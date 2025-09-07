@@ -1,11 +1,11 @@
 // Content script for lunchdrop.com
 (() => {
   // Start the main script immediately
-      initializeContentScript();
+  initializeContentScript();
 
   // Submit any pending data that was stored locally (reduced delay)
-      setTimeout(() => {
-        submitPendingData();
+  setTimeout(() => {
+    submitPendingData();
   }, 500);
 
   function initializeContentScript() {
@@ -17,63 +17,66 @@
       restaurantGrid: null,
       restaurantCards: null,
       lastCacheTime: 0,
-      cacheTimeout: 5000 // 5 seconds
+      cacheTimeout: 5000, // 5 seconds
     };
 
     // Helper function to get cached restaurant grid
     function getCachedRestaurantGrid() {
       const now = Date.now();
-      if (domCache.restaurantGrid && (now - domCache.lastCacheTime) < domCache.cacheTimeout) {
+      if (domCache.restaurantGrid && now - domCache.lastCacheTime < domCache.cacheTimeout) {
         return domCache.restaurantGrid;
       }
-      
+
       // Try to find the restaurant grid using optimized strategies
       let restaurantGrid = null;
-      
+
       // Strategy 1: Look for the specific selector from the user's xpath
-      restaurantGrid = document.querySelector('#app > div.flex.flex-col.justify-between.w-full.min-h-screen.v-cloak > div.flex-auto.basis-full.relative > div.max-w-6xl.mx-auto > div:nth-child(6) > div');
-      
+      restaurantGrid = document.querySelector(
+        '#app > div.flex.flex-col.justify-between.w-full.min-h-screen.v-cloak > div.flex-auto.basis-full.relative > div.max-w-6xl.mx-auto > div:nth-child(6) > div'
+      );
+
       // Strategy 2: Look for flex-wrap gap-3 (common pattern for restaurant grids)
       if (!restaurantGrid) {
         restaurantGrid = document.querySelector('div.flex.flex-wrap.gap-3');
       }
-      
+
       // Strategy 3: Look for div containing restaurant links with specific URL pattern
       if (!restaurantGrid) {
         const restaurantLinks = document.querySelectorAll('a[href*="/app/"]');
-        const validRestaurantLinks = Array.from(restaurantLinks).filter(link => {
+        const validRestaurantLinks = Array.from(restaurantLinks).filter((link) => {
           const href = link.getAttribute('href');
           return href && /\/app\/.*\/[a-zA-Z0-9]+/.test(href);
         });
-        
+
         if (validRestaurantLinks.length > 0) {
           const potentialGrid = validRestaurantLinks[0].closest('div');
           const restaurantLinksInGrid = potentialGrid.querySelectorAll('a[href*="/app/"]');
-          const validLinksInGrid = Array.from(restaurantLinksInGrid).filter(link => {
+          const validLinksInGrid = Array.from(restaurantLinksInGrid).filter((link) => {
             const href = link.getAttribute('href');
             return href && /\/app\/.*\/[a-zA-Z0-9]+/.test(href);
           });
-          
+
           const hasMultipleRestaurants = validLinksInGrid.length >= 3;
-          const isNotDateNav = !potentialGrid.className.includes('day-container') && 
-                              !potentialGrid.className.includes('snap-x') &&
-                              !potentialGrid.className.includes('overflow-scroll');
-          
+          const isNotDateNav =
+            !potentialGrid.className.includes('day-container') &&
+            !potentialGrid.className.includes('snap-x') &&
+            !potentialGrid.className.includes('overflow-scroll');
+
           if (hasMultipleRestaurants && isNotDateNav) {
             restaurantGrid = potentialGrid;
           }
         }
       }
-      
+
       // Strategy 4: Fallback to old selector
       if (!restaurantGrid) {
         restaurantGrid = document.querySelector('div.mx-4.my-8.sm\\:my-2');
       }
-      
+
       // Cache the result
       domCache.restaurantGrid = restaurantGrid;
       domCache.lastCacheTime = now;
-      
+
       return restaurantGrid;
     }
 
@@ -95,8 +98,6 @@
       return 'order_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
     }
 
-
-
     // Function to inject rating widget into the page
     async function injectRatingWidget() {
       if (ratingWidget) return; // Already injected
@@ -107,7 +108,10 @@
       let menuItems = [];
       try {
         if (typeof LanchDrapApiClient !== 'undefined' && typeof LanchDrapConfig !== 'undefined') {
-          const apiClient = new LanchDrapApiClient.ApiClient(LanchDrapConfig.CONFIG.API_BASE_URL, LanchDrapConfig.CONFIG.ENDPOINTS);
+          const apiClient = new LanchDrapApiClient.ApiClient(
+            LanchDrapConfig.CONFIG.API_BASE_URL,
+            LanchDrapConfig.CONFIG.ENDPOINTS
+          );
           const restaurantData = await apiClient.searchRestaurantByName(restaurantName);
           menuItems = restaurantData.menu || [];
         }
@@ -184,9 +188,7 @@
         if (!searchTerm) {
           return menuItems;
         }
-        return menuItems.filter(item => 
-          item.toLowerCase().includes(searchTerm.toLowerCase())
-        );
+        return menuItems.filter((item) => item.toLowerCase().includes(searchTerm.toLowerCase()));
       }
 
       function renderMenuDropdown(items) {
@@ -196,9 +198,9 @@
           return;
         }
 
-        items.forEach(item => {
+        items.forEach((item) => {
           if (selectedMenuItems.includes(item)) return; // Skip already selected items
-          
+
           const option = document.createElement('div');
           option.className = 'ld-menu-option';
           option.textContent = item;
@@ -209,7 +211,7 @@
           });
           menuDropdown.appendChild(option);
         });
-        
+
         menuDropdown.style.display = 'block';
       }
 
@@ -221,13 +223,13 @@
       }
 
       function removeMenuItem(item) {
-        selectedMenuItems = selectedMenuItems.filter(i => i !== item);
+        selectedMenuItems = selectedMenuItems.filter((i) => i !== item);
         renderSelectedItems();
       }
 
       function renderSelectedItems() {
         selectedItems.innerHTML = '';
-        selectedMenuItems.forEach(item => {
+        selectedMenuItems.forEach((item) => {
           const tag = document.createElement('div');
           tag.className = 'ld-selected-item';
           tag.innerHTML = `
@@ -238,7 +240,7 @@
         });
 
         // Add event listeners for remove buttons
-        selectedItems.querySelectorAll('.ld-remove-item').forEach(btn => {
+        selectedItems.querySelectorAll('.ld-remove-item').forEach((btn) => {
           btn.addEventListener('click', (e) => {
             removeMenuItem(e.target.dataset.item);
           });
@@ -326,7 +328,10 @@
           const ratingData = {
             orderId: orderData?.orderId || generateOrderId(),
             restaurant: orderData?.restaurant || 'Unknown Restaurant',
-            items: selectedMenuItems.length > 0 ? selectedMenuItems : (orderData?.items || ['Unknown Items']),
+            items:
+              selectedMenuItems.length > 0
+                ? selectedMenuItems
+                : orderData?.items || ['Unknown Items'],
             rating: currentRating,
             comment: comment,
             timestamp: new Date().toISOString(),
@@ -377,7 +382,6 @@
         ratingWidget = null;
       }
     }
-
 
     // Function to detect LanchDrap's rating prompt
     function detectLunchDropRatingPrompt() {
@@ -437,14 +441,15 @@
       }
     }
 
-
     // Function to scrape restaurant availability from the main grid
     async function scrapeRestaurantAvailability() {
       try {
         // Quick checks to avoid unnecessary processing
-        if (document.querySelector('input[type="password"]') || 
-            document.body.textContent.includes('Sign in') ||
-            document.body.textContent.includes('Phone Number or Email Address')) {
+        if (
+          document.querySelector('input[type="password"]') ||
+          document.body.textContent.includes('Sign in') ||
+          document.body.textContent.includes('Phone Number or Email Address')
+        ) {
           return null;
         }
 
@@ -469,38 +474,55 @@
         // Get restaurant cards that match the specific URL pattern
         const allAppLinks = restaurantGrid.querySelectorAll('a[href*="/app/"]');
         console.log('LanchDrap Rating Extension: Found', allAppLinks.length, 'app links in grid');
-        
+
         // Debug: Log the first few hrefs to see the actual format
         if (allAppLinks.length > 0) {
-          console.log('LanchDrap Rating Extension: Sample hrefs:', Array.from(allAppLinks).slice(0, 3).map(link => link.getAttribute('href')));
+          console.log(
+            'LanchDrap Rating Extension: Sample hrefs:',
+            Array.from(allAppLinks)
+              .slice(0, 3)
+              .map((link) => link.getAttribute('href'))
+          );
         }
-        
-        const restaurantCards = Array.from(allAppLinks).filter(link => {
+
+        const restaurantCards = Array.from(allAppLinks).filter((link) => {
           const href = link.getAttribute('href');
           // More flexible pattern - just check if it contains /app/ and has some identifier
           return href && /\/app\/.*\/[a-zA-Z0-9]+/.test(href);
         });
-        
-        console.log('LanchDrap Rating Extension: Filtered to', restaurantCards.length, 'restaurant cards');
-          
+
+        console.log(
+          'LanchDrap Rating Extension: Filtered to',
+          restaurantCards.length,
+          'restaurant cards'
+        );
+
         if (restaurantCards.length === 0) {
           // Try to find valid restaurant cards with a broader search
           const allPageAppLinks = document.querySelectorAll('a[href*="/app/"]');
-          console.log('LanchDrap Rating Extension: Found', allPageAppLinks.length, 'app links on entire page');
-          
-          const validPageLinks = Array.from(allPageAppLinks).filter(link => {
+          console.log(
+            'LanchDrap Rating Extension: Found',
+            allPageAppLinks.length,
+            'app links on entire page'
+          );
+
+          const validPageLinks = Array.from(allPageAppLinks).filter((link) => {
             const href = link.getAttribute('href');
             return href && /\/app\/.*\/[a-zA-Z0-9]+/.test(href);
           });
-          
-          console.log('LanchDrap Rating Extension: Found', validPageLinks.length, 'valid page links');
-          
+
+          console.log(
+            'LanchDrap Rating Extension: Found',
+            validPageLinks.length,
+            'valid page links'
+          );
+
           if (validPageLinks.length > 0) {
             // Use the first few valid restaurant links we can find
             const cards = validPageLinks.slice(0, 10); // Limit to first 10
             return await processRestaurantCards(cards, urlDate);
           }
-          
+
           console.log('LanchDrap Rating Extension: No valid restaurant cards found anywhere');
           return null;
         }
@@ -527,148 +549,148 @@
         for (const batch of batches) {
           const batchPromises = batch.map(async (card, batchIndex) => {
             const index = batches.indexOf(batch) * batchSize + batchIndex;
-          try {
-            // Extract restaurant information
-            const href = card.getAttribute('href');
-            const timeSlot = card
-              .querySelector('.text-base.font-bold.text-center')
-              ?.textContent?.trim();
-            const statusElement = card.querySelector('.text-sm.text-center');
-            const statusText = statusElement?.textContent?.trim();
+            try {
+              // Extract restaurant information
+              const href = card.getAttribute('href');
+              const timeSlot = card
+                .querySelector('.text-base.font-bold.text-center')
+                ?.textContent?.trim();
+              const statusElement = card.querySelector('.text-sm.text-center');
+              const statusText = statusElement?.textContent?.trim();
 
-            // Determine availability status based on visual indicators
-            let status = 'available';
-            let reason = null;
+              // Determine availability status based on visual indicators
+              let status = 'available';
+              let reason = null;
 
-            // Check for "SOLD OUT" text inside the restaurant card
-            const cardText = card.textContent || '';
-            const soldOutRegex = /sold\s+out!?/i;
-            if (soldOutRegex.test(cardText)) {
-              status = 'soldout';
-              reason = 'Restaurant is sold out';
-            }
-            // Check for "Ordering Closed" text
-            else if (statusText && statusText.includes('Ordering Closed')) {
-              status = 'soldout';
-              reason = 'Ordering closed for this time slot';
-            }
-            // Check for "Order Placed" (available)
-            else if (statusText && statusText.includes('Order Placed')) {
-              status = 'available';
-              reason = 'Orders currently being accepted';
-            }
-
-            // Check visual indicators (opacity and border color)
-            const cardDiv = card.querySelector('div.relative.h-full.rounded-md');
-            let isSelected = false;
-            let color = null;
-            if (cardDiv) {
-              const opacity = window.getComputedStyle(cardDiv).opacity;
-              color = window.getComputedStyle(cardDiv).borderColor;
-
-              // Check if this is the selected restaurant (has 'border-2' class)
-              // Selected restaurants have the 'border-2' class
-              if (cardDiv.classList.contains('border-2')) {
-                isSelected = true;
+              // Check for "SOLD OUT" text inside the restaurant card
+              const cardText = card.textContent || '';
+              const soldOutRegex = /sold\s+out!?/i;
+              if (soldOutRegex.test(cardText)) {
+                status = 'soldout';
+                reason = 'Restaurant is sold out';
+              }
+              // Check for "Ordering Closed" text
+              else if (statusText && statusText.includes('Ordering Closed')) {
+                status = 'soldout';
+                reason = 'Ordering closed for this time slot';
+              }
+              // Check for "Order Placed" (available)
+              else if (statusText && statusText.includes('Order Placed')) {
+                status = 'available';
+                reason = 'Orders currently being accepted';
               }
 
-              // Reduced opacity often indicates closed/unavailable
-              if (opacity && parseFloat(opacity) < 1) {
-                if (status === 'available') {
-                  status = 'limited';
-                  reason = 'Reduced opacity suggests limited availability';
+              // Check visual indicators (opacity and border color)
+              const cardDiv = card.querySelector('div.relative.h-full.rounded-md');
+              let isSelected = false;
+              let color = null;
+              if (cardDiv) {
+                const opacity = window.getComputedStyle(cardDiv).opacity;
+                color = window.getComputedStyle(cardDiv).borderColor;
+
+                // Check if this is the selected restaurant (has 'border-2' class)
+                // Selected restaurants have the 'border-2' class
+                if (cardDiv.classList.contains('border-2')) {
+                  isSelected = true;
                 }
-              }
-            }
 
-            // Extract restaurant ID from href (primary method)
-            let restaurantId = 'unknown';
-            let restaurantName = null;
-            
-            // Extract restaurant ID from href
-            if (href) {
-              const hrefParts = href.split('/');
-              if (hrefParts.length > 2) {
-                restaurantId = hrefParts[hrefParts.length - 1];
-              }
-            }
-            
-            // Fallback: try to extract from image URL hash if no href ID
-            if (restaurantId === 'unknown') {
-            const img = card.querySelector('img');
-            if (img && img.src) {
-                // Extract restaurant hash from the image URL
-              // URL format: https://lunchdrop.s3.amazonaws.com/restaurant-logos/[hash].png
-              const urlParts = img.src.split('/');
-              if (urlParts.length > 0) {
-                const filename = urlParts[urlParts.length - 1];
-                if (filename.includes('.')) {
-                  const hash = filename.split('.')[0];
-                    restaurantId = hash;
+                // Reduced opacity often indicates closed/unavailable
+                if (opacity && parseFloat(opacity) < 1) {
+                  if (status === 'available') {
+                    status = 'limited';
+                    reason = 'Reduced opacity suggests limited availability';
                   }
                 }
               }
-            }
-            
-            // Try to get restaurant name from local storage or use identifier
-            restaurantName = await getRestaurantName(restaurantId);
-            if (!restaurantName || restaurantName === restaurantId) {
-              // Use the ID as the name only if we don't have a better name
-              restaurantName = restaurantId;
-            }
 
-            // Parse time slot
-            let timeSlotData = null;
-            if (timeSlot) {
-              const timeMatch = timeSlot.match(/(\d{1,2}):(\d{2})-(\d{1,2}):(\d{2})(am|pm)/);
-              if (timeMatch) {
-                const [_, startHour, startMin, endHour, endMin, period] = timeMatch;
-                timeSlotData = {
-                  start: `${startHour}:${startMin}${period}`,
-                  end: `${endHour}:${endMin}${period}`,
-                  full: timeSlot,
-                };
+              // Extract restaurant ID from href (primary method)
+              let restaurantId = 'unknown';
+              let restaurantName = null;
+
+              // Extract restaurant ID from href
+              if (href) {
+                const hrefParts = href.split('/');
+                if (hrefParts.length > 2) {
+                  restaurantId = hrefParts[hrefParts.length - 1];
+                }
               }
+
+              // Fallback: try to extract from image URL hash if no href ID
+              if (restaurantId === 'unknown') {
+                const img = card.querySelector('img');
+                if (img && img.src) {
+                  // Extract restaurant hash from the image URL
+                  // URL format: https://lunchdrop.s3.amazonaws.com/restaurant-logos/[hash].png
+                  const urlParts = img.src.split('/');
+                  if (urlParts.length > 0) {
+                    const filename = urlParts[urlParts.length - 1];
+                    if (filename.includes('.')) {
+                      const hash = filename.split('.')[0];
+                      restaurantId = hash;
+                    }
+                  }
+                }
+              }
+
+              // Try to get restaurant name from local storage or use identifier
+              restaurantName = await getRestaurantName(restaurantId);
+              if (!restaurantName || restaurantName === restaurantId) {
+                // Use the ID as the name only if we don't have a better name
+                restaurantName = restaurantId;
+              }
+
+              // Parse time slot
+              let timeSlotData = null;
+              if (timeSlot) {
+                const timeMatch = timeSlot.match(/(\d{1,2}):(\d{2})-(\d{1,2}):(\d{2})(am|pm)/);
+                if (timeMatch) {
+                  const [_, startHour, startMin, endHour, endMin, period] = timeMatch;
+                  timeSlotData = {
+                    start: `${startHour}:${startMin}${period}`,
+                    end: `${endHour}:${endMin}${period}`,
+                    full: timeSlot,
+                  };
+                }
+              }
+
+              const restaurantInfo = {
+                index,
+                id: restaurantId,
+                name: restaurantName,
+                restaurant: restaurantName, // Keep for backward compatibility
+                status,
+                reason,
+                timeSlot: timeSlotData,
+                href,
+                urlDate: urlDate,
+                timestamp: now.toISOString(),
+                isSelected,
+                color, // Add the color to the main object
+                visualIndicators: {
+                  opacity: window.getComputedStyle(card).opacity,
+                  borderColor: window.getComputedStyle(
+                    card.querySelector('div.relative.h-full.rounded-md')
+                  )?.borderColor,
+                  hasOrderPlaced: statusText?.includes('Order Placed') || false,
+                  hasOrderingClosed: statusText?.includes('Ordering Closed') || false,
+                  hasSoldOutInCard: /sold\s+out!?/i.test(cardText),
+                },
+              };
+
+              return restaurantInfo;
+            } catch (cardError) {
+              console.error('Error processing restaurant card:', cardError);
+              return null;
             }
-
-            const restaurantInfo = {
-              index,
-              id: restaurantId,
-              name: restaurantName,
-              restaurant: restaurantName, // Keep for backward compatibility
-              status,
-              reason,
-              timeSlot: timeSlotData,
-              href,
-              urlDate: urlDate,
-              timestamp: now.toISOString(),
-              isSelected,
-              color, // Add the color to the main object
-              visualIndicators: {
-                opacity: window.getComputedStyle(card).opacity,
-                borderColor: window.getComputedStyle(
-                  card.querySelector('div.relative.h-full.rounded-md')
-                )?.borderColor,
-                hasOrderPlaced: statusText?.includes('Order Placed') || false,
-                hasOrderingClosed: statusText?.includes('Ordering Closed') || false,
-                hasSoldOutInCard: /sold\s+out!?/i.test(cardText),
-              },
-            };
-
-            return restaurantInfo;
-          } catch (cardError) {
-            console.error('Error processing restaurant card:', cardError);
-            return null;
-          }
           });
-          
+
           // Wait for batch to complete
           const batchResults = await Promise.all(batchPromises);
-          availabilityData.push(...batchResults.filter(result => result !== null));
-          
+          availabilityData.push(...batchResults.filter((result) => result !== null));
+
           // Small delay between batches to avoid blocking UI
           if (batches.indexOf(batch) < batches.length - 1) {
-            await new Promise(resolve => setTimeout(resolve, 10));
+            await new Promise((resolve) => setTimeout(resolve, 10));
           }
         }
 
@@ -738,7 +760,6 @@
       }
     }
 
-
     // Function to track restaurant appearances on daily pages
     async function trackRestaurantAppearances(availabilityData) {
       try {
@@ -757,11 +778,14 @@
           return;
         }
 
-        const apiClient = new LanchDrapApiClient.ApiClient(LanchDrapConfig.CONFIG.API_BASE_URL, LanchDrapConfig.CONFIG.ENDPOINTS);
+        const apiClient = new LanchDrapApiClient.ApiClient(
+          LanchDrapConfig.CONFIG.API_BASE_URL,
+          LanchDrapConfig.CONFIG.ENDPOINTS
+        );
         const timeSlot = availabilityData[0]?.timeSlot?.full || 'unknown';
 
         const trackingData = {
-          restaurants: availabilityData.map(restaurant => ({
+          restaurants: availabilityData.map((restaurant) => ({
             id: restaurant.id,
             name: restaurant.name,
             status: restaurant.status,
@@ -773,13 +797,17 @@
           timeSlot: timeSlot,
         };
 
-        console.log('LanchDrap Rating Extension: Sending tracking data for', trackingData.restaurants.length, 'restaurants');
+        console.log(
+          'LanchDrap Rating Extension: Sending tracking data for',
+          trackingData.restaurants.length,
+          'restaurants'
+        );
         const result = await apiClient.trackRestaurantAppearances(trackingData);
-        
+
         // Add sell out indicators to restaurant cards based on response
         // The API response has nested structure: result.data.data.restaurants
         const restaurants = result?.data?.data?.restaurants || result?.data?.restaurants;
-        
+
         if (restaurants && Array.isArray(restaurants)) {
           addSellOutIndicators(restaurants);
         }
@@ -793,22 +821,23 @@
       try {
         // Use cached restaurant grid if available, otherwise find all restaurant cards
         const restaurantGrid = getCachedRestaurantGrid();
-        const restaurantCards = restaurantGrid ? 
-          restaurantGrid.querySelectorAll('a[href*="/app/"]') : 
-          document.querySelectorAll('a[href*="/app/"]');
-        
-        restaurantsWithRates.forEach(restaurant => {
-          if (restaurant.sellOutRate > 0.8) { // 80% threshold
+        const restaurantCards = restaurantGrid
+          ? restaurantGrid.querySelectorAll('a[href*="/app/"]')
+          : document.querySelectorAll('a[href*="/app/"]');
+
+        restaurantsWithRates.forEach((restaurant) => {
+          if (restaurant.sellOutRate > 0.8) {
+            // 80% threshold
             // Find the card for this restaurant
-            const restaurantCard = Array.from(restaurantCards).find(card => {
+            const restaurantCard = Array.from(restaurantCards).find((card) => {
               const href = card.getAttribute('href');
               return href && href.includes(restaurant.id);
             });
-            
+
             if (restaurantCard) {
               // Check if indicator already exists
               const existingIndicator = restaurantCard.querySelector('.ld-sellout-indicator');
-              
+
               if (!existingIndicator) {
                 // Create the indicator element
                 const indicator = document.createElement('div');
@@ -831,10 +860,10 @@
                   white-space: nowrap;
                 `;
                 indicator.textContent = 'Likely to Sell Out';
-                
+
                 // Make sure the card has relative positioning
                 const cardDiv = restaurantCard.querySelector('div');
-                
+
                 if (cardDiv) {
                   cardDiv.style.position = 'relative';
                   cardDiv.appendChild(indicator);
@@ -851,14 +880,14 @@
     // Helper function to format date strings properly (avoid timezone issues)
     function formatDateString(dateString) {
       if (!dateString) return 'Unknown';
-      
+
       // If it's already in YYYY-MM-DD format, treat it as local date
       if (typeof dateString === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
         const [year, month, day] = dateString.split('-');
         const date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
         return date.toLocaleDateString();
       }
-      
+
       // Otherwise, use the date as-is
       return new Date(dateString).toLocaleDateString();
     }
@@ -866,12 +895,13 @@
     // Shared function to render stats component
     function renderStatsComponent(stats, containerId, title) {
       // Add API error indicator if applicable
-      const apiErrorIndicator = stats.apiError ? 
-        '<div class="ld-api-error">⚠️ API temporarily unavailable - showing cached data</div>' : '';
-      
+      const apiErrorIndicator = stats.apiError
+        ? '<div class="ld-api-error">⚠️ API temporarily unavailable - showing cached data</div>'
+        : '';
+
       // Use restaurant's color for styling
       const restaurantColor = stats.color || 'rgb(100, 100, 100)'; // Default gray if no color
-      
+
       const restaurantName = stats.name || stats.id;
       const displayTitle = `📊 ${restaurantName}'s Stats`;
 
@@ -1002,7 +1032,7 @@
         }
 
         // Find the selected restaurant
-        const selectedRestaurant = availabilityData.find(restaurant => restaurant.isSelected);
+        const selectedRestaurant = availabilityData.find((restaurant) => restaurant.isSelected);
         if (!selectedRestaurant) {
           return;
         }
@@ -1012,19 +1042,25 @@
           return;
         }
 
-        const apiClient = new LanchDrapApiClient.ApiClient(LanchDrapConfig.CONFIG.API_BASE_URL, LanchDrapConfig.CONFIG.ENDPOINTS);
+        const apiClient = new LanchDrapApiClient.ApiClient(
+          LanchDrapConfig.CONFIG.API_BASE_URL,
+          LanchDrapConfig.CONFIG.ENDPOINTS
+        );
         let stats = null;
 
         try {
           stats = await apiClient.getRestaurantById(selectedRestaurant.id, selectedRestaurant.name);
-          
+
           // Use the color from the selected restaurant if the API doesn't have it yet
           if (!stats.color && selectedRestaurant.color) {
             stats.color = selectedRestaurant.color;
           }
         } catch (apiError) {
-          console.error('LanchDrap Rating Extension: API error fetching selected restaurant stats:', apiError);
-          
+          console.error(
+            'LanchDrap Rating Extension: API error fetching selected restaurant stats:',
+            apiError
+          );
+
           // Create fallback stats when API is unavailable
           stats = {
             name: selectedRestaurant.name,
@@ -1039,24 +1075,29 @@
             firstSeen: null,
             lastUpdated: new Date().toISOString(),
             apiError: true,
-            errorMessage: 'API temporarily unavailable'
+            errorMessage: 'API temporarily unavailable',
           };
         }
 
         // Create stats display using shared component
-        const statsContainer = renderStatsComponent(stats, 'lunchdrop-restaurant-stats', 'Selected Restaurant Stats');
+        const statsContainer = renderStatsComponent(
+          stats,
+          'lunchdrop-restaurant-stats',
+          'Selected Restaurant Stats'
+        );
 
         // Insert the stats after the restaurant title element
         let restaurantNameElement = document.querySelector('.text-3xl.font-bold');
         if (!restaurantNameElement) {
-          restaurantNameElement = document.querySelector('#app > div:nth-child(1) > div:nth-child(2) > div:nth-child(2) > div:nth-child(7) > div > div > div:nth-child(1) > div:nth-child(1)');
+          restaurantNameElement = document.querySelector(
+            '#app > div:nth-child(1) > div:nth-child(2) > div:nth-child(2) > div:nth-child(7) > div > div > div:nth-child(1) > div:nth-child(1)'
+          );
         }
-        
+
         if (restaurantNameElement) {
           const insertionPoint = restaurantNameElement.parentNode || restaurantNameElement;
           insertionPoint.insertBefore(statsContainer, restaurantNameElement.nextSibling);
         }
-
       } catch (error) {
         console.error('Error displaying selected restaurant stats:', error);
       }
@@ -1068,12 +1109,12 @@
         // Look for menu sections with the structure provided by the user
         const menuSections = document.querySelectorAll('.my-16');
         const allMenuItems = [];
-        
-        menuSections.forEach(section => {
+
+        menuSections.forEach((section) => {
           // Find all menu item containers within this section
           const menuItems = section.querySelectorAll('.my-4.text-lg.cursor-pointer');
-          
-          menuItems.forEach(item => {
+
+          menuItems.forEach((item) => {
             // Extract the menu item name from the span with font-bold class
             const nameElement = item.querySelector('.flex.items-center.font-bold span');
             if (nameElement) {
@@ -1084,7 +1125,7 @@
             }
           });
         });
-        
+
         return allMenuItems;
       } catch (error) {
         console.error('Error parsing menu from page:', error);
@@ -1092,6 +1133,169 @@
       }
     }
 
+    // Function to parse order details from the order confirmation page
+    function parseOrderFromPage() {
+      try {
+        // Look for the order confirmation container
+        const orderContainer =
+          document.querySelector('[id^="w"]') || document.querySelector('.my-8.last\\:mb-0');
+        if (!orderContainer) {
+          console.log('No order container found');
+          return null;
+        }
+
+        // Extract restaurant name from URL or page
+        const url = window.location.href;
+        const dateMatch = url.match(/\/(\d{4}-\d{2}-\d{2})\//);
+        const date = dateMatch ? dateMatch[1] : new Date().toISOString().split('T')[0];
+
+        // Try to get restaurant name from various sources
+        let restaurantName = null;
+
+        // Method 1: Look for restaurant name in the page title or headers
+        const titleElement = document.querySelector('h1, .text-3xl, .text-2xl');
+        if (titleElement && !titleElement.textContent.includes('Your order has been placed')) {
+          restaurantName = titleElement.textContent.trim();
+        }
+
+        // Method 2: Look for restaurant name in navigation or breadcrumbs
+        if (!restaurantName) {
+          const navElements = document.querySelectorAll('nav a, .breadcrumb a, [href*="/app/"]');
+          for (const nav of navElements) {
+            const text = nav.textContent.trim();
+            if (
+              text &&
+              text.length > 3 &&
+              !text.includes('Lunchdrop') &&
+              !text.includes('Sign in')
+            ) {
+              restaurantName = text;
+              break;
+            }
+          }
+        }
+
+        // Method 3: Extract from URL path if available
+        if (!restaurantName) {
+          const pathParts = url.split('/');
+          const restaurantIndex =
+            pathParts.findIndex((part) => part.match(/\d{4}-\d{2}-\d{2}/)) + 1;
+          if (restaurantIndex < pathParts.length) {
+            restaurantName = pathParts[restaurantIndex];
+          }
+        }
+
+        // Parse order items from the table
+        const orderItems = [];
+        const itemRows = orderContainer.querySelectorAll('tbody tr');
+
+        itemRows.forEach((row) => {
+          const itemCell = row.querySelector('td:nth-child(2)');
+          if (itemCell) {
+            const itemNameElement = itemCell.querySelector('.text-lg.font-medium, .font-medium');
+            const optionsElement = itemCell.querySelector('.text-gray-500');
+
+            if (itemNameElement) {
+              const itemName = itemNameElement.textContent.trim();
+              const options = optionsElement ? optionsElement.textContent.trim() : '';
+
+              // Parse quantity if present (e.g., "2× Chicken Fajita")
+              const quantityMatch = itemName.match(/^(\d+)×\s*(.+)$/);
+              const quantity = quantityMatch ? parseInt(quantityMatch[1]) : 1;
+              const name = quantityMatch ? quantityMatch[2] : itemName;
+
+              orderItems.push({
+                name: name,
+                quantity: quantity,
+                options: options,
+                fullDescription: `${itemName}${options ? ` (${options})` : ''}`,
+              });
+            }
+          }
+        });
+
+        if (orderItems.length === 0) {
+          console.log('No order items found');
+          return null;
+        }
+
+        return {
+          date: date,
+          restaurantName: restaurantName,
+          items: orderItems,
+        };
+      } catch (error) {
+        console.error('Error parsing order from page:', error);
+        return null;
+      }
+    }
+
+    // Function to detect and store order when placed
+    async function detectAndStoreOrder() {
+      try {
+        // Check if this is an order confirmation page
+        const orderConfirmationText = document.querySelector('text-3xl.font-bold, .text-xl');
+        const isOrderPage =
+          orderConfirmationText &&
+          (orderConfirmationText.textContent.includes('Your order has been placed') ||
+            orderConfirmationText.textContent.includes('order has been placed'));
+
+        if (!isOrderPage) {
+          return;
+        }
+
+        // Parse the order from the page
+        const orderData = parseOrderFromPage();
+        if (!orderData) {
+          console.log('Could not parse order data from page');
+          return;
+        }
+
+        // Get user ID
+        const userId = await getUserId();
+        if (!userId) {
+          console.log('No user ID available for order storage');
+          return;
+        }
+
+        // Get restaurant ID by name
+        let restaurantId = orderData.restaurantName;
+        if (typeof LanchDrapApiClient !== 'undefined' && typeof LanchDrapConfig !== 'undefined') {
+          try {
+            const apiClient = new LanchDrapApiClient.ApiClient(
+              LanchDrapConfig.CONFIG.API_BASE_URL,
+              LanchDrapConfig.CONFIG.ENDPOINTS
+            );
+            const restaurantData = await apiClient.searchRestaurantByName(orderData.restaurantName);
+            if (restaurantData && restaurantData.id) {
+              restaurantId = restaurantData.id;
+            }
+          } catch (error) {
+            console.log('Could not find restaurant ID, using name:', error);
+          }
+        }
+
+        // Store the order
+        if (typeof LanchDrapApiClient !== 'undefined' && typeof LanchDrapConfig !== 'undefined') {
+          try {
+            const apiClient = new LanchDrapApiClient.ApiClient(
+              LanchDrapConfig.CONFIG.API_BASE_URL,
+              LanchDrapConfig.CONFIG.ENDPOINTS
+            );
+            await apiClient.storeUserOrder(userId, restaurantId, orderData);
+            console.log('LanchDrap Rating Extension: Order stored successfully:', {
+              userId,
+              restaurantId,
+              orderData,
+            });
+          } catch (error) {
+            console.error('LanchDrap Rating Extension: Failed to store order:', error);
+          }
+        }
+      } catch (error) {
+        console.error('LanchDrap Rating Extension: Error detecting and storing order:', error);
+      }
+    }
 
     // Function to display restaurant tracking information on detail pages
     async function displayRestaurantTrackingInfo() {
@@ -1100,9 +1304,11 @@
         // Try multiple selectors to find the restaurant name
         let restaurantNameElement = document.querySelector('.text-3xl.font-bold');
         if (!restaurantNameElement) {
-          restaurantNameElement = document.querySelector('#app > div:nth-child(1) > div:nth-child(2) > div:nth-child(2) > div:nth-child(7) > div > div > div:nth-child(1) > div:nth-child(1)');
+          restaurantNameElement = document.querySelector(
+            '#app > div:nth-child(1) > div:nth-child(2) > div:nth-child(2) > div:nth-child(7) > div > div > div:nth-child(1) > div:nth-child(1)'
+          );
         }
-        
+
         if (!restaurantNameElement) {
           return; // Not on a detail page
         }
@@ -1118,27 +1324,30 @@
         }
 
         // Create API client instance
-        const apiClient = new LanchDrapApiClient.ApiClient(LanchDrapConfig.CONFIG.API_BASE_URL, LanchDrapConfig.CONFIG.ENDPOINTS);
+        const apiClient = new LanchDrapApiClient.ApiClient(
+          LanchDrapConfig.CONFIG.API_BASE_URL,
+          LanchDrapConfig.CONFIG.ENDPOINTS
+        );
 
         // Store the restaurant name for future use (extract identifier from URL)
         const urlParts = window.location.pathname.split('/');
         let restaurantId = null;
         let stats = null;
-        
+
         // Expected URL structure: /app/2025-09-08/eajz7qx8
         // We want the last part (restaurant ID), not the date
         if (urlParts.length >= 4 && urlParts[1] === 'app') {
           restaurantId = urlParts[urlParts.length - 1];
-          
+
           // Validate that it's not a date (YYYY-MM-DD format)
           const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
           if (dateRegex.test(restaurantId)) {
             return;
           }
-          
+
           const localKey = `restaurant_name:${restaurantId}`;
           localStorage.setItem(localKey, restaurantName);
-          
+
           try {
             stats = await apiClient.getRestaurantById(restaurantId, restaurantName);
 
@@ -1148,30 +1357,34 @@
 
             // Check if we need to update the restaurant name or menu in backend
             // Only update if we have a real name (not just an ID) and it's different from what's stored
-            const needsNameUpdate = restaurantName !== restaurantId && 
-                                   restaurantName.length > 3 && 
-                                   stats.name !== restaurantName;
-            
+            const needsNameUpdate =
+              restaurantName !== restaurantId &&
+              restaurantName.length > 3 &&
+              stats.name !== restaurantName;
+
             // Parse menu items from the page
             const menuItems = parseMenuFromPage();
             const needsMenuUpdate = menuItems.length > 0;
-            
+
             if (needsNameUpdate || needsMenuUpdate) {
               try {
                 await apiClient.updateRestaurant(restaurantId, restaurantName, menuItems);
                 console.log('LanchDrap Rating Extension: Updated restaurant data:', {
                   restaurantId,
                   restaurantName,
-                  menuItems: menuItems
+                  menuItems: menuItems,
                 });
               } catch (error) {
                 // Silently handle the error for now since the endpoint may not be available
-                console.warn('LanchDrap Rating Extension: Could not update restaurant data in backend (endpoint may not be available):', error.message);
+                console.warn(
+                  'LanchDrap Rating Extension: Could not update restaurant data in backend (endpoint may not be available):',
+                  error.message
+                );
               }
             }
           } catch (apiError) {
             console.error('LanchDrap Rating Extension: API error fetching stats:', apiError);
-            
+
             // Create fallback stats when API is unavailable
             stats = {
               name: restaurantName,
@@ -1185,9 +1398,8 @@
               firstSeen: null,
               lastUpdated: new Date().toISOString(),
               apiError: true,
-              errorMessage: 'API temporarily unavailable'
+              errorMessage: 'API temporarily unavailable',
             };
-            
           }
         } else {
           return;
@@ -1199,7 +1411,11 @@
         }
 
         // Create tracking info display using shared component
-        const trackingInfo = renderStatsComponent(stats, 'lunchdrop-restaurant-stats', 'Restaurant Stats');
+        const trackingInfo = renderStatsComponent(
+          stats,
+          'lunchdrop-restaurant-stats',
+          'Restaurant Stats'
+        );
 
         // Insert the tracking info near the restaurant name
         // Try to find a good insertion point near the restaurant name
@@ -1214,7 +1430,7 @@
     function extractDateFromUrl() {
       try {
         const url = window.location.href;
-        
+
         const dateMatch = url.match(/\/app\/(\d{4}-\d{2}-\d{2})/);
         if (dateMatch) {
           return dateMatch[1]; // Returns YYYY-MM-DD format
@@ -1232,7 +1448,6 @@
         return null;
       }
     }
-
 
     // Function to extract city from LanchDrap URL (for single office use)
     function extractCityFromUrl() {
@@ -1315,11 +1530,9 @@
       }
     }
 
-
-
     // Run detection on page load
     // detectLunchDropRatingPrompt(); // Disabled - not working on rating prompts yet
-    
+
     // Check if we're on a restaurant detail page and display tracking info
     // Only call this on individual restaurant pages (URLs with restaurant IDs)
     if (window.location.pathname.match(/\/app\/\d{4}-\d{2}-\d{2}\/[a-zA-Z0-9]+$/)) {
@@ -1327,6 +1540,11 @@
         displayRestaurantTrackingInfo();
       }, 500);
     }
+
+    // Check for order confirmation and store order history
+    setTimeout(() => {
+      detectAndStoreOrder();
+    }, 1000);
 
     // Check if we're on the main restaurant grid page
     if (
@@ -1355,6 +1573,11 @@
             displayRestaurantTrackingInfo();
           }, 200);
         }
+
+        // Check for order confirmation and store order history
+        setTimeout(() => {
+          detectAndStoreOrder();
+        }, 500);
 
         // Check if we're on a restaurant grid page
         if (url.includes('/app/') || document.querySelector('div.mx-4.my-8.sm\\:my-2')) {
@@ -1404,10 +1627,17 @@
           if (detectLunchDropRatingPrompt()) {
             // Don't call extractOrderData() - use the restaurant name from the prompt detection
             await injectRatingWidget();
-            console.log('LanchDrap Rating Extension: Rating widget opened via button click (prompt detected)');
-            console.log('LanchDrap Rating Extension: Rating for restaurant:', orderData?.restaurant);
+            console.log(
+              'LanchDrap Rating Extension: Rating widget opened via button click (prompt detected)'
+            );
+            console.log(
+              'LanchDrap Rating Extension: Rating for restaurant:',
+              orderData?.restaurant
+            );
           } else {
-            console.log('LanchDrap Rating Extension: No LunchDrop rating prompt found, rating widget not shown');
+            console.log(
+              'LanchDrap Rating Extension: No LunchDrop rating prompt found, rating widget not shown'
+            );
             // Optionally show a brief message to the user
             button.style.background = '#ffa500';
             button.innerHTML = '🍽️ No Prompt';
@@ -1440,7 +1670,6 @@
 
       // const apiClient = new LanchDrapApiClient.ApiClient(LanchDrapConfig.CONFIG.API_BASE_URL);
 
-
       // Submit pending availability summaries
       const pendingSummaries = JSON.parse(
         localStorage.getItem('pendingAvailabilitySummaries') || '[]'
@@ -1463,4 +1692,3 @@
 
   // End of initializeContentScript function
 })();
-

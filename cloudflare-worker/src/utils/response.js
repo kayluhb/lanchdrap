@@ -11,18 +11,21 @@ export const corsHeaders = {
 
 // Create standardized API response
 export function createApiResponse(data, status = 200, headers = corsHeaders) {
-  return new Response(JSON.stringify({
-    success: status >= 200 && status < 300,
-    data,
-    timestamp: new Date().toISOString(),
-    status
-  }), {
-    status,
-    headers: {
-      ...headers,
-      'Content-Type': 'application/json',
-    },
-  });
+  return new Response(
+    JSON.stringify({
+      success: status >= 200 && status < 300,
+      data,
+      timestamp: new Date().toISOString(),
+      status,
+    }),
+    {
+      status,
+      headers: {
+        ...headers,
+        'Content-Type': 'application/json',
+      },
+    }
+  );
 }
 
 // Create standardized error response
@@ -32,8 +35,8 @@ export function createErrorResponse(message, status = 400, headers = corsHeaders
     error: {
       message,
       status,
-      timestamp: new Date().toISOString()
-    }
+      timestamp: new Date().toISOString(),
+    },
   };
 
   if (details) {

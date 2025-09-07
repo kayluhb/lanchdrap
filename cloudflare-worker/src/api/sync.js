@@ -7,18 +7,26 @@ import { createApiResponse, createErrorResponse } from '../utils/response.js';
 export async function syncRatings(request, env, corsHeaders) {
   try {
     const { ratings } = await request.json();
-    
+
     // Validation
     if (!ratings || !Array.isArray(ratings)) {
-      return createErrorResponse('Invalid ratings data: ratings must be an array', 400, corsHeaders);
+      return createErrorResponse(
+        'Invalid ratings data: ratings must be an array',
+        400,
+        corsHeaders
+      );
     }
 
     if (ratings.length === 0) {
-      return createApiResponse({
-        success: true,
-        message: 'No ratings to sync',
-        syncedCount: 0
-      }, 200, corsHeaders);
+      return createApiResponse(
+        {
+          success: true,
+          message: 'No ratings to sync',
+          syncedCount: 0,
+        },
+        200,
+        corsHeaders
+      );
     }
 
     // Validate each rating
@@ -42,28 +50,33 @@ export async function syncRatings(request, env, corsHeaders) {
         id: ratingKey,
         syncedAt: new Date().toISOString(),
         userAgent: request.headers.get('User-Agent'),
-        ip: request.headers.get('CF-Connecting-IP')
+        ip: request.headers.get('CF-Connecting-IP'),
       };
-      
+
       await env.LANCHDRAP_RATINGS.put(ratingKey, JSON.stringify(fullRatingData));
       syncedRatings.push(fullRatingData);
     }
 
-    return createApiResponse({
-      success: true,
-      message: `Synced ${syncedRatings.length} ratings`,
-      syncedCount: syncedRatings.length,
-      invalidCount: invalidRatings.length,
-      data: {
-        syncedRatings: syncedRatings.length,
-        invalidRatings: invalidRatings.length,
-        totalProcessed: ratings.length,
-        timestamp: new Date().toISOString()
-      }
-    }, 200, corsHeaders);
-
+    return createApiResponse(
+      {
+        success: true,
+        message: `Synced ${syncedRatings.length} ratings`,
+        syncedCount: syncedRatings.length,
+        invalidCount: invalidRatings.length,
+        data: {
+          syncedRatings: syncedRatings.length,
+          invalidRatings: invalidRatings.length,
+          totalProcessed: ratings.length,
+          timestamp: new Date().toISOString(),
+        },
+      },
+      200,
+      corsHeaders
+    );
   } catch (error) {
     console.error('Error syncing ratings:', error);
-    return createErrorResponse('Failed to sync ratings', 500, corsHeaders, { error: error.message });
+    return createErrorResponse('Failed to sync ratings', 500, corsHeaders, {
+      error: error.message,
+    });
   }
 }

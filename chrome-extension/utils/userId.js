@@ -78,12 +78,15 @@ if (typeof module !== 'undefined' && module.exports) {
   // Browser environment - ensure global variables are set
   window.lanchDrapUserIdManager = lanchDrapUserIdManager;
   window.LanchDrapUserIdManager = { LanchDrapUserIdManager, lanchDrapUserIdManager };
-  
+
   // Also set on global scope for content scripts
   if (typeof globalThis !== 'undefined') {
     globalThis.lanchDrapUserIdManager = lanchDrapUserIdManager;
     globalThis.LanchDrapUserIdManager = { LanchDrapUserIdManager, lanchDrapUserIdManager };
   }
-  
-  console.log('LanchDrap Rating Extension: lanchDrapUserIdManager set globally:', typeof window.lanchDrapUserIdManager);
+
+  console.log(
+    'LanchDrap Rating Extension: lanchDrapUserIdManager set globally:',
+    typeof window.lanchDrapUserIdManager
+  );
 }

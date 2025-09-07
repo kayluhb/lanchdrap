@@ -6,20 +6,33 @@ import { createCorsResponse } from './utils/response.js';
 // Import API route handlers
 import { health } from './api/health.js';
 import { submitRating } from './api/ratings.js';
-import { trackAppearances, update, getRestaurantById, searchRestaurantByName } from './api/restaurants.js';
+import {
+  trackAppearances,
+  update,
+  getRestaurantById,
+  searchRestaurantByName,
+  storeUserOrder,
+  getUserOrderHistory,
+  getUserRestaurantSummary,
+} from './api/restaurants.js';
 
 // Route configuration
 const routes = {
   // Health endpoints
   'GET /api/health': health,
-  
+
   // Rating endpoints
   'POST /api/ratings': submitRating,
   'POST /api/restaurants/appearances/track': trackAppearances,
   'POST /api/restaurants/update': update,
-  
+
   // Restaurant search endpoints
   'GET /api/restaurants/search': searchRestaurantByName,
+
+  // User order history endpoints
+  'POST /api/orders': storeUserOrder,
+  'GET /api/orders': getUserOrderHistory,
+  'GET /api/orders/summary': getUserRestaurantSummary,
 };
 
 // Main worker export
@@ -34,56 +47,61 @@ export default {
       const url = new URL(request.url);
       const path = url.pathname;
       const method = request.method;
-      
+
       // Create route key
       const routeKey = `${method} ${path}`;
-      
+
       // Find matching route
       let handler = routes[routeKey];
-      
+
       // Handle dynamic routes
       if (!handler && method === 'GET' && path.startsWith('/api/restaurant/')) {
         handler = getRestaurantById;
       }
-      
+
       if (handler) {
         // Execute the handler
         return await handler(request, env);
       }
-      
-      // No route found - return 404
-      return new Response(JSON.stringify({
-        success: false,
-        error: {
-          message: 'Route not found',
-          status: 404,
-          timestamp: new Date().toISOString()
-        }
-      }), {
-        status: 404,
-        headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
-        },
-      });
 
+      // No route found - return 404
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: {
+            message: 'Route not found',
+            status: 404,
+            timestamp: new Date().toISOString(),
+          },
+        }),
+        {
+          status: 404,
+          headers: {
+            'Content-Type': 'application/json',
+            'Access-Control-Allow-Origin': '*',
+          },
+        }
+      );
     } catch (error) {
       console.error('Worker error:', error);
-      return new Response(JSON.stringify({
-        success: false,
-        error: {
-          message: 'Internal server error',
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: {
+            message: 'Internal server error',
+            status: 500,
+            timestamp: new Date().toISOString(),
+            details: { error: error.message },
+          },
+        }),
+        {
           status: 500,
-          timestamp: new Date().toISOString(),
-          details: { error: error.message }
+          headers: {
+            'Content-Type': 'application/json',
+            'Access-Control-Allow-Origin': '*',
+          },
         }
-      }), {
-        status: 500,
-        headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
-        },
-      });
+      );
     }
   },
 };

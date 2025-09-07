@@ -7,20 +7,24 @@ const CONFIG = {
   ENDPOINTS: {
     // Health endpoints
     HEALTH: '/api/health',
-    
+
     // Rating endpoints
     RATINGS: '/api/ratings',
     RATINGS_STATS: '/api/ratings/stats',
-    
+
     // Restaurant endpoints
     RESTAURANTS: '/api/restaurants',
     RESTAURANTS_APPEARANCES_TRACK: '/api/restaurants/appearances/track',
     RESTAURANTS_UPDATE: '/api/restaurants/update',
     RESTAURANTS_GET_BY_ID: '/api/restaurant',
     RESTAURANTS_SEARCH: '/api/restaurants/search',
-    
+
     // Sync endpoints
     SYNC: '/api/sync',
+
+    // Order history endpoints
+    ORDERS: '/api/orders',
+    ORDERS_SUMMARY: '/api/orders/summary',
   },
 
   // Extension settings
@@ -28,15 +32,15 @@ const CONFIG = {
     // API client settings (used in apiClient.js)
     API_RETRY_ATTEMPTS: 3,
     API_RETRY_DELAY: 1000, // 1 second
-    
+
     // Content script timing settings
     PAGE_LOAD_DELAY: 300, // Delay before scraping restaurant availability
     RESTAURANT_STATS_DELAY: 500, // Delay before showing restaurant stats
     FLOATING_BUTTON_DELAY: 2000, // Delay before showing floating rating button
-    
+
     // DOM cache settings
     DOM_CACHE_TIMEOUT: 5000, // 5 seconds - how long to cache DOM queries
-    
+
     // Local storage settings
     MAX_DAILY_RECORDS: 100, // Max records to keep per day in localStorage
   },
@@ -46,7 +50,6 @@ const CONFIG = {
     STORAGE_KEY: 'lunchdrop_user_id',
     GENERATE_IF_MISSING: true,
   },
-
 
   // Status indicators
   STATUS_INDICATORS: {
@@ -71,7 +74,7 @@ const CONFIG = {
       CREATED_AT: 'createdAt', // When restaurant record was created
       UPDATED_AT: 'updatedAt', // When restaurant record was last updated
     },
-    
+
     // API request/response structure for restaurant updates
     UPDATE_REQUEST: {
       RESTAURANT_ID: 'restaurantId', // Required: Restaurant identifier
@@ -97,6 +100,9 @@ if (typeof module !== 'undefined' && module.exports) {
   if (typeof globalThis !== 'undefined') {
     globalThis.LanchDrapConfig = { CONFIG, getApiUrl };
   }
-  
-  console.log('LanchDrap Rating Extension: LanchDrapConfig set globally:', typeof window.LanchDrapConfig);
+
+  console.log(
+    'LanchDrap Rating Extension: LanchDrapConfig set globally:',
+    typeof window.LanchDrapConfig
+  );
 }

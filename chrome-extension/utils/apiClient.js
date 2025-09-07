@@ -29,7 +29,7 @@ class ApiClient {
     for (let attempt = 1; attempt <= this.retryAttempts; attempt++) {
       try {
         console.log(`LanchDrap API: Attempting request to ${url} (attempt ${attempt})`);
-        
+
         const response = await fetch(url, {
           ...options,
           headers: {
@@ -49,8 +49,10 @@ class ApiClient {
           } catch {
             console.log(`LanchDrap API: Could not read error response body`);
           }
-          
-          throw new Error(`HTTP ${response.status}: ${response.statusText}${errorBody ? ` - ${errorBody}` : ''}`);
+
+          throw new Error(
+            `HTTP ${response.status}: ${response.statusText}${errorBody ? ` - ${errorBody}` : ''}`
+          );
         }
 
         // Try to parse JSON response
@@ -82,7 +84,7 @@ class ApiClient {
     console.error(`LanchDrap API: Last error details:`, lastError);
     console.error(`LanchDrap API: Request URL: ${url}`);
     console.error(`LanchDrap API: Request options:`, options);
-    
+
     throw new Error(errorMessage);
   }
 
@@ -113,14 +115,14 @@ class ApiClient {
   // Get restaurant by ID
   async getRestaurantById(restaurantId, restaurantName = null) {
     let endpoint = `${this.getEndpoint('RESTAURANTS_GET_BY_ID')}/${restaurantId}`;
-    
+
     // Add name as query parameter if provided
     if (restaurantName && restaurantName !== restaurantId) {
       const params = new URLSearchParams();
       params.append('name', restaurantName);
       endpoint += `?${params.toString()}`;
     }
-    
+
     return this.request(endpoint);
   }
 
@@ -129,7 +131,7 @@ class ApiClient {
     const params = new URLSearchParams();
     params.append('name', restaurantName);
     const endpoint = `${this.getEndpoint('RESTAURANTS_SEARCH')}?${params.toString()}`;
-    
+
     return this.request(endpoint);
   }
 
@@ -149,6 +151,32 @@ class ApiClient {
     });
   }
 
+  // Store user order history
+  async storeUserOrder(userId, restaurantId, orderData) {
+    return this.request(this.getEndpoint('ORDERS'), {
+      method: 'POST',
+      body: JSON.stringify({ userId, restaurantId, orderData }),
+    });
+  }
+
+  // Get user order history
+  async getUserOrderHistory(userId, restaurantId = null) {
+    const params = new URLSearchParams();
+    params.append('userId', userId);
+    if (restaurantId) {
+      params.append('restaurantId', restaurantId);
+    }
+    const endpoint = `${this.getEndpoint('ORDERS')}?${params.toString()}`;
+    return this.request(endpoint);
+  }
+
+  // Get user's restaurant order summary
+  async getUserRestaurantSummary(userId) {
+    const params = new URLSearchParams();
+    params.append('userId', userId);
+    const endpoint = `${this.getEndpoint('ORDERS_SUMMARY')}?${params.toString()}`;
+    return this.request(endpoint);
+  }
 }
 
 // Export for use in other files
@@ -162,6 +190,9 @@ if (typeof module !== 'undefined' && module.exports) {
   if (typeof globalThis !== 'undefined') {
     globalThis.LanchDrapApiClient = { ApiClient };
   }
-  
-  console.log('LanchDrap Rating Extension: LanchDrapApiClient set globally:', typeof window.LanchDrapApiClient);
+
+  console.log(
+    'LanchDrap Rating Extension: LanchDrapApiClient set globally:',
+    typeof window.LanchDrapApiClient
+  );
 }

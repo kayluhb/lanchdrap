@@ -21,13 +21,19 @@
     "rules": {
       "recommended": true,
       "correctness": {
-        "noUnusedVariables": "error"
+        "noUnusedVariables": "error",
+        "noUnusedImports": "error"
       },
       "suspicious": {
-        "noExplicitAny": "warn"
+        "noExplicitAny": "warn",
+        "noConsole": "warn"
       },
       "style": {
-        "useConst": "error"
+        "useConst": "error",
+        "useTemplate": "error"
+      },
+      "complexity": {
+        "noForEach": "warn"
       }
     }
   },

@@ -7,7 +7,7 @@ import { createApiResponse, createErrorResponse } from '../utils/response.js';
 export async function submitRating(request, env) {
   try {
     const ratingData = await request.json();
-    
+
     // Validation
     if (!ratingData.restaurant || !ratingData.rating) {
       return createErrorResponse('Restaurant and rating are required', 400);
@@ -21,13 +21,11 @@ export async function submitRating(request, env) {
     const today = new Date().toISOString().split('T')[0];
     const dailyRatingKey = `daily_rating:${ratingData.restaurant}:${today}`;
     const existingRating = await env.LANCHDRAP_RATINGS.get(dailyRatingKey);
-    
+
     if (existingRating) {
-      return createErrorResponse(
-        'You have already rated this restaurant today',
-        409,
-        { existingRating: JSON.parse(existingRating) }
-      );
+      return createErrorResponse('You have already rated this restaurant today', 409, {
+        existingRating: JSON.parse(existingRating),
+      });
     }
 
     // Store the rating
@@ -37,20 +35,22 @@ export async function submitRating(request, env) {
       id: ratingKey,
       timestamp: new Date().toISOString(),
       userAgent: request.headers.get('User-Agent'),
-      ip: request.headers.get('CF-Connecting-IP')
+      ip: request.headers.get('CF-Connecting-IP'),
     };
-    
+
     // COMMENTED OUT: Not storing ratings yet
     // await env.LANCHDRAP_RATINGS.put(ratingKey, JSON.stringify(fullRatingData));
     // await env.LANCHDRAP_RATINGS.put(dailyRatingKey, JSON.stringify(fullRatingData));
 
-    return createApiResponse({
-      success: true,
-      message: 'Rating submitted successfully',
-      ratingId: ratingKey,
-      rating: fullRatingData
-    }, 201);
-
+    return createApiResponse(
+      {
+        success: true,
+        message: 'Rating submitted successfully',
+        ratingId: ratingKey,
+        rating: fullRatingData,
+      },
+      201
+    );
   } catch (error) {
     console.error('Error submitting rating:', error);
     return createErrorResponse('Failed to submit rating', 500, { error: error.message });
@@ -70,7 +70,7 @@ export async function getRatings(request, _env) {
     // COMMENTED OUT: Not storing ratings yet, return empty array
     const ratings = [];
     // const list = await env.LANCHDRAP_RATINGS.list({ prefix: 'rating:' });
-    // 
+    //
     // for (const key of list.keys) {
     //   const ratingData = await env.LANCHDRAP_RATINGS.get(key.name);
     //   if (ratingData) {
@@ -85,7 +85,7 @@ export async function getRatings(request, _env) {
     ratings.sort((a, b) => {
       const aVal = a[sortBy];
       const bVal = b[sortBy];
-      
+
       if (order === 'desc') {
         return new Date(bVal) - new Date(aVal);
       } else {
@@ -95,21 +95,23 @@ export async function getRatings(request, _env) {
 
     const paginatedRatings = ratings.slice(offset, offset + limit);
 
-    return createApiResponse({
-      ratings: paginatedRatings,
-      pagination: {
-        total: ratings.length,
-        limit,
-        offset,
-        hasMore: offset + limit < ratings.length
+    return createApiResponse(
+      {
+        ratings: paginatedRatings,
+        pagination: {
+          total: ratings.length,
+          limit,
+          offset,
+          hasMore: offset + limit < ratings.length,
+        },
+        filters: {
+          restaurant: restaurant || null,
+          sortBy,
+          order,
+        },
       },
-      filters: {
-        restaurant: restaurant || null,
-        sortBy,
-        order
-      }
-    }, 200);
-
+      200
+    );
   } catch (error) {
     console.error('Error getting ratings:', error);
     return createErrorResponse('Failed to get ratings', 500, { error: error.message });
@@ -126,7 +128,7 @@ export async function getRatingStats(request, _env) {
     // COMMENTED OUT: Not storing ratings yet, return empty array
     const ratings = [];
     // const list = await env.LANCHDRAP_RATINGS.list({ prefix: 'rating:' });
-    // 
+    //
     // for (const key of list.keys) {
     //   const ratingData = await env.LANCHDRAP_RATINGS.get(key.name);
     //   if (ratingData) {
@@ -139,31 +141,35 @@ export async function getRatingStats(request, _env) {
 
     // Calculate statistics
     const totalRatings = ratings.length;
-    const averageRating = totalRatings > 0 
-      ? ratings.reduce((sum, r) => sum + r.rating, 0) / totalRatings 
-      : 0;
+    const averageRating =
+      totalRatings > 0 ? ratings.reduce((sum, r) => sum + r.rating, 0) / totalRatings : 0;
 
     // Rating distribution
-    const ratingDistribution = [1, 2, 3, 4, 5].map(star => ({
+    const ratingDistribution = [1, 2, 3, 4, 5].map((star) => ({
       stars: star,
-      count: ratings.filter(r => r.rating === star).length,
-      percentage: totalRatings > 0 ? (ratings.filter(r => r.rating === star).length / totalRatings * 100).toFixed(1) : 0
+      count: ratings.filter((r) => r.rating === star).length,
+      percentage:
+        totalRatings > 0
+          ? ((ratings.filter((r) => r.rating === star).length / totalRatings) * 100).toFixed(1)
+          : 0,
     }));
 
     // Recent ratings (last 7 days)
     const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-    const recentRatings = ratings.filter(r => new Date(r.timestamp) > weekAgo);
+    const recentRatings = ratings.filter((r) => new Date(r.timestamp) > weekAgo);
 
-    return createApiResponse({
-      totalRatings,
-      averageRating: Math.round(averageRating * 100) / 100,
-      ratingDistribution,
-      recentRatings: recentRatings.length,
-      timeRange,
-      restaurant: restaurant || 'all',
-      lastUpdated: new Date().toISOString()
-    }, 200);
-
+    return createApiResponse(
+      {
+        totalRatings,
+        averageRating: Math.round(averageRating * 100) / 100,
+        ratingDistribution,
+        recentRatings: recentRatings.length,
+        timeRange,
+        restaurant: restaurant || 'all',
+        lastUpdated: new Date().toISOString(),
+      },
+      200
+    );
   } catch (error) {
     console.error('Error getting rating stats:', error);
     return createErrorResponse('Failed to get rating statistics', 500, { error: error.message });
@@ -175,7 +181,7 @@ export async function checkDailyRating(request, env) {
   try {
     const url = new URL(request.url);
     const restaurant = url.searchParams.get('restaurant');
-    
+
     if (!restaurant) {
       return createErrorResponse('Restaurant parameter is required', 400);
     }
@@ -183,20 +189,25 @@ export async function checkDailyRating(request, env) {
     const today = new Date().toISOString().split('T')[0];
     const dailyRatingKey = `daily_rating:${restaurant}:${today}`;
     const existingRating = await env.LANCHDRAP_RATINGS.get(dailyRatingKey);
-    
+
     if (existingRating) {
-      return createApiResponse({
-        hasRatedToday: true,
-        rating: JSON.parse(existingRating),
-        date: today
-      }, 200);
+      return createApiResponse(
+        {
+          hasRatedToday: true,
+          rating: JSON.parse(existingRating),
+          date: today,
+        },
+        200
+      );
     }
 
-    return createApiResponse({
-      hasRatedToday: false,
-      date: today
-    }, 200);
-
+    return createApiResponse(
+      {
+        hasRatedToday: false,
+        date: today,
+      },
+      200
+    );
   } catch (error) {
     console.error('Error checking daily rating:', error);
     return createErrorResponse('Failed to check daily rating', 500, { error: error.message });

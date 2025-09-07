@@ -1,6 +1,59 @@
 // Restaurant utility functions
 // Shared logic for restaurant data management
 
+// Parse menu items from HTML structure
+export function parseMenuItems(htmlContent) {
+  try {
+    // Create a temporary DOM element to parse the HTML
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(htmlContent, 'text/html');
+    
+    // Find all menu item containers
+    const menuItems = [];
+    const menuItemElements = doc.querySelectorAll('.my-4.text-lg.cursor-pointer');
+    
+    menuItemElements.forEach(item => {
+      // Extract the menu item name from the span with font-bold class
+      const nameElement = item.querySelector('.flex.items-center.font-bold span');
+      if (nameElement) {
+        const menuItemName = nameElement.textContent.trim();
+        if (menuItemName) {
+          menuItems.push(menuItemName);
+        }
+      }
+    });
+    
+    return menuItems;
+  } catch (error) {
+    console.error('Error parsing menu items:', error);
+    return [];
+  }
+}
+
+// Compare two menu arrays to detect changes
+export function compareMenus(oldMenu, newMenu) {
+  if (!oldMenu || !newMenu) {
+    return oldMenu !== newMenu; // Different if one is null/undefined
+  }
+  
+  if (oldMenu.length !== newMenu.length) {
+    return true; // Different lengths means change
+  }
+  
+  // Sort both arrays for comparison
+  const sortedOld = [...oldMenu].sort();
+  const sortedNew = [...newMenu].sort();
+  
+  // Compare each item
+  for (let i = 0; i < sortedOld.length; i++) {
+    if (sortedOld[i] !== sortedNew[i]) {
+      return true; // Found a difference
+    }
+  }
+  
+  return false; // No changes detected
+}
+
 // Update restaurant appearance counts
 export async function updateRestaurantAppearanceCounts(env, restaurants, _date) {
   try {

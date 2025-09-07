@@ -2,6 +2,7 @@
 // Following modern API patterns with proper error handling and validation
 
 import { createApiResponse, createErrorResponse } from '../utils/response.js';
+import { parseMenuItems, compareMenus } from '../utils/restaurants.js';
 
 // Track restaurant appearances with proper KV structure
 async function trackRestaurantAppearances(env, restaurants, date) {
@@ -30,6 +31,7 @@ async function trackRestaurantAppearances(env, restaurants, date) {
           appearances: [],
           soldOutDates: [],
           color: restaurantInfo.color || null, // Store the color
+          menu: restaurantInfo.menu || [], // Store menu items
           firstSeen: date,
           lastSeen: date,
           createdAt: new Date().toISOString()
@@ -59,6 +61,11 @@ async function trackRestaurantAppearances(env, restaurants, date) {
         restaurantData.color = restaurantInfo.color;
       }
       
+      // Initialize menu if it doesn't exist (for existing records)
+      if (!restaurantData.menu) {
+        restaurantData.menu = [];
+      }
+      
       // Track sold out status if restaurant is sold out
       if (restaurantInfo.status === 'soldout' && !restaurantData.soldOutDates.includes(date)) {
         restaurantData.soldOutDates.push(date);
@@ -78,6 +85,16 @@ async function trackRestaurantAppearances(env, restaurants, date) {
         if (restaurantInfo.color && restaurantData.color !== restaurantInfo.color) {
           restaurantData.color = restaurantInfo.color;
           restaurantData.updatedAt = new Date().toISOString();
+        }
+        
+        // Update menu if provided and different
+        if (restaurantInfo.menu && Array.isArray(restaurantInfo.menu)) {
+          const menuChanged = compareMenus(restaurantData.menu, restaurantInfo.menu);
+          if (menuChanged) {
+            restaurantData.menu = restaurantInfo.menu;
+            restaurantData.updatedAt = new Date().toISOString();
+            console.log(`Menu updated for restaurant ${restaurantData.id}:`, restaurantInfo.menu);
+          }
         }
         
         // Save to KV
@@ -229,16 +246,16 @@ export async function getAppearances(request, env) {
   }
 }
 
-// Update restaurant name
-export async function updateName(request, env) {
+// Update restaurant (name, menu, etc.)
+export async function update(request, env) {
   try {
-    const { restaurantId, restaurantName } = await request.json();
+    const { restaurantId, restaurantName, menuHtml } = await request.json();
     
-    if (!restaurantId || !restaurantName) {
-      return createErrorResponse('Restaurant ID and name are required', 400);
+    if (!restaurantId) {
+      return createErrorResponse('Restaurant ID is required', 400);
     }
 
-    if (restaurantName.length < 2) {
+    if (restaurantName && restaurantName.length < 2) {
       return createErrorResponse('Restaurant name must be at least 2 characters long', 400);
     }
 
@@ -255,53 +272,82 @@ export async function updateName(request, env) {
         id: restaurantId,
         name: restaurantName,
         appearances: [],
+        soldOutDates: [],
+        menu: [],
         firstSeen: null,
         lastSeen: null,
         createdAt: new Date().toISOString()
       };
     }
     
+    // Initialize menu if it doesn't exist
+    if (!restaurantData.menu) {
+      restaurantData.menu = [];
+    }
+    
+    const updates = [];
+    let hasChanges = false;
+    
+    // Parse menu from HTML if provided
+    let newMenu = [];
+    if (menuHtml) {
+      newMenu = parseMenuItems(menuHtml);
+      const menuChanged = compareMenus(restaurantData.menu, newMenu);
+      if (menuChanged) {
+        restaurantData.menu = newMenu;
+        updates.push('menu');
+        hasChanges = true;
+        console.log(`Menu updated for restaurant ${restaurantId}:`, newMenu);
+      }
+    }
+    
     // Check if the name is actually different
-    const oldName = restaurantData.name;
-    if (oldName === restaurantName) {
-      // Name is the same, no need to update
+    if (restaurantName && restaurantData.name !== restaurantName) {
+      const oldName = restaurantData.name;
+      restaurantData.name = restaurantName;
+      updates.push('name');
+      hasChanges = true;
+      console.log(`Name updated for restaurant ${restaurantId}: "${oldName}" -> "${restaurantName}"`);
+    }
+    
+    if (!hasChanges) {
+      // No changes needed
       return createApiResponse({
         success: true,
-        message: `Restaurant name is already "${restaurantName}" - no update needed`,
+        message: 'No changes detected - restaurant data is up to date',
         data: {
           restaurantId,
-          name: restaurantName,
+          name: restaurantData.name,
+          menu: restaurantData.menu,
           unchanged: true,
           timestamp: new Date().toISOString()
         }
       }, 200);
     }
     
-    // Update the restaurant name
-    restaurantData.name = restaurantName;
+    // Update timestamp and save to KV
     restaurantData.updatedAt = new Date().toISOString();
-    
-    // COMMENTED OUT: Save to KV - not implementing this yet
-    // await env.LANCHDRAP_RATINGS.put(restaurantKey, JSON.stringify(restaurantData));
+    await env.LANCHDRAP_RATINGS.put(restaurantKey, JSON.stringify(restaurantData));
     
     return createApiResponse({
       success: true,
-      message: `Updated restaurant name from "${oldName}" to "${restaurantName}"`,
+      message: `Updated restaurant: ${updates.join(', ')}`,
       data: {
         restaurantId,
-        oldName,
-        newName: restaurantName,
+        name: restaurantData.name,
+        menu: restaurantData.menu,
+        updatedFields: updates,
         updatedAt: restaurantData.updatedAt
       }
     }, 200);
   } catch (error) {
-    console.error('Error updating restaurant name:', error);
-    return createErrorResponse('Failed to update restaurant name', 500, { error: error.message });
+    console.error('Error updating restaurant:', error);
+    return createErrorResponse('Failed to update restaurant', 500, { error: error.message });
   }
 }
 
 // Get all restaurants
-export async function getAllRestaurants(request, env) {
+export async function getAllRestaurants(_request, env) {
   try {
     // List all restaurant keys from KV
     const list = await env.LANCHDRAP_RATINGS.list({ prefix: 'restaurant:' });

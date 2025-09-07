@@ -161,12 +161,17 @@ class ApiClient {
 
   // Check daily rating endpoint removed
 
-  // Update restaurant name
-  async updateRestaurantName(restaurantId, restaurantName) {
-    return this.request('/api/restaurants/update-name', {
+  // Update restaurant (name, menu, etc.)
+  async updateRestaurant(restaurantId, restaurantName = null, menuHtml = null) {
+    return this.request('/api/restaurants/update', {
       method: 'POST',
-      body: JSON.stringify({ restaurantId, restaurantName }),
+      body: JSON.stringify({ restaurantId, restaurantName, menuHtml }),
     });
+  }
+
+  // Legacy method for backward compatibility
+  async updateRestaurantName(restaurantId, restaurantName) {
+    return this.updateRestaurant(restaurantId, restaurantName);
   }
 
   // Sync ratings from local storage

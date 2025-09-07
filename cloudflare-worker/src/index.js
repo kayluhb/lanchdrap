@@ -6,7 +6,7 @@ import { createCorsResponse } from './utils/response.js';
 // Import API route handlers
 import { health } from './api/health.js';
 import { submitRating } from './api/ratings.js';
-import { trackAppearances, updateName, getRestaurantById } from './api/restaurants.js';
+import { trackAppearances, update, getRestaurantById } from './api/restaurants.js';
 
 // Route configuration
 const routes = {
@@ -16,7 +16,7 @@ const routes = {
   // Rating endpoints
   'POST /api/ratings': submitRating,
   'POST /api/restaurants/appearances/track': trackAppearances,
-  'POST /api/restaurants/update-name': updateName,
+  'POST /api/restaurants/update': update,
 };
 
 // Main worker export

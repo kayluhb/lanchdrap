@@ -1,28 +1,88 @@
 // Content script for lunchdrop.com
 (() => {
-  // Utilities are loaded via manifest, check availability
-  console.log('LanchDrap Rating Extension: Checking utility availability...');
-  console.log('LanchDrapApiClient available:', typeof LanchDrapApiClient !== 'undefined');
-  console.log('LanchDrapConfig available:', typeof LanchDrapConfig !== 'undefined');
-  console.log('lanchDrapUserIdManager available:', typeof lanchDrapUserIdManager !== 'undefined');
-  console.log('Window object keys:', Object.keys(window).filter(key => key.includes('LanchDrap')));
-  console.log('Available globals:', {
-    LanchDrapApiClient: typeof LanchDrapApiClient,
-    LanchDrapConfig: typeof LanchDrapConfig,
-    lanchDrapUserIdManager: typeof lanchDrapUserIdManager
-  });
-
-  // Start the main script
+  // Start the main script immediately
       initializeContentScript();
 
-      // Submit any pending data that was stored locally
+  // Submit any pending data that was stored locally (reduced delay)
       setTimeout(() => {
         submitPendingData();
-      }, 2000);
+  }, 500);
 
   function initializeContentScript() {
     let orderData = null;
     let ratingWidget = null;
+
+    // Cache for DOM queries to avoid repeated lookups
+    const domCache = {
+      restaurantGrid: null,
+      restaurantCards: null,
+      lastCacheTime: 0,
+      cacheTimeout: 5000 // 5 seconds
+    };
+
+    // Helper function to get cached restaurant grid
+    function getCachedRestaurantGrid() {
+      const now = Date.now();
+      if (domCache.restaurantGrid && (now - domCache.lastCacheTime) < domCache.cacheTimeout) {
+        return domCache.restaurantGrid;
+      }
+      
+      // Try to find the restaurant grid using optimized strategies
+      let restaurantGrid = null;
+      
+      // Strategy 1: Look for the specific selector from the user's xpath
+      restaurantGrid = document.querySelector('#app > div.flex.flex-col.justify-between.w-full.min-h-screen.v-cloak > div.flex-auto.basis-full.relative > div.max-w-6xl.mx-auto > div:nth-child(6) > div');
+      
+      // Strategy 2: Look for flex-wrap gap-3 (common pattern for restaurant grids)
+      if (!restaurantGrid) {
+        restaurantGrid = document.querySelector('div.flex.flex-wrap.gap-3');
+      }
+      
+      // Strategy 3: Look for div containing restaurant links with specific URL pattern
+      if (!restaurantGrid) {
+        const restaurantLinks = document.querySelectorAll('a[href*="/app/"]');
+        const validRestaurantLinks = Array.from(restaurantLinks).filter(link => {
+          const href = link.getAttribute('href');
+          return href && /\/app\/.*\/[a-zA-Z0-9]+/.test(href);
+        });
+        
+        if (validRestaurantLinks.length > 0) {
+          const potentialGrid = validRestaurantLinks[0].closest('div');
+          const restaurantLinksInGrid = potentialGrid.querySelectorAll('a[href*="/app/"]');
+          const validLinksInGrid = Array.from(restaurantLinksInGrid).filter(link => {
+            const href = link.getAttribute('href');
+            return href && /\/app\/.*\/[a-zA-Z0-9]+/.test(href);
+          });
+          
+          const hasMultipleRestaurants = validLinksInGrid.length >= 3;
+          const isNotDateNav = !potentialGrid.className.includes('day-container') && 
+                              !potentialGrid.className.includes('snap-x') &&
+                              !potentialGrid.className.includes('overflow-scroll');
+          
+          if (hasMultipleRestaurants && isNotDateNav) {
+            restaurantGrid = potentialGrid;
+          }
+        }
+      }
+      
+      // Strategy 4: Fallback to old selector
+      if (!restaurantGrid) {
+        restaurantGrid = document.querySelector('div.mx-4.my-8.sm\\:my-2');
+      }
+      
+      // Cache the result
+      domCache.restaurantGrid = restaurantGrid;
+      domCache.lastCacheTime = now;
+      
+      return restaurantGrid;
+    }
+
+    // Helper function to clear DOM cache
+    function clearDomCache() {
+      domCache.restaurantGrid = null;
+      domCache.restaurantCards = null;
+      domCache.lastCacheTime = 0;
+    }
 
     // Listen for messages from popup
     chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
@@ -31,361 +91,20 @@
       }
     });
 
-    // Function to extract order data from the page
-    function extractOrderData() {
-      try {
-        // Common selectors for order information on food delivery sites
-        const selectors = {
-          restaurant: [
-            '[data-testid="restaurant-name"]',
-            '.restaurant-name',
-            'h1',
-            '[class*="restaurant"]',
-            '[class*="vendor"]',
-            // Specific LunchDrop selector for restaurant name on detail page (XPath style)
-            '//*[@id="app"]/div[1]/div[2]/div[2]/div[7]/div/div/div[1]/div[1]',
-            // CSS equivalent for detail page
-            '#app > div:nth-child(1) > div:nth-child(2) > div:nth-child(2) > div:nth-child(7) > div > div > div:nth-child(1) > div:nth-child(1)',
-            // Specific LunchDrop selector for restaurant name on daily page (XPath style)
-            '//*[@id="app"]/div[1]/div[2]/div[2]/div[6]/div/div/div/div[1]',
-            // CSS equivalent for daily page
-            '#app > div:nth-child(1) > div:nth-child(2) > div:nth-child(2) > div:nth-child(6) > div > div > div > div:nth-child(1)',
-          ],
-          items: [
-            '[data-testid="menu-item"]',
-            '.menu-item',
-            '.item-name',
-            '[class*="item"]',
-            '[class*="product"]',
-          ],
-          total: [
-            '[data-testid="total"]',
-            '.total',
-            '.order-total',
-            '[class*="total"]',
-            '[class*="amount"]',
-          ],
-          orderId: ['[data-testid="order-id"]', '.order-id', '[class*="order"]', '[class*="id"]'],
-        };
-
-        const restaurantElement = findElement(selectors.restaurant);
-        const restaurant = restaurantElement?.textContent?.trim() || 'Unknown Restaurant';
-
-        // Log which selector found the restaurant name for debugging
-        if (restaurantElement) {
-          console.log('LanchDrap Rating Extension: Found restaurant name:', restaurant);
-        } else {
-          console.log('LanchDrap Rating Extension: Could not find restaurant name element');
-        }
-        const items = Array.from(findElements(selectors.items))
-          .map((item) => item.textContent?.trim())
-          .filter(Boolean);
-        const total = findElement(selectors.total)?.textContent?.trim() || '$0.00';
-        const orderId = findElement(selectors.orderId)?.textContent?.trim() || generateOrderId();
-
-        orderData = {
-          restaurant,
-          items: items.length > 0 ? items : ['Unknown Items'],
-          total: total,
-          orderId: orderId,
-        };
-
-        console.log('LanchDrap Rating Extension: Order data extracted:', orderData);
-        return orderData;
-      } catch (error) {
-        console.error('LanchDrap Rating Extension: Error extracting order data:', error);
-        return null;
-      }
-    }
-
-    function findElement(selectors) {
-      for (const selector of selectors) {
-        // Handle both CSS selectors and XPath-style selectors
-        let element = null;
-
-        if (selector.startsWith('//') || selector.startsWith('*[@')) {
-          // XPath-style selector - convert to CSS selector or use document.evaluate
-          try {
-            // Try to convert common XPath patterns to CSS selectors
-            const cssSelector = convertXPathToCSS(selector);
-            element = document.querySelector(cssSelector);
-          } catch (error) {
-            console.log('Could not convert XPath to CSS, trying direct evaluation:', error);
-            // Fallback: try to find by text content or other means
-            element = findElementByText(selector);
-          }
-        } else {
-          // Regular CSS selector
-          element = document.querySelector(selector);
-        }
-
-        if (element) return element;
-      }
-      return null;
-    }
-
-    function findElements(selectors) {
-      for (const selector of selectors) {
-        const elements = document.querySelectorAll(selector);
-        if (elements.length > 0) return elements;
-      }
-      return [];
-    }
-
     function generateOrderId() {
       return 'order_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
     }
 
-    // Helper function to convert XPath-style selectors to CSS selectors
-    function convertXPathToCSS(xpath) {
-      // Handle the specific XPath pattern: //*[@id="app"]/div[1]/div[2]/div[2]/div[6]/div/div/div/div[1]
-      if (xpath.includes('[@id="app"]')) {
-        // Convert to CSS selector
-        return '#app > div:nth-child(1) > div:nth-child(2) > div:nth-child(2) > div:nth-child(6) > div > div > div > div:nth-child(1)';
-      }
 
-      // Handle other common XPath patterns
-      return xpath
-        .replace(/\/\//g, '') // Remove // at the beginning
-        .replace(/\[@id="([^"]+)"\]/g, '#$1') // Convert [@id="value"] to #value
-        .replace(/\[@class="([^"]+)"\]/g, '.$1') // Convert [@class="value"] to .value
-        .replace(/\[(\d+)\]/g, ':nth-child($1)') // Convert [1] to :nth-child(1)
-        .replace(/\//g, ' > '); // Convert / to > for CSS descendant selectors
-    }
-
-    // Helper function to find elements by text content or other fallback methods
-    function findElementByText(selector) {
-      // For the specific restaurant name element, try to find it by looking for common patterns
-      if (selector.includes('app') && selector.includes('div[6]')) {
-        // Try to find the restaurant name by looking for text that looks like a restaurant name
-        const appElement = document.getElementById('app');
-        if (appElement) {
-          // Look for div elements that might contain restaurant names
-          const divs = appElement.querySelectorAll('div');
-          for (const div of divs) {
-            const text = div.textContent?.trim();
-            if (
-              text &&
-              text.length > 0 &&
-              text.length < 100 &&
-              !text.includes('$') &&
-              !text.includes('Order') &&
-              !text.includes('Total') &&
-              !text.includes('Checkout')
-            ) {
-              // This might be a restaurant name
-              return div;
-            }
-          }
-        }
-      }
-      return null;
-    }
-
-    // Function to check if user has already rated this specific order
-    async function hasUserRatedOrder(restaurantName, orderItems) {
-      try {
-        // Check if utilities are loaded
-        if (typeof LanchDrapApiClient === 'undefined' || typeof LanchDrapConfig === 'undefined') {
-          console.log('Extension utilities not loaded yet, skipping rating check');
-          return false;
-        }
-
-        const apiClient = new LanchDrapApiClient.ApiClient(LanchDrapConfig.CONFIG.API_BASE_URL);
-        const userIdentification = await lanchDrapUserIdManager.getUserIdentification();
-
-        // Get user's ratings for this restaurant
-        // Ratings endpoint removed - can't fetch ratings anymore
-        const ratings = null;
-
-        // Check if user has rated this specific order (same restaurant + same items)
-        if (ratings && ratings.ratings && ratings.ratings.length > 0) {
-          for (const rating of ratings.ratings) {
-            // Compare items arrays (order doesn't matter)
-            const ratingItems = rating.items || [];
-            const currentItems = orderItems || [];
-
-            // Check if the items match (same length and same items)
-            if (ratingItems.length === currentItems.length) {
-              const itemsMatch = ratingItems.every((item) =>
-                currentItems.some(
-                  (currentItem) => currentItem.toLowerCase().trim() === item.toLowerCase().trim()
-                )
-              );
-
-              if (itemsMatch) {
-                console.log(
-                  'LanchDrap Rating Extension: User has already rated this specific order'
-                );
-                return true;
-              }
-            }
-          }
-        }
-
-        return false;
-      } catch (error) {
-        console.error('Error checking if user has rated order:', error);
-        return false; // Default to allowing rating if check fails
-      }
-    }
-
-    // Function to create widget showing restaurant was already rated today
-    function createAlreadyRatedWidget(existingRating) {
-      if (ratingWidget) {
-        ratingWidget.remove();
-      }
-
-      ratingWidget = document.createElement('div');
-      ratingWidget.id = 'lunchdrop-rating-widget';
-      ratingWidget.innerHTML = `
-            <div class="ld-rating-container">
-                <div class="ld-rating-header">
-                    <span class="ld-rating-title">Already Rated Today</span>
-                    <button class="ld-rating-close" id="ld-rating-close">×</button>
-                </div>
-                <div class="ld-restaurant-name">
-                    <span class="ld-restaurant-title">${existingRating.restaurant}</span>
-                </div>
-                <div class="ld-already-rated-content">
-                    <div class="ld-rating-display">
-                        <span class="ld-rating-stars-display">
-                            ${'🤠'.repeat(existingRating.rating)}${'⚪'.repeat(5 - existingRating.rating)}
-                        </span>
-                        <span class="ld-rating-value">${existingRating.rating}/5</span>
-                    </div>
-                    ${existingRating.comment ? `<div class="ld-rating-comment-display">"${existingRating.comment}"</div>` : ''}
-                    <div class="ld-rating-timestamp">Rated on ${new Date(existingRating.timestamp).toLocaleDateString()}</div>
-                </div>
-            </div>
-        `;
-
-      // Inject the CSS styles
-      if (!document.getElementById('lunchdrop-extension-styles')) {
-        const style = document.createElement('style');
-        style.id = 'lunchdrop-extension-styles';
-        style.textContent = `
-          #lunchdrop-rating-widget {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            width: 300px;
-            background: white;
-            border: 2px solid #007bff;
-            border-radius: 8px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-            z-index: 10000;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-          }
-          .ld-rating-container {
-            padding: 16px;
-          }
-          .ld-rating-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 12px;
-            border-bottom: 1px solid #eee;
-            padding-bottom: 8px;
-          }
-          .ld-rating-title {
-            font-weight: 600;
-            color: #333;
-            font-size: 16px;
-          }
-          .ld-rating-close {
-            background: none;
-            border: none;
-            font-size: 20px;
-            cursor: pointer;
-            color: #666;
-            padding: 0;
-            width: 24px;
-            height: 24px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-          }
-          .ld-rating-close:hover {
-            color: #333;
-          }
-          .ld-restaurant-name {
-            margin-bottom: 12px;
-          }
-          .ld-restaurant-title {
-            font-weight: 500;
-            color: #555;
-            font-size: 14px;
-          }
-          .ld-already-rated-content {
-            text-align: center;
-          }
-          .ld-rating-display {
-            margin-bottom: 12px;
-          }
-          .ld-rating-stars-display {
-            font-size: 24px;
-            color: #ffc107;
-            margin-right: 8px;
-          }
-          .ld-rating-value {
-            font-size: 18px;
-            font-weight: 600;
-            color: #333;
-          }
-          .ld-rating-comment-display {
-            background: #f8f9fa;
-            padding: 8px 12px;
-            border-radius: 4px;
-            margin-bottom: 8px;
-            font-style: italic;
-            color: #666;
-            font-size: 14px;
-          }
-          .ld-rating-timestamp {
-            font-size: 12px;
-            color: #999;
-          }
-        `;
-        document.head.appendChild(style);
-      }
-
-      // Add to page
-      document.body.appendChild(ratingWidget);
-
-      // Setup close button
-      const closeButton = ratingWidget.querySelector('#ld-rating-close');
-      closeButton.addEventListener('click', () => {
-        ratingWidget.remove();
-        ratingWidget = null;
-      });
-
-      // Auto-close after 5 seconds
-      setTimeout(() => {
-        if (ratingWidget) {
-          ratingWidget.remove();
-          ratingWidget = null;
-        }
-      }, 5000);
-    }
 
     // Function to inject rating widget into the page
     async function injectRatingWidget() {
       if (ratingWidget) return; // Already injected
 
       const restaurantName = orderData?.restaurant || 'Unknown Restaurant';
-      const orderItems = orderData?.items || ['Unknown Items'];
 
       // Daily rating check endpoint removed - no longer checking if restaurant was rated today
 
-      // Check if user has already rated this specific order
-      const alreadyRated = await hasUserRatedOrder(restaurantName, orderItems);
-      if (alreadyRated) {
-        console.log(
-          'LanchDrap Rating Extension: Not showing rating widget - user has already rated this specific order'
-        );
-        return;
-      }
 
       const widget = document.createElement('div');
       widget.id = 'lunchdrop-rating-widget';
@@ -549,20 +268,6 @@
       }
     }
 
-    // Function to detect when user is on an order page
-    function detectOrderPage() {
-      // Look for common indicators of an order page
-      const orderIndicators = ['order', 'checkout', 'confirmation', 'receipt', 'summary'];
-
-      const url = window.location.href.toLowerCase();
-      const pageText = document.body.textContent.toLowerCase();
-
-      const isOrderPage = orderIndicators.some(
-        (indicator) => url.includes(indicator) || pageText.includes(indicator)
-      );
-
-      // Order page detection removed - rating is now completely manual via button click only
-    }
 
     // Function to detect LanchDrap's rating prompt
     function detectLunchDropRatingPrompt() {
@@ -622,172 +327,71 @@
       }
     }
 
-    // Function to detect sellout status
-    function detectSelloutStatus() {
-      const selloutIndicators = [
-        'sold out',
-        'soldout',
-        'out of stock',
-        'unavailable',
-        'not available',
-        'temporarily unavailable',
-        'currently unavailable',
-        'no longer available',
-        'limited availability',
-        'limited menu',
-        'reduced menu',
-      ];
-
-      const pageText = document.body.textContent.toLowerCase();
-      let detectedStatus = 'available';
-      let reason = null;
-
-      // Check for sold out indicators
-      if (selloutIndicators.some((indicator) => pageText.includes(indicator))) {
-        detectedStatus = 'soldout';
-        reason = 'Detected sellout indicators on page';
-      }
-      // Check for limited availability
-      else if (pageText.includes('limited') || pageText.includes('reduced')) {
-        detectedStatus = 'limited';
-        reason = 'Detected limited availability indicators';
-      }
-
-      // If we detected a change in status, report it - DISABLED FOR NOW
-      // if (detectedStatus !== 'available') {
-      //   reportSelloutStatus(detectedStatus, reason);
-      // }
-    }
 
     // Function to scrape restaurant availability from the main grid
     async function scrapeRestaurantAvailability() {
       try {
-        // Check if we're on a sign-in page
+        // Quick checks to avoid unnecessary processing
         if (document.querySelector('input[type="password"]') || 
             document.body.textContent.includes('Sign in') ||
             document.body.textContent.includes('Phone Number or Email Address')) {
-          console.log('LanchDrap Rating Extension: Detected sign-in page, skipping restaurant scraping');
           return null;
         }
 
         // Check if we're on an individual restaurant page (not the main grid)
         const urlParts = window.location.pathname.split('/');
         if (urlParts.length >= 4 && urlParts[1] === 'app' && urlParts[3]) {
-          console.log('LanchDrap Rating Extension: Detected individual restaurant page, skipping grid scraping');
           return null;
         }
 
         // Extract date from URL for daily tracking
         const urlDate = extractDateFromUrl();
         if (!urlDate) {
-          console.log('LanchDrap Rating Extension: Could not extract date from URL');
           return null;
         }
 
-        // Look for the main restaurant grid element using multiple strategies
-        let restaurantGrid = null;
-        
-        // Strategy 1: Look for the specific selector from the user's xpath
-        restaurantGrid = document.querySelector('#app > div.flex.flex-col.justify-between.w-full.min-h-screen.v-cloak > div.flex-auto.basis-full.relative > div.max-w-6xl.mx-auto > div:nth-child(6) > div');
-        
-        // Strategy 2: Look for flex-wrap gap-3 (common pattern for restaurant grids)
+        // Use cached restaurant grid
+        const restaurantGrid = getCachedRestaurantGrid();
         if (!restaurantGrid) {
-          restaurantGrid = document.querySelector('div.flex.flex-wrap.gap-3');
-        }
-        
-        // Strategy 3: Look for div containing restaurant links with specific URL pattern
-        if (!restaurantGrid) {
-          // Look for links that match the restaurant URL pattern: /app/YYYY-MM-DD/restaurant-id
-          const restaurantLinks = document.querySelectorAll('a[href*="/app/"]');
-          const validRestaurantLinks = Array.from(restaurantLinks).filter(link => {
-            const href = link.getAttribute('href');
-            // Check if href matches pattern: /app/YYYY-MM-DD/restaurant-id
-            return href && /^\/app\/\d{4}-\d{2}-\d{2}\/[a-zA-Z0-9]+$/.test(href);
-          });
-          
-          if (validRestaurantLinks.length > 0) {
-            // Find the common parent container of these valid restaurant links
-            const potentialGrid = validRestaurantLinks[0].closest('div');
-            
-            // Validate that this is actually a restaurant grid by checking:
-            // 1. It contains multiple valid restaurant links
-            // 2. It doesn't have classes that indicate it's a date navigation
-            const restaurantLinksInGrid = potentialGrid.querySelectorAll('a[href*="/app/"]');
-            const validLinksInGrid = Array.from(restaurantLinksInGrid).filter(link => {
-              const href = link.getAttribute('href');
-              return href && /^\/app\/\d{4}-\d{2}-\d{2}\/[a-zA-Z0-9]+$/.test(href);
-            });
-            
-            const hasMultipleRestaurants = validLinksInGrid.length >= 3; // Should have multiple restaurants
-            const isNotDateNav = !potentialGrid.className.includes('day-container') && 
-                                !potentialGrid.className.includes('snap-x') &&
-                                !potentialGrid.className.includes('overflow-scroll');
-            
-            if (hasMultipleRestaurants && isNotDateNav) {
-              restaurantGrid = potentialGrid;
-              console.log('LanchDrap Rating Extension: Found restaurant grid using validated restaurant URL pattern strategy');
-              console.log('LanchDrap Rating Extension: Found', validLinksInGrid.length, 'valid restaurant links');
-            } else {
-              console.log('LanchDrap Rating Extension: Rejected potential grid - not enough valid restaurants or appears to be date navigation');
-              console.log('LanchDrap Rating Extension: Valid restaurant links found:', validLinksInGrid.length);
-            }
-          }
-        }
-        
-        // Strategy 4: Fallback to old selector
-        if (!restaurantGrid) {
-          restaurantGrid = document.querySelector('div.mx-4.my-8.sm\\:my-2');
-        }
-        
-        if (!restaurantGrid) {
-          console.log('LanchDrap Rating Extension: Could not find restaurant grid with any strategy');
-          console.log('LanchDrap Rating Extension: Available divs with flex classes:', document.querySelectorAll('div[class*="flex"]').length);
-          console.log('LanchDrap Rating Extension: Available app links:', document.querySelectorAll('a[href*="/app/"]').length);
-          
-          // Debug: Show what elements we found that might be confused for restaurant grids
-          const allAppLinks = document.querySelectorAll('a[href*="/app/"]');
-          if (allAppLinks.length > 0) {
-            const parentDiv = allAppLinks[0].closest('div');
-            console.log('LanchDrap Rating Extension: First app link parent classes:', parentDiv?.className);
-            console.log('LanchDrap Rating Extension: Restaurant links in parent:', parentDiv?.querySelectorAll('a[href*="/app/"]').length);
-          }
-          
           return;
         }
 
-        console.log('LanchDrap Rating Extension: Found restaurant grid:', restaurantGrid);
-        console.log('LanchDrap Rating Extension: Grid classes:', restaurantGrid.className);
-        console.log('LanchDrap Rating Extension: Restaurant links in grid:', restaurantGrid.querySelectorAll('a[href*="/app/"]').length);
-
         // Get restaurant cards that match the specific URL pattern
         const allAppLinks = restaurantGrid.querySelectorAll('a[href*="/app/"]');
+        console.log('LanchDrap Rating Extension: Found', allAppLinks.length, 'app links in grid');
+        
+        // Debug: Log the first few hrefs to see the actual format
+        if (allAppLinks.length > 0) {
+          console.log('LanchDrap Rating Extension: Sample hrefs:', Array.from(allAppLinks).slice(0, 3).map(link => link.getAttribute('href')));
+        }
+        
         const restaurantCards = Array.from(allAppLinks).filter(link => {
           const href = link.getAttribute('href');
-          // Check if href matches pattern: /app/YYYY-MM-DD/restaurant-id
-          return href && /^\/app\/\d{4}-\d{2}-\d{2}\/[a-zA-Z0-9]+$/.test(href);
+          // More flexible pattern - just check if it contains /app/ and has some identifier
+          return href && /\/app\/.*\/[a-zA-Z0-9]+/.test(href);
         });
-        if (restaurantCards.length === 0) {
-          console.log('LanchDrap Rating Extension: No restaurant cards found in grid');
-          console.log('LanchDrap Rating Extension: Grid element:', restaurantGrid);
-          console.log('LanchDrap Rating Extension: Grid children:', restaurantGrid.children.length);
-          console.log('LanchDrap Rating Extension: All app links on page:', document.querySelectorAll('a[href*="/app/"]').length);
+        
+        console.log('LanchDrap Rating Extension: Filtered to', restaurantCards.length, 'restaurant cards');
           
+        if (restaurantCards.length === 0) {
           // Try to find valid restaurant cards with a broader search
           const allPageAppLinks = document.querySelectorAll('a[href*="/app/"]');
+          console.log('LanchDrap Rating Extension: Found', allPageAppLinks.length, 'app links on entire page');
+          
           const validPageLinks = Array.from(allPageAppLinks).filter(link => {
             const href = link.getAttribute('href');
-            return href && /^\/app\/\d{4}-\d{2}-\d{2}\/[a-zA-Z0-9]+$/.test(href);
+            return href && /\/app\/.*\/[a-zA-Z0-9]+/.test(href);
           });
           
+          console.log('LanchDrap Rating Extension: Found', validPageLinks.length, 'valid page links');
+          
           if (validPageLinks.length > 0) {
-            console.log('LanchDrap Rating Extension: Found valid restaurant links elsewhere, using those instead');
             // Use the first few valid restaurant links we can find
             const cards = validPageLinks.slice(0, 10); // Limit to first 10
             return await processRestaurantCards(cards, urlDate);
           }
           
-          // No cards found anywhere, but continue with other functionality
-          console.log('LanchDrap Rating Extension: No restaurant cards found, but continuing with other functionality');
+          console.log('LanchDrap Rating Extension: No valid restaurant cards found anywhere');
           return null;
         }
 
@@ -803,8 +407,16 @@
         const availabilityData = [];
         const now = new Date();
 
-        for (let index = 0; index < restaurantCards.length; index++) {
-          const card = restaurantCards[index];
+        // Process cards in batches to avoid blocking the UI
+        const batchSize = 5;
+        const batches = [];
+        for (let i = 0; i < restaurantCards.length; i += batchSize) {
+          batches.push(restaurantCards.slice(i, i + batchSize));
+        }
+
+        for (const batch of batches) {
+          const batchPromises = batch.map(async (card, batchIndex) => {
+            const index = batches.indexOf(batch) * batchSize + batchIndex;
           try {
             // Extract restaurant information
             const href = card.getAttribute('href');
@@ -824,7 +436,6 @@
             if (soldOutRegex.test(cardText)) {
               status = 'soldout';
               reason = 'Restaurant is sold out';
-              console.log('LanchDrap Rating Extension: Detected SOLD OUT in card text');
             }
             // Check for "Ordering Closed" text
             else if (statusText && statusText.includes('Ordering Closed')) {
@@ -849,7 +460,6 @@
               // Selected restaurants have the 'border-2' class
               if (cardDiv.classList.contains('border-2')) {
                 isSelected = true;
-                console.log('LanchDrap Rating Extension: Found selected restaurant with border-2 class and color:', color);
               }
 
               // Reduced opacity often indicates closed/unavailable
@@ -935,14 +545,20 @@
               },
             };
 
-            availabilityData.push(restaurantInfo);
-
-            // Report individual restaurant status - DISABLED FOR NOW
-            // if (status !== 'available') {
-            //   reportSelloutStatus(status, reason, restaurantName, timeSlotData);
-            // }
+            return restaurantInfo;
           } catch (cardError) {
             console.error('Error processing restaurant card:', cardError);
+            return null;
+          }
+          });
+          
+          // Wait for batch to complete
+          const batchResults = await Promise.all(batchPromises);
+          availabilityData.push(...batchResults.filter(result => result !== null));
+          
+          // Small delay between batches to avoid blocking UI
+          if (batches.indexOf(batch) < batches.length - 1) {
+            await new Promise(resolve => setTimeout(resolve, 10));
           }
         }
 
@@ -1016,18 +632,18 @@
     // Function to track restaurant appearances on daily pages
     async function trackRestaurantAppearances(availabilityData) {
       try {
-        console.log('LanchDrap Rating Extension: trackRestaurantAppearances called with data:', availabilityData);
-        
         if (typeof LanchDrapApiClient === 'undefined' || typeof LanchDrapConfig === 'undefined') {
-          console.log('Extension utilities not loaded yet, skipping appearance tracking');
           return;
         }
 
         const urlDate = extractDateFromUrl();
-        console.log('LanchDrap Rating Extension: URL date for tracking:', urlDate);
-        
         if (!urlDate) {
-          console.log('Could not extract date from URL for appearance tracking');
+          return;
+        }
+
+        // Don't send empty restaurant arrays to the API
+        if (!availabilityData || availabilityData.length === 0) {
+          console.log('LanchDrap Rating Extension: No restaurant data to track, skipping API call');
           return;
         }
 
@@ -1047,34 +663,16 @@
           timeSlot: timeSlot,
         };
 
-        console.log('LanchDrap Rating Extension: Sending tracking data:', trackingData);
-        console.log('LanchDrap Rating Extension: Restaurant names being tracked:', trackingData.restaurants.map(r => r.name));
+        console.log('LanchDrap Rating Extension: Sending tracking data for', trackingData.restaurants.length, 'restaurants');
         const result = await apiClient.trackRestaurantAppearances(trackingData);
-        console.log('LanchDrap Rating Extension: Tracking result:', result);
-        console.log('LanchDrap Rating Extension: Result structure check:', {
-          hasResult: !!result,
-          hasData: !!(result && result.data),
-          hasRestaurants: !!(result && result.data && result.data.restaurants),
-          restaurantsLength: result?.data?.restaurants?.length
-        });
         
         // Add sell out indicators to restaurant cards based on response
         // The API response has nested structure: result.data.data.restaurants
         const restaurants = result?.data?.data?.restaurants || result?.data?.restaurants;
         
         if (restaurants && Array.isArray(restaurants)) {
-          console.log('LanchDrap Rating Extension: Received sell out rates:', restaurants);
           addSellOutIndicators(restaurants);
-        } else {
-          console.log('LanchDrap Rating Extension: ❌ No sell out rates in response, result structure:', {
-            result: result,
-            data: result?.data,
-            nestedData: result?.data?.data,
-            restaurants: restaurants
-          });
         }
-        
-        console.log('LanchDrap Rating Extension: Tracked restaurant appearances for', urlDate);
       } catch (error) {
         console.error('Error tracking restaurant appearances:', error);
       }
@@ -1083,30 +681,23 @@
     // Function to add sell out indicators to restaurant cards
     function addSellOutIndicators(restaurantsWithRates) {
       try {
-        // Find all restaurant cards on the page
-        const restaurantCards = document.querySelectorAll('a[href*="/app/"]');
-        console.log(`LanchDrap Rating Extension: Found ${restaurantCards.length} restaurant cards on page`);
+        // Use cached restaurant grid if available, otherwise find all restaurant cards
+        const restaurantGrid = getCachedRestaurantGrid();
+        const restaurantCards = restaurantGrid ? 
+          restaurantGrid.querySelectorAll('a[href*="/app/"]') : 
+          document.querySelectorAll('a[href*="/app/"]');
         
         restaurantsWithRates.forEach(restaurant => {
-          console.log(`LanchDrap Rating Extension: Checking ${restaurant.name} - sellOutRate: ${restaurant.sellOutRate} (type: ${typeof restaurant.sellOutRate})`);
-          console.log(`LanchDrap Rating Extension: Comparison ${restaurant.sellOutRate} > 0.8 = ${restaurant.sellOutRate > 0.8}`);
-          
           if (restaurant.sellOutRate > 0.8) { // 80% threshold
-            console.log(`LanchDrap Rating Extension: ${restaurant.name} meets threshold, looking for card...`);
-            
             // Find the card for this restaurant
             const restaurantCard = Array.from(restaurantCards).find(card => {
               const href = card.getAttribute('href');
-              console.log(`LanchDrap Rating Extension: Checking card href: ${href} for restaurant ID: ${restaurant.id}`);
               return href && href.includes(restaurant.id);
             });
-            
-            console.log(`LanchDrap Rating Extension: Found card for ${restaurant.name}:`, restaurantCard);
             
             if (restaurantCard) {
               // Check if indicator already exists
               const existingIndicator = restaurantCard.querySelector('.ld-sellout-indicator');
-              console.log(`LanchDrap Rating Extension: Existing indicator for ${restaurant.name}:`, existingIndicator);
               
               if (!existingIndicator) {
                 // Create the indicator element
@@ -1133,16 +724,10 @@
                 
                 // Make sure the card has relative positioning
                 const cardDiv = restaurantCard.querySelector('div');
-                console.log(`LanchDrap Rating Extension: Card div for ${restaurant.name}:`, cardDiv);
                 
                 if (cardDiv) {
                   cardDiv.style.position = 'relative';
                   cardDiv.appendChild(indicator);
-                  
-                  console.log(`LanchDrap Rating Extension: ✅ Successfully added sell out indicator to ${restaurant.name} (${(restaurant.sellOutRate * 100).toFixed(1)}% sell out rate)`);
-                  console.log(`LanchDrap Rating Extension: Indicator element:`, indicator);
-                } else {
-                  console.log(`LanchDrap Rating Extension: ❌ Could not find card div for ${restaurant.name}`);
                 }
               }
             }
@@ -1303,18 +888,14 @@
     async function displaySelectedRestaurantStats(availabilityData) {
       try {
         if (typeof LanchDrapApiClient === 'undefined' || typeof LanchDrapConfig === 'undefined') {
-          console.log('Extension utilities not loaded yet, skipping selected restaurant stats');
           return;
         }
 
         // Find the selected restaurant
         const selectedRestaurant = availabilityData.find(restaurant => restaurant.isSelected);
         if (!selectedRestaurant) {
-          console.log('LanchDrap Rating Extension: No selected restaurant found');
           return;
         }
-
-        console.log('LanchDrap Rating Extension: Found selected restaurant:', selectedRestaurant);
 
         // Check if stats are already displayed
         if (document.getElementById('lunchdrop-restaurant-stats')) {
@@ -1326,7 +907,6 @@
 
         try {
           stats = await apiClient.getRestaurantById(selectedRestaurant.id, selectedRestaurant.name);
-          console.log('LanchDrap Rating Extension: Received stats for selected restaurant:', stats);
           
           // Use the color from the selected restaurant if the API doesn't have it yet
           if (!stats.color && selectedRestaurant.color) {
@@ -1360,13 +940,59 @@
         const restaurantNameElement = document.querySelector('#app > div:nth-child(1) > div:nth-child(2) > div:nth-child(2) > div:nth-child(7) > div > div > div:nth-child(1) > div:nth-child(1)');
         if (restaurantNameElement) {
           restaurantNameElement.parentNode.insertBefore(statsContainer, restaurantNameElement.nextSibling);
-          console.log('LanchDrap Rating Extension: Displayed selected restaurant stats for', stats.name || stats.id);
-        } else {
-          console.log('LanchDrap Rating Extension: Could not find restaurant title element to insert stats');
         }
 
       } catch (error) {
         console.error('Error displaying selected restaurant stats:', error);
+      }
+    }
+
+    // Function to parse menu items from restaurant page
+    function parseMenuFromPage() {
+      try {
+        // Look for menu sections with the structure provided by the user
+        const menuSections = document.querySelectorAll('.my-16');
+        const allMenuItems = [];
+        
+        menuSections.forEach(section => {
+          // Find all menu item containers within this section
+          const menuItems = section.querySelectorAll('.my-4.text-lg.cursor-pointer');
+          
+          menuItems.forEach(item => {
+            // Extract the menu item name from the span with font-bold class
+            const nameElement = item.querySelector('.flex.items-center.font-bold span');
+            if (nameElement) {
+              const menuItemName = nameElement.textContent.trim();
+              if (menuItemName) {
+                allMenuItems.push(menuItemName);
+              }
+            }
+          });
+        });
+        
+        return allMenuItems;
+      } catch (error) {
+        console.error('Error parsing menu from page:', error);
+        return [];
+      }
+    }
+
+    // Function to get menu HTML for parsing
+    function getMenuHtml() {
+      try {
+        // Look for menu sections with the structure provided by the user
+        const menuSections = document.querySelectorAll('.my-16');
+        let menuHtml = '';
+        
+        menuSections.forEach(section => {
+          // Get the HTML content of the menu section
+          menuHtml += section.outerHTML;
+        });
+        
+        return menuHtml;
+      } catch (error) {
+        console.error('Error getting menu HTML:', error);
+        return '';
       }
     }
 
@@ -1386,7 +1012,6 @@
 
         // Check if utilities are loaded
         if (typeof LanchDrapApiClient === 'undefined' || typeof LanchDrapConfig === 'undefined') {
-          console.log('Extension utilities not loaded yet, skipping tracking info display');
           return;
         }
 
@@ -1398,55 +1023,49 @@
         let restaurantId = null;
         let stats = null;
         
-        console.log('LanchDrap Rating Extension: Current URL:', window.location.pathname);
-        console.log('LanchDrap Rating Extension: URL parts:', urlParts);
-        
         // Expected URL structure: /app/2025-09-08/eajz7qx8
         // We want the last part (restaurant ID), not the date
         if (urlParts.length >= 4 && urlParts[1] === 'app') {
           restaurantId = urlParts[urlParts.length - 1];
-          console.log('LanchDrap Rating Extension: Extracted restaurant ID:', restaurantId);
           
           // Validate that it's not a date (YYYY-MM-DD format)
           const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
           if (dateRegex.test(restaurantId)) {
-            console.log('LanchDrap Rating Extension: Extracted ID is a date, not a restaurant ID. Skipping stats display.');
             return;
           }
           
           const localKey = `restaurant_name:${restaurantId}`;
           localStorage.setItem(localKey, restaurantName);
-          console.log('LanchDrap Rating Extension: Stored restaurant name:', restaurantName, 'for ID:', restaurantId);
-          
-          // Use the restaurant ID for stats query instead of name
-          console.log('LanchDrap Rating Extension: Fetching stats for restaurant ID:', restaurantId);
-          console.log('LanchDrap Rating Extension: Restaurant name type:', typeof restaurantName, 'Length:', restaurantName?.length);
           
           try {
             stats = await apiClient.getRestaurantById(restaurantId, restaurantName);
 
-            console.log('LanchDrap Rating Extension: Received stats:', stats);
-            console.log('LanchDrap Rating Extension: Stats name field:', stats?.name);
-
             if (!stats) {
-              console.log('LanchDrap Rating Extension: No stats received');
               return;
             }
 
-            // Check if we need to update the restaurant name in backend
+            // Check if we need to update the restaurant name or menu in backend
             // Only update if we have a real name (not just an ID) and it's different from what's stored
-            if (restaurantName !== restaurantId && 
-                restaurantName.length > 3 && 
-                stats.name !== restaurantName) {
+            const needsNameUpdate = restaurantName !== restaurantId && 
+                                   restaurantName.length > 3 && 
+                                   stats.name !== restaurantName;
+            
+            // Get menu HTML for parsing
+            const menuHtml = getMenuHtml();
+            const needsMenuUpdate = menuHtml.length > 0;
+            
+            if (needsNameUpdate || needsMenuUpdate) {
               try {
-                const updateResult = await apiClient.updateRestaurantName(restaurantId, restaurantName);
-                console.log('LanchDrap Rating Extension: Updated restaurant name in backend:', updateResult);
+                await apiClient.updateRestaurant(restaurantId, restaurantName, menuHtml);
+                console.log('LanchDrap Rating Extension: Updated restaurant data:', {
+                  restaurantId,
+                  restaurantName,
+                  menuItems: parseMenuFromPage()
+                });
               } catch (error) {
                 // Silently handle the error for now since the endpoint may not be available
-                console.warn('LanchDrap Rating Extension: Could not update restaurant name in backend (endpoint may not be available):', error.message);
+                console.warn('LanchDrap Rating Extension: Could not update restaurant data in backend (endpoint may not be available):', error.message);
               }
-            } else if (stats.name === restaurantName) {
-              console.log('LanchDrap Rating Extension: Restaurant name is already up to date, skipping update');
             }
           } catch (apiError) {
             console.error('LanchDrap Rating Extension: API error fetching stats:', apiError);
@@ -1467,10 +1086,8 @@
               errorMessage: 'API temporarily unavailable'
             };
             
-            console.log('LanchDrap Rating Extension: Using fallback stats due to API error');
           }
         } else {
-          console.log('LanchDrap Rating Extension: Could not extract restaurant ID from URL - URL structure not recognized');
           return;
         }
 
@@ -1484,8 +1101,6 @@
 
         // Insert the tracking info near the restaurant name
         restaurantNameElement.parentNode.insertBefore(trackingInfo, restaurantNameElement.nextSibling);
-
-        console.log('LanchDrap Rating Extension: Displayed tracking info for', restaurantName);
       } catch (error) {
         console.error('Error displaying restaurant tracking info:', error);
       }
@@ -1495,24 +1110,18 @@
     function extractDateFromUrl() {
       try {
         const url = window.location.href;
-        console.log('LanchDrap Rating Extension: Extracting date from URL:', url);
         
         const dateMatch = url.match(/\/app\/(\d{4}-\d{2}-\d{2})/);
         if (dateMatch) {
-          const extractedDate = dateMatch[1];
-          console.log('LanchDrap Rating Extension: Extracted date from URL:', extractedDate);
-          return extractedDate; // Returns YYYY-MM-DD format
+          return dateMatch[1]; // Returns YYYY-MM-DD format
         }
 
         // If no date in URL but URL contains /app, treat as today
         if (url.includes('/app') && !url.includes('/app/')) {
           const today = new Date();
-          const todayString = today.toISOString().split('T')[0];
-          console.log('LanchDrap Rating Extension: No date in URL, using today:', todayString);
-          return todayString; // Returns YYYY-MM-DD format for today
+          return today.toISOString().split('T')[0]; // Returns YYYY-MM-DD format for today
         }
 
-        console.log('LanchDrap Rating Extension: No date found in URL');
         return null;
       } catch (error) {
         console.error('Error extracting date from URL:', error);
@@ -1520,23 +1129,6 @@
       }
     }
 
-    // Function to check if a date is in the past or today
-    function isDateInPast(dateString) {
-      try {
-        const urlDate = new Date(dateString);
-        const today = new Date();
-
-        // Set time to start of day for both dates to compare only dates
-        urlDate.setHours(0, 0, 0, 0);
-        today.setHours(0, 0, 0, 0);
-
-        // Allow today's date and past dates (urlDate <= today)
-        return urlDate <= today;
-      } catch (error) {
-        console.error('Error checking if date is in past:', error);
-        return false; // Default to false if we can't determine
-      }
-    }
 
     // Function to extract city from LanchDrap URL (for single office use)
     function extractCityFromUrl() {
@@ -1559,7 +1151,6 @@
       try {
         // Check if utilities are loaded
         if (typeof LanchDrapApiClient === 'undefined' || typeof LanchDrapConfig === 'undefined') {
-          console.log('Extension utilities not loaded yet, skipping availability summary');
           // Store data locally for later submission
           storeAvailabilitySummaryLocally(availabilityData);
           return;
@@ -1568,7 +1159,6 @@
         const urlDate = extractDateFromUrl();
         // Validate data before sending
         if (!availabilityData || availabilityData.length === 0) {
-          console.log('LanchDrap Rating Extension: No availability data to send');
           return;
         }
 
@@ -1585,11 +1175,8 @@
 
         // Validate required fields
         if (!summary.totalRestaurants || !summary.timestamp) {
-          console.error('LanchDrap Rating Extension: Invalid summary data:', summary);
           return;
         }
-
-        console.log('LanchDrap Rating Extension: Sending availability summary:', summary);
 
         // Availability summary endpoint removed - no longer sending summaries
       } catch (error) {
@@ -1624,93 +1211,28 @@
       }
     }
 
-    // Function to report sellout status to the worker
-    async function reportSelloutStatus(status, reason, restaurantName = null, timeSlot = null) {
-      try {
-        // Check if utilities are loaded
-        if (typeof LanchDrapApiClient === 'undefined' || typeof LanchDrapConfig === 'undefined') {
-          console.log('Extension utilities not loaded yet, skipping sellout status report');
-          // Store data locally for later submission
-          storeSelloutStatusLocally(status, reason, restaurantName, timeSlot);
-          return;
-        }
 
-        const restaurant = restaurantName || orderData?.restaurant || 'Unknown Restaurant';
-
-        const apiClient = new LanchDrapApiClient.ApiClient(LanchDrapConfig.CONFIG.API_BASE_URL);
-        const response = await apiClient.reportSelloutStatus({
-          restaurant,
-          status,
-          reason,
-          timestamp: new Date().toISOString(),
-          timeSlot,
-          source: 'page_scraping',
-        });
-
-        if (response.ok) {
-          console.log(`LanchDrap Rating Extension: Reported ${status} status for ${restaurant}`);
-        } else {
-          console.error('Failed to report sellout status');
-        }
-      } catch (error) {
-        console.error('Error reporting sellout status:', error);
-      }
-    }
-
-    // Function to store sellout status locally when utilities aren't loaded
-    function storeSelloutStatusLocally(status, reason, restaurantName = null, timeSlot = null) {
-      try {
-        const restaurant = restaurantName || orderData?.restaurant || 'Unknown Restaurant';
-        const selloutData = {
-          restaurant,
-          status,
-          reason,
-          timestamp: new Date().toISOString(),
-          timeSlot,
-          source: 'page_scraping',
-          pendingSubmission: true,
-        };
-
-        // Store in localStorage for later submission
-        const pendingSellouts = JSON.parse(localStorage.getItem('pendingSelloutReports') || '[]');
-        pendingSellouts.push(selloutData);
-        localStorage.setItem('pendingSelloutReports', JSON.stringify(pendingSellouts));
-      } catch (error) {
-        console.error('Error storing sellout status locally:', error);
-      }
-    }
 
     // Run detection on page load
-    detectOrderPage();
     // detectLunchDropRatingPrompt(); // Disabled - not working on rating prompts yet
-    // detectSelloutStatus(); // Disabled - not reporting sellout status yet
     
     // Check if we're on a restaurant detail page and display tracking info
     // Only call this on individual restaurant pages (URLs with restaurant IDs)
     if (window.location.pathname.match(/\/app\/\d{4}-\d{2}-\d{2}\/[a-zA-Z0-9]+$/)) {
       setTimeout(() => {
         displayRestaurantTrackingInfo();
-      }, 2000);
+      }, 500);
     }
 
     // Check if we're on the main restaurant grid page
-    console.log('LanchDrap Rating Extension: Checking if we should scrape availability...');
-    console.log('LanchDrap Rating Extension: Current pathname:', window.location.pathname);
-    console.log('LanchDrap Rating Extension: Pathname includes /app/:', window.location.pathname.includes('/app/'));
-    console.log('LanchDrap Rating Extension: Found grid selector:', !!document.querySelector('div.mx-4.my-8.sm\\:my-2'));
-    
     if (
       window.location.pathname.includes('/app/') ||
       document.querySelector('div.mx-4.my-8.sm\\:my-2')
     ) {
-      console.log('LanchDrap Rating Extension: ✅ Should scrape availability, scheduling...');
-      // Wait for page to load and then scrape availability
+      // Wait for page to load and then scrape availability (reduced delay)
       setTimeout(async () => {
-        console.log('LanchDrap Rating Extension: Executing scrapeRestaurantAvailability...');
         await scrapeRestaurantAvailability();
-      }, 1000);
-    } else {
-      console.log('LanchDrap Rating Extension: ❌ Not on restaurant grid page, skipping scraping');
+      }, 300);
     }
 
     // Also run when URL changes (for SPA navigation)
@@ -1719,23 +1241,22 @@
       const url = location.href;
       if (url !== lastUrl) {
         lastUrl = url;
-        detectOrderPage();
+        clearDomCache(); // Clear cache when URL changes
         // detectLunchDropRatingPrompt(); // Disabled - not working on rating prompts yet
-        // detectSelloutStatus(); // Disabled - not reporting sellout status yet
 
         // Check if we're on a restaurant detail page and display tracking info
         // Only call this on individual restaurant pages (URLs with restaurant IDs)
         if (url.match(/\/app\/\d{4}-\d{2}-\d{2}\/[a-zA-Z0-9]+$/)) {
           setTimeout(() => {
             displayRestaurantTrackingInfo();
-          }, 500);
+          }, 200);
         }
 
         // Check if we're on a restaurant grid page
         if (url.includes('/app/') || document.querySelector('div.mx-4.my-8.sm\\:my-2')) {
           setTimeout(async () => {
             await scrapeRestaurantAvailability();
-          }, 500);
+          }, 200);
         }
       }
     }).observe(document, { subtree: true, childList: true });
@@ -1799,11 +1320,10 @@
       document.body.appendChild(button);
     }
 
-    // Add floating button for manual rating (no automatic prompt detection)
+    // Add floating button for manual rating (lazy loaded after page is stable)
     setTimeout(() => {
-      console.log('LanchDrap Rating Extension: Adding floating rating button for manual use');
       addFloatingButton();
-    }, 3000);
+    }, 2000);
   }
 
   // Function to submit pending data once utilities are loaded
@@ -1814,32 +1334,14 @@
         return;
       }
 
-      const apiClient = new LanchDrapApiClient.ApiClient(LanchDrapConfig.CONFIG.API_BASE_URL);
+      // const apiClient = new LanchDrapApiClient.ApiClient(LanchDrapConfig.CONFIG.API_BASE_URL);
 
-      // Submit pending sellout reports
-      const pendingSellouts = JSON.parse(localStorage.getItem('pendingSelloutReports') || '[]');
-      if (pendingSellouts.length > 0) {
-        console.log(
-          `LanchDrap Rating Extension: Submitting ${pendingSellouts.length} pending sellout reports`
-        );
-        for (const selloutData of pendingSellouts) {
-          try {
-            await apiClient.reportSelloutStatus(selloutData);
-          } catch (error) {
-            console.error('Error submitting pending sellout report:', error);
-          }
-        }
-        localStorage.removeItem('pendingSelloutReports');
-      }
 
       // Submit pending availability summaries
       const pendingSummaries = JSON.parse(
         localStorage.getItem('pendingAvailabilitySummaries') || '[]'
       );
       if (pendingSummaries.length > 0) {
-        console.log(
-          `LanchDrap Rating Extension: Submitting ${pendingSummaries.length} pending availability summaries`
-        );
         // Availability summary endpoint removed - no longer submitting summaries
         localStorage.removeItem('pendingAvailabilitySummaries');
       }

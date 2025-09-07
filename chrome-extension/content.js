@@ -95,7 +95,7 @@
     });
 
     function generateOrderId() {
-      return 'order_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+      return `order_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     }
 
     // Function to inject rating widget into the page
@@ -115,8 +115,7 @@
           const restaurantData = await apiClient.searchRestaurantByName(restaurantName);
           menuItems = restaurantData.menu || [];
         }
-      } catch (error) {
-        console.log('Could not fetch restaurant menu:', error);
+      } catch (_error) {
         // Fallback to parsing menu from current page
         menuItems = parseMenuFromPage();
       }
@@ -270,14 +269,14 @@
 
       stars.forEach((star) => {
         star.addEventListener('click', function () {
-          const rating = parseInt(this.dataset.rating);
+          const rating = parseInt(this.dataset.rating, 10);
           currentRating = rating;
           updateStarDisplay();
           ratingDisplay.textContent = rating;
         });
 
         star.addEventListener('mouseenter', function () {
-          const rating = parseInt(this.dataset.rating);
+          const rating = parseInt(this.dataset.rating, 10);
           highlightStars(rating);
         });
 
@@ -361,8 +360,7 @@
           } else {
             throw new Error('Failed to submit rating');
           }
-        } catch (error) {
-          console.error('Error submitting rating:', error);
+        } catch (_error) {
           alert('Error submitting rating. Please try again.');
 
           // Re-enable the button on error
@@ -391,10 +389,6 @@
 
         if (ratingPromptMatch) {
           const restaurantName = ratingPromptMatch[1].trim();
-          console.log(
-            'LanchDrap Rating Extension: Detected LanchDrap rating prompt for:',
-            restaurantName
-          );
 
           // Create order data from the detected restaurant name
           const detectedOrderData = {
@@ -409,9 +403,6 @@
 
           // Check if utilities are loaded, if not, wait and try again
           if (typeof LanchDrapApiClient === 'undefined' || typeof LanchDrapConfig === 'undefined') {
-            console.log(
-              'LanchDrap Rating Extension: Utilities not loaded, will check for rating later'
-            );
             // Store the prompt detection for later processing
             localStorage.setItem(
               'lunchdrop_pending_rating_prompt',
@@ -435,8 +426,7 @@
         }
 
         return false;
-      } catch (error) {
-        console.error('Error detecting LanchDrap rating prompt:', error);
+      } catch (_error) {
         return false;
       }
     }
@@ -473,16 +463,9 @@
 
         // Get restaurant cards that match the specific URL pattern
         const allAppLinks = restaurantGrid.querySelectorAll('a[href*="/app/"]');
-        console.log('LanchDrap Rating Extension: Found', allAppLinks.length, 'app links in grid');
 
         // Debug: Log the first few hrefs to see the actual format
         if (allAppLinks.length > 0) {
-          console.log(
-            'LanchDrap Rating Extension: Sample hrefs:',
-            Array.from(allAppLinks)
-              .slice(0, 3)
-              .map((link) => link.getAttribute('href'))
-          );
         }
 
         const restaurantCards = Array.from(allAppLinks).filter((link) => {
@@ -491,46 +474,25 @@
           return href && /\/app\/.*\/[a-zA-Z0-9]+/.test(href);
         });
 
-        console.log(
-          'LanchDrap Rating Extension: Filtered to',
-          restaurantCards.length,
-          'restaurant cards'
-        );
-
         if (restaurantCards.length === 0) {
           // Try to find valid restaurant cards with a broader search
           const allPageAppLinks = document.querySelectorAll('a[href*="/app/"]');
-          console.log(
-            'LanchDrap Rating Extension: Found',
-            allPageAppLinks.length,
-            'app links on entire page'
-          );
 
           const validPageLinks = Array.from(allPageAppLinks).filter((link) => {
             const href = link.getAttribute('href');
             return href && /\/app\/.*\/[a-zA-Z0-9]+/.test(href);
           });
 
-          console.log(
-            'LanchDrap Rating Extension: Found',
-            validPageLinks.length,
-            'valid page links'
-          );
-
           if (validPageLinks.length > 0) {
             // Use the first few valid restaurant links we can find
             const cards = validPageLinks.slice(0, 10); // Limit to first 10
             return await processRestaurantCards(cards, urlDate);
           }
-
-          console.log('LanchDrap Rating Extension: No valid restaurant cards found anywhere');
           return null;
         }
 
         return await processRestaurantCards(restaurantCards, urlDate);
-      } catch (error) {
-        console.error('Error tracking restaurant appearances:', error);
-      }
+      } catch (_error) {}
     }
 
     // Function to process restaurant cards and extract data
@@ -570,12 +532,12 @@
                 reason = 'Restaurant is sold out';
               }
               // Check for "Ordering Closed" text
-              else if (statusText && statusText.includes('Ordering Closed')) {
+              else if (statusText?.includes('Ordering Closed')) {
                 status = 'soldout';
                 reason = 'Ordering closed for this time slot';
               }
               // Check for "Order Placed" (available)
-              else if (statusText && statusText.includes('Order Placed')) {
+              else if (statusText?.includes('Order Placed')) {
                 status = 'available';
                 reason = 'Orders currently being accepted';
               }
@@ -618,7 +580,7 @@
               // Fallback: try to extract from image URL hash if no href ID
               if (restaurantId === 'unknown') {
                 const img = card.querySelector('img');
-                if (img && img.src) {
+                if (img?.src) {
                   // Extract restaurant hash from the image URL
                   // URL format: https://lunchdrop.s3.amazonaws.com/restaurant-logos/[hash].png
                   const urlParts = img.src.split('/');
@@ -678,8 +640,7 @@
               };
 
               return restaurantInfo;
-            } catch (cardError) {
-              console.error('Error processing restaurant card:', cardError);
+            } catch (_cardError) {
               return null;
             }
           });
@@ -705,11 +666,8 @@
 
         // Display stats for selected restaurant on daily pages
         await displaySelectedRestaurantStats(availabilityData);
-
-        console.log('LanchDrap Rating Extension: Scraped availability data:', availabilityData);
         return availabilityData;
-      } catch (error) {
-        console.error('LanchDrap Rating Extension: Error processing restaurant cards:', error);
+      } catch (_error) {
         return null;
       }
     }
@@ -735,9 +693,7 @@
         }
 
         localStorage.setItem(storageKey, JSON.stringify(dailyData));
-      } catch (error) {
-        console.error('Error storing availability data:', error);
-      }
+      } catch (_error) {}
     }
 
     // Function to get restaurant name from local storage or API
@@ -754,8 +710,7 @@
         // Restaurant names will be learned through the update-name endpoint
 
         return null;
-      } catch (error) {
-        console.error('Error getting restaurant name:', error);
+      } catch (_error) {
         return null;
       }
     }
@@ -774,7 +729,6 @@
 
         // Don't send empty restaurant arrays to the API
         if (!availabilityData || availabilityData.length === 0) {
-          console.log('LanchDrap Rating Extension: No restaurant data to track, skipping API call');
           return;
         }
 
@@ -796,12 +750,6 @@
           date: urlDate,
           timeSlot: timeSlot,
         };
-
-        console.log(
-          'LanchDrap Rating Extension: Sending tracking data for',
-          trackingData.restaurants.length,
-          'restaurants'
-        );
         const result = await apiClient.trackRestaurantAppearances(trackingData);
 
         // Add sell out indicators to restaurant cards based on response
@@ -811,9 +759,7 @@
         if (restaurants && Array.isArray(restaurants)) {
           addSellOutIndicators(restaurants);
         }
-      } catch (error) {
-        console.error('Error tracking restaurant appearances:', error);
-      }
+      } catch (_error) {}
     }
 
     // Function to add sell out indicators to restaurant cards
@@ -831,7 +777,7 @@
             // Find the card for this restaurant
             const restaurantCard = Array.from(restaurantCards).find((card) => {
               const href = card.getAttribute('href');
-              return href && href.includes(restaurant.id);
+              return href?.includes(restaurant.id);
             });
 
             if (restaurantCard) {
@@ -872,9 +818,7 @@
             }
           }
         });
-      } catch (error) {
-        console.error('Error adding sell out indicators:', error);
-      }
+      } catch (_error) {}
     }
 
     // Helper function to format date strings properly (avoid timezone issues)
@@ -884,7 +828,7 @@
       // If it's already in YYYY-MM-DD format, treat it as local date
       if (typeof dateString === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
         const [year, month, day] = dateString.split('-');
-        const date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+        const date = new Date(parseInt(year, 10), parseInt(month, 10) - 1, parseInt(day, 10));
         return date.toLocaleDateString();
       }
 
@@ -893,7 +837,7 @@
     }
 
     // Shared function to render stats component
-    function renderStatsComponent(stats, containerId, title) {
+    function renderStatsComponent(stats, containerId, _title) {
       // Add API error indicator if applicable
       const apiErrorIndicator = stats.apiError
         ? '<div class="ld-api-error">⚠️ API temporarily unavailable - showing cached data</div>'
@@ -1001,7 +945,7 @@
                 color: ${restaurantColor};
                 font-weight: 600;
                 font-size: 14px;
-              ">${stats.soldOutRate ? (stats.soldOutRate * 100).toFixed(1) + '%' : '0%'}</span>
+              ">${stats.soldOutRate ? `${(stats.soldOutRate * 100).toFixed(1)}%` : '0%'}</span>
             </div>
           </div>
         </div>
@@ -1055,12 +999,7 @@
           if (!stats.color && selectedRestaurant.color) {
             stats.color = selectedRestaurant.color;
           }
-        } catch (apiError) {
-          console.error(
-            'LanchDrap Rating Extension: API error fetching selected restaurant stats:',
-            apiError
-          );
-
+        } catch (_apiError) {
           // Create fallback stats when API is unavailable
           stats = {
             name: selectedRestaurant.name,
@@ -1098,9 +1037,7 @@
           const insertionPoint = restaurantNameElement.parentNode || restaurantNameElement;
           insertionPoint.insertBefore(statsContainer, restaurantNameElement.nextSibling);
         }
-      } catch (error) {
-        console.error('Error displaying selected restaurant stats:', error);
-      }
+      } catch (_error) {}
     }
 
     // Function to parse menu items from restaurant page
@@ -1127,8 +1064,7 @@
         });
 
         return allMenuItems;
-      } catch (error) {
-        console.error('Error parsing menu from page:', error);
+      } catch (_error) {
         return [];
       }
     }
@@ -1140,7 +1076,6 @@
         const orderContainer =
           document.querySelector('[id^="w"]') || document.querySelector('.my-8.last\\:mb-0');
         if (!orderContainer) {
-          console.log('No order container found');
           return null;
         }
 
@@ -1201,7 +1136,7 @@
 
               // Parse quantity if present (e.g., "2× Chicken Fajita")
               const quantityMatch = itemName.match(/^(\d+)×\s*(.+)$/);
-              const quantity = quantityMatch ? parseInt(quantityMatch[1]) : 1;
+              const quantity = quantityMatch ? parseInt(quantityMatch[1], 10) : 1;
               const name = quantityMatch ? quantityMatch[2] : itemName;
 
               orderItems.push({
@@ -1215,7 +1150,6 @@
         });
 
         if (orderItems.length === 0) {
-          console.log('No order items found');
           return null;
         }
 
@@ -1224,8 +1158,7 @@
           restaurantName: restaurantName,
           items: orderItems,
         };
-      } catch (error) {
-        console.error('Error parsing order from page:', error);
+      } catch (_error) {
         return null;
       }
     }
@@ -1247,14 +1180,12 @@
         // Parse the order from the page
         const orderData = parseOrderFromPage();
         if (!orderData) {
-          console.log('Could not parse order data from page');
           return;
         }
 
         // Get user ID
         const userId = await getUserId();
         if (!userId) {
-          console.log('No user ID available for order storage');
           return;
         }
 
@@ -1267,12 +1198,10 @@
               LanchDrapConfig.CONFIG.ENDPOINTS
             );
             const restaurantData = await apiClient.searchRestaurantByName(orderData.restaurantName);
-            if (restaurantData && restaurantData.id) {
+            if (restaurantData?.id) {
               restaurantId = restaurantData.id;
             }
-          } catch (error) {
-            console.log('Could not find restaurant ID, using name:', error);
-          }
+          } catch (_error) {}
         }
 
         // Store the order
@@ -1283,18 +1212,9 @@
               LanchDrapConfig.CONFIG.ENDPOINTS
             );
             await apiClient.storeUserOrder(userId, restaurantId, orderData);
-            console.log('LanchDrap Rating Extension: Order stored successfully:', {
-              userId,
-              restaurantId,
-              orderData,
-            });
-          } catch (error) {
-            console.error('LanchDrap Rating Extension: Failed to store order:', error);
-          }
+          } catch (_error) {}
         }
-      } catch (error) {
-        console.error('LanchDrap Rating Extension: Error detecting and storing order:', error);
-      }
+      } catch (_error) {}
     }
 
     // Function to display restaurant tracking information on detail pages
@@ -1369,22 +1289,9 @@
             if (needsNameUpdate || needsMenuUpdate) {
               try {
                 await apiClient.updateRestaurant(restaurantId, restaurantName, menuItems);
-                console.log('LanchDrap Rating Extension: Updated restaurant data:', {
-                  restaurantId,
-                  restaurantName,
-                  menuItems: menuItems,
-                });
-              } catch (error) {
-                // Silently handle the error for now since the endpoint may not be available
-                console.warn(
-                  'LanchDrap Rating Extension: Could not update restaurant data in backend (endpoint may not be available):',
-                  error.message
-                );
-              }
+              } catch (_error) {}
             }
-          } catch (apiError) {
-            console.error('LanchDrap Rating Extension: API error fetching stats:', apiError);
-
+          } catch (_apiError) {
             // Create fallback stats when API is unavailable
             stats = {
               name: restaurantName,
@@ -1421,9 +1328,7 @@
         // Try to find a good insertion point near the restaurant name
         const insertionPoint = restaurantNameElement.parentNode || restaurantNameElement;
         insertionPoint.insertBefore(trackingInfo, restaurantNameElement.nextSibling);
-      } catch (error) {
-        console.error('Error displaying restaurant tracking info:', error);
-      }
+      } catch (_error) {}
     }
 
     // Function to extract date from LanchDrap URL
@@ -1443,8 +1348,7 @@
         }
 
         return null;
-      } catch (error) {
-        console.error('Error extracting date from URL:', error);
+      } catch (_error) {
         return null;
       }
     }
@@ -1459,8 +1363,7 @@
           return cityMatch[1]; // Returns city name (e.g., "austin")
         }
         return 'office'; // Default to 'office' for single office use
-      } catch (error) {
-        console.error('Error extracting city from URL:', error);
+      } catch (_error) {
         return 'office';
       }
     }
@@ -1498,9 +1401,7 @@
         }
 
         // Availability summary endpoint removed - no longer sending summaries
-      } catch (error) {
-        console.error('Error creating availability summary:', error);
-      }
+      } catch (_error) {}
     }
 
     // Function to store availability summary locally when utilities aren't loaded
@@ -1525,9 +1426,7 @@
         );
         pendingSummaries.push(summary);
         localStorage.setItem('pendingAvailabilitySummaries', JSON.stringify(pendingSummaries));
-      } catch (error) {
-        console.error('Error storing availability summary locally:', error);
-      }
+      } catch (_error) {}
     }
 
     // Run detection on page load
@@ -1627,17 +1526,7 @@
           if (detectLunchDropRatingPrompt()) {
             // Don't call extractOrderData() - use the restaurant name from the prompt detection
             await injectRatingWidget();
-            console.log(
-              'LanchDrap Rating Extension: Rating widget opened via button click (prompt detected)'
-            );
-            console.log(
-              'LanchDrap Rating Extension: Rating for restaurant:',
-              orderData?.restaurant
-            );
           } else {
-            console.log(
-              'LanchDrap Rating Extension: No LunchDrop rating prompt found, rating widget not shown'
-            );
             // Optionally show a brief message to the user
             button.style.background = '#ffa500';
             button.innerHTML = '🍽️ No Prompt';
@@ -1685,9 +1574,7 @@
       //   // Rating prompt processing disabled - not working on rating prompts yet
       //   localStorage.removeItem('lunchdrop_pending_rating_prompt');
       // }
-    } catch (error) {
-      console.error('Error submitting pending data:', error);
-    }
+    } catch (_error) {}
   }
 
   // End of initializeContentScript function

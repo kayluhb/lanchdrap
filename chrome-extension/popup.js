@@ -10,14 +10,14 @@ document.addEventListener('DOMContentLoaded', () => {
   // Star rating functionality
   stars.forEach((star) => {
     star.addEventListener('click', function () {
-      const rating = parseInt(this.dataset.rating);
+      const rating = parseInt(this.dataset.rating, 10);
       currentRating = rating;
       updateStarDisplay();
       ratingDisplay.textContent = rating;
     });
 
     star.addEventListener('mouseenter', function () {
-      const rating = parseInt(this.dataset.rating);
+      const rating = parseInt(this.dataset.rating, 10);
       highlightStars(rating);
     });
 
@@ -82,8 +82,7 @@ document.addEventListener('DOMContentLoaded', () => {
       showStatus('Rating submitted successfully!', 'success');
       resetForm();
       loadRatingHistory();
-    } catch (error) {
-      console.error('Error submitting rating:', error);
+    } catch (_error) {
       showStatus('Error submitting rating. Please try again.', 'error');
     }
   });
@@ -93,8 +92,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
       const response = await chrome.tabs.sendMessage(tab.id, { action: 'getOrderData' });
       return response;
-    } catch (error) {
-      console.error('Error getting order data:', error);
+    } catch (_error) {
       return null;
     }
   }
@@ -117,8 +115,7 @@ document.addEventListener('DOMContentLoaded', () => {
         LunchDropConfig.CONFIG.ENDPOINTS
       );
       return await apiClient.submitRating(ratingDataWithUser);
-    } catch (error) {
-      console.error('Error sending rating to server:', error);
+    } catch (_error) {
       throw new Error('Failed to send rating to server');
     }
   }
@@ -159,16 +156,14 @@ document.addEventListener('DOMContentLoaded', () => {
       // Ratings endpoint removed - can't fetch ratings from server anymore
       const serverHistory = null;
 
-      if (serverHistory && serverHistory.ratings) {
+      if (serverHistory?.ratings) {
         displayRatingHistory(serverHistory.ratings);
 
         // Also update local storage
         chrome.storage.local.set({ ratingHistory: serverHistory.ratings });
         return;
       }
-    } catch (error) {
-      console.log('Could not load from server, using local storage:', error);
-    }
+    } catch (_error) {}
 
     // Fallback to local storage
     chrome.storage.local.get(['ratingHistory'], (result) => {
@@ -219,19 +214,18 @@ document.addEventListener('DOMContentLoaded', () => {
       // Restaurant list endpoint removed - can't fetch restaurant list anymore
       const restaurants = { restaurants: [] };
 
-      if (restaurants && restaurants.restaurants) {
+      if (restaurants?.restaurants) {
         displayRestaurantStats(restaurants.restaurants, overallStats);
-      } else if (overallStats && overallStats.restaurants) {
+      } else if (overallStats?.restaurants) {
         displayRestaurantStats(overallStats.restaurants);
       }
-    } catch (error) {
-      console.log('Could not load restaurant stats:', error);
+    } catch (_error) {
       document.getElementById('restaurant-stats').innerHTML =
         '<p class="no-stats">Statistics unavailable</p>';
     }
   }
 
-  function displayRestaurantStats(restaurants, overallStats = null) {
+  function displayRestaurantStats(restaurants, _overallStats = null) {
     const statsDiv = document.getElementById('restaurant-stats');
 
     if (!restaurants || restaurants.length === 0) {
@@ -338,11 +332,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
       const availability = await apiClient.getDailyAvailability(today);
 
-      if (availability && availability.restaurants) {
+      if (availability?.restaurants) {
         displayAvailabilityStats(availability.restaurants);
       }
-    } catch (error) {
-      console.log('Could not load availability stats:', error);
+    } catch (_error) {
       document.getElementById('availability-stats').innerHTML =
         '<p class="no-availability">Availability data unavailable</p>';
     }

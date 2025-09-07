@@ -16,9 +16,8 @@ export async function health(request, env) {
         'health_check',
         JSON.stringify({ timestamp: new Date().toISOString() })
       );
-    } catch (error) {
+    } catch (_error) {
       kvStatus = 'unhealthy';
-      console.error('KV store health check failed:', error);
     }
 
     const responseTime = Date.now() - startTime;
@@ -46,7 +45,6 @@ export async function health(request, env) {
       200
     );
   } catch (error) {
-    console.error('Health check error:', error);
     return createApiResponse(
       {
         status: 'unhealthy',

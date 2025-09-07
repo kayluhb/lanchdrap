@@ -24,8 +24,7 @@ export function parseMenuItems(htmlContent) {
     });
 
     return menuItems;
-  } catch (error) {
-    console.error('Error parsing menu items:', error);
+  } catch (_error) {
     return [];
   }
 }
@@ -56,76 +55,67 @@ export function compareMenus(oldMenu, newMenu) {
 
 // Update restaurant appearance counts
 export async function updateRestaurantAppearanceCounts(env, restaurants, _date) {
-  try {
-    const restaurantListKey = 'restaurants:list';
-    let restaurantList = [];
+  const restaurantListKey = 'restaurants:list';
+  let restaurantList = [];
 
-    const existingList = await env.LANCHDRAP_RATINGS.get(restaurantListKey);
-    if (existingList) {
-      restaurantList = JSON.parse(existingList);
-    }
-
-    restaurants.forEach((restaurantInfo) => {
-      const restaurantId = restaurantInfo.id || restaurantInfo.name || restaurantInfo.restaurant;
-      const restaurantName = restaurantInfo.name || restaurantInfo.restaurant || restaurantId;
-      const existingIndex = restaurantList.findIndex(
-        (r) => r.id === restaurantId || r.name === restaurantName
-      );
-
-      if (existingIndex === -1) {
-        // Add new restaurant
-        const newRestaurant = {
-          id: restaurantId,
-          name: restaurantName,
-          firstSeen: new Date().toISOString(),
-          lastSeen: new Date().toISOString(),
-          lastAppearance: new Date().toISOString(),
-          appearanceCount: 1,
-          totalRatings: 0,
-          averageRating: 0,
-          selloutCount: 0,
-          lastSellout: null,
-          availabilityStatus: restaurantInfo.status || 'available',
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        };
-        restaurantList.push(newRestaurant);
-      } else {
-        // Update existing restaurant
-        const restaurant = restaurantList[existingIndex];
-        restaurant.appearanceCount = (restaurant.appearanceCount || 0) + 1;
-        restaurant.lastSeen = new Date().toISOString();
-        restaurant.lastAppearance = new Date().toISOString();
-        restaurant.updatedAt = new Date().toISOString();
-        restaurant.availabilityStatus =
-          restaurantInfo.status || restaurant.availabilityStatus || 'available';
-
-        // Preserve existing name if it's more descriptive than the ID
-        if (
-          restaurant.name &&
-          restaurant.name !== restaurantId &&
-          restaurantName === restaurantId
-        ) {
-          // Keep the existing name
-        } else if (restaurantName && restaurantName !== restaurantId && restaurantName.length > 3) {
-          // Update with better name
-          restaurant.name = restaurantName;
-        }
-      }
-    });
-
-    // Save the updated list
-    await env.LANCHDRAP_RATINGS.put(restaurantListKey, JSON.stringify(restaurantList));
-
-    return {
-      success: true,
-      updatedCount: restaurants.length,
-      totalRestaurants: restaurantList.length,
-    };
-  } catch (error) {
-    console.error('Error updating restaurant appearance counts:', error);
-    throw error;
+  const existingList = await env.LANCHDRAP_RATINGS.get(restaurantListKey);
+  if (existingList) {
+    restaurantList = JSON.parse(existingList);
   }
+
+  restaurants.forEach((restaurantInfo) => {
+    const restaurantId = restaurantInfo.id || restaurantInfo.name || restaurantInfo.restaurant;
+    const restaurantName = restaurantInfo.name || restaurantInfo.restaurant || restaurantId;
+    const existingIndex = restaurantList.findIndex(
+      (r) => r.id === restaurantId || r.name === restaurantName
+    );
+
+    if (existingIndex === -1) {
+      // Add new restaurant
+      const newRestaurant = {
+        id: restaurantId,
+        name: restaurantName,
+        firstSeen: new Date().toISOString(),
+        lastSeen: new Date().toISOString(),
+        lastAppearance: new Date().toISOString(),
+        appearanceCount: 1,
+        totalRatings: 0,
+        averageRating: 0,
+        selloutCount: 0,
+        lastSellout: null,
+        availabilityStatus: restaurantInfo.status || 'available',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      restaurantList.push(newRestaurant);
+    } else {
+      // Update existing restaurant
+      const restaurant = restaurantList[existingIndex];
+      restaurant.appearanceCount = (restaurant.appearanceCount || 0) + 1;
+      restaurant.lastSeen = new Date().toISOString();
+      restaurant.lastAppearance = new Date().toISOString();
+      restaurant.updatedAt = new Date().toISOString();
+      restaurant.availabilityStatus =
+        restaurantInfo.status || restaurant.availabilityStatus || 'available';
+
+      // Preserve existing name if it's more descriptive than the ID
+      if (restaurant.name && restaurant.name !== restaurantId && restaurantName === restaurantId) {
+        // Keep the existing name
+      } else if (restaurantName && restaurantName !== restaurantId && restaurantName.length > 3) {
+        // Update with better name
+        restaurant.name = restaurantName;
+      }
+    }
+  });
+
+  // Save the updated list
+  await env.LANCHDRAP_RATINGS.put(restaurantListKey, JSON.stringify(restaurantList));
+
+  return {
+    success: true,
+    updatedCount: restaurants.length,
+    totalRestaurants: restaurantList.length,
+  };
 }
 
 // Find restaurant by ID or name

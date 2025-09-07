@@ -3,8 +3,6 @@
 // Handle extension installation
 chrome.runtime.onInstalled.addListener((details) => {
   if (details.reason === 'install') {
-    console.log('LunchDrop Rating Extension installed');
-
     // Open welcome page
     chrome.tabs.create({
       url: 'https://github.com/yourusername/lanchdrap#readme',
@@ -13,13 +11,10 @@ chrome.runtime.onInstalled.addListener((details) => {
 });
 
 // Handle extension icon click
-chrome.action.onClicked.addListener((tab) => {
-  // This won't be called since we have a popup, but keeping for future use
-  console.log('Extension icon clicked');
-});
+chrome.action.onClicked.addListener((_tab) => {});
 
 // Listen for messages from content scripts or popup
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
   if (request.action === 'getTabInfo') {
     // Get information about the current tab
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
@@ -45,8 +40,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 // Handle storage changes
 chrome.storage.onChanged.addListener((changes, namespace) => {
   if (namespace === 'local' && changes.ratingHistory) {
-    console.log('Rating history updated');
-
     // You could sync with server here if needed
     // syncRatingsToServer();
   }
@@ -72,12 +65,9 @@ function syncRatingsToServer() {
           .then((response) => {
             if (response.ok) {
               chrome.storage.local.set({ lastSync: now });
-              console.log('Ratings synced to server');
             }
           })
-          .catch((error) => {
-            console.error('Failed to sync ratings:', error);
-          });
+          .catch((_error) => {});
       }
     }
   });

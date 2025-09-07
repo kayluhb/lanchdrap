@@ -32,11 +32,8 @@ class LanchDrapUserIdManager {
 
       // Store the new user ID
       await chrome.storage.local.set({ [this.storageKey]: this.userId });
-
-      console.log('LanchDrap Rating Extension: Generated new user ID:', this.userId);
       return this.userId;
-    } catch (error) {
-      console.error('Error getting user ID:', error);
+    } catch (_error) {
       // Fallback to generated ID without storage
       this.userId = this.generateUserId();
       return this.userId;
@@ -84,9 +81,4 @@ if (typeof module !== 'undefined' && module.exports) {
     globalThis.lanchDrapUserIdManager = lanchDrapUserIdManager;
     globalThis.LanchDrapUserIdManager = { LanchDrapUserIdManager, lanchDrapUserIdManager };
   }
-
-  console.log(
-    'LanchDrap Rating Extension: lanchDrapUserIdManager set globally:',
-    typeof window.lanchDrapUserIdManager
-  );
 }

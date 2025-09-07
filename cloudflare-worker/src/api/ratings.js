@@ -52,7 +52,6 @@ export async function submitRating(request, env) {
       201
     );
   } catch (error) {
-    console.error('Error submitting rating:', error);
     return createErrorResponse('Failed to submit rating', 500, { error: error.message });
   }
 }
@@ -62,8 +61,8 @@ export async function getRatings(request, _env) {
   try {
     const url = new URL(request.url);
     const restaurant = url.searchParams.get('restaurant');
-    const limit = Math.min(parseInt(url.searchParams.get('limit')) || 50, 100); // Max 100
-    const offset = Math.max(parseInt(url.searchParams.get('offset')) || 0, 0);
+    const limit = Math.min(parseInt(url.searchParams.get('limit'), 10) || 50, 100); // Max 100
+    const offset = Math.max(parseInt(url.searchParams.get('offset'), 10) || 0, 0);
     const sortBy = url.searchParams.get('sortBy') || 'timestamp';
     const order = url.searchParams.get('order') || 'desc';
 
@@ -113,7 +112,6 @@ export async function getRatings(request, _env) {
       200
     );
   } catch (error) {
-    console.error('Error getting ratings:', error);
     return createErrorResponse('Failed to get ratings', 500, { error: error.message });
   }
 }
@@ -171,7 +169,6 @@ export async function getRatingStats(request, _env) {
       200
     );
   } catch (error) {
-    console.error('Error getting rating stats:', error);
     return createErrorResponse('Failed to get rating statistics', 500, { error: error.message });
   }
 }
@@ -209,7 +206,6 @@ export async function checkDailyRating(request, env) {
       200
     );
   } catch (error) {
-    console.error('Error checking daily rating:', error);
     return createErrorResponse('Failed to check daily rating', 500, { error: error.message });
   }
 }

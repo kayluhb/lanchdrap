@@ -28,8 +28,6 @@ class ApiClient {
 
     for (let attempt = 1; attempt <= this.retryAttempts; attempt++) {
       try {
-        console.log(`LanchDrap API: Attempting request to ${url} (attempt ${attempt})`);
-
         const response = await fetch(url, {
           ...options,
           headers: {
@@ -38,17 +36,12 @@ class ApiClient {
           },
         });
 
-        console.log(`LanchDrap API: Response status: ${response.status} ${response.statusText}`);
-
         if (!response.ok) {
           // Get response body for better error messages
           let errorBody = '';
           try {
             errorBody = await response.text();
-            console.log(`LanchDrap API: Error response body:`, errorBody);
-          } catch {
-            console.log(`LanchDrap API: Could not read error response body`);
-          }
+          } catch {}
 
           throw new Error(
             `HTTP ${response.status}: ${response.statusText}${errorBody ? ` - ${errorBody}` : ''}`
@@ -58,20 +51,16 @@ class ApiClient {
         // Try to parse JSON response
         try {
           const jsonResponse = await response.json();
-          console.log(`LanchDrap API: Successfully parsed JSON response`);
           return jsonResponse;
         } catch {
           // If response is not JSON, return text
           const textResponse = await response.text();
-          console.log(`LanchDrap API: Returning text response`);
           return textResponse;
         }
       } catch (error) {
         lastError = error;
-        console.warn(`LanchDrap API: Request attempt ${attempt} failed:`, error);
 
         if (attempt < this.retryAttempts) {
-          console.log(`LanchDrap API: Waiting ${this.retryDelay * attempt}ms before retry...`);
           // Wait before retrying
           await new Promise((resolve) => setTimeout(resolve, this.retryDelay * attempt));
         }
@@ -80,10 +69,6 @@ class ApiClient {
 
     // Enhanced error message with debugging info
     const errorMessage = `API request failed after ${this.retryAttempts} attempts: ${lastError.message}`;
-    console.error(`LanchDrap API: ${errorMessage}`);
-    console.error(`LanchDrap API: Last error details:`, lastError);
-    console.error(`LanchDrap API: Request URL: ${url}`);
-    console.error(`LanchDrap API: Request options:`, options);
 
     throw new Error(errorMessage);
   }
@@ -190,9 +175,4 @@ if (typeof module !== 'undefined' && module.exports) {
   if (typeof globalThis !== 'undefined') {
     globalThis.LanchDrapApiClient = { ApiClient };
   }
-
-  console.log(
-    'LanchDrap Rating Extension: LanchDrapApiClient set globally:',
-    typeof window.LanchDrapApiClient
-  );
 }

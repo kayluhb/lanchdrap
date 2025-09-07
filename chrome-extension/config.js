@@ -100,9 +100,4 @@ if (typeof module !== 'undefined' && module.exports) {
   if (typeof globalThis !== 'undefined') {
     globalThis.LanchDrapConfig = { CONFIG, getApiUrl };
   }
-
-  console.log(
-    'LanchDrap Rating Extension: LanchDrapConfig set globally:',
-    typeof window.LanchDrapConfig
-  );
 }

@@ -1,20 +1,19 @@
 // Main Cloudflare Worker with API Routes Pattern
 // Following modern patterns similar to React Router Cloudflare template
 
-import { createCorsResponse } from './utils/response.js';
-
 // Import API route handlers
 import { health } from './api/health.js';
 import { submitRating } from './api/ratings.js';
 import {
-  trackAppearances,
-  update,
   getRestaurantById,
-  searchRestaurantByName,
-  storeUserOrder,
   getUserOrderHistory,
   getUserRestaurantSummary,
+  searchRestaurantByName,
+  storeUserOrder,
+  trackAppearances,
+  update,
 } from './api/restaurants.js';
+import { createCorsResponse } from './utils/response.js';
 
 // Route configuration
 const routes = {
@@ -83,7 +82,6 @@ export default {
         }
       );
     } catch (error) {
-      console.error('Worker error:', error);
       return new Response(
         JSON.stringify({
           success: false,

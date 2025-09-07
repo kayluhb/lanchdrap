@@ -74,7 +74,6 @@ export async function syncRatings(request, env, corsHeaders) {
       corsHeaders
     );
   } catch (error) {
-    console.error('Error syncing ratings:', error);
     return createErrorResponse('Failed to sync ratings', 500, corsHeaders, {
       error: error.message,
     });

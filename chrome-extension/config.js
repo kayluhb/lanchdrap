@@ -15,28 +15,30 @@ const CONFIG = {
     // Restaurant endpoints
     RESTAURANTS: '/api/restaurants',
     RESTAURANTS_APPEARANCES_TRACK: '/api/restaurants/appearances/track',
-    RESTAURANTS_UPDATE: '/api/restaurants/update', // Updated from update-name to update
-    RESTAURANTS_GET_BY_ID: '/api/restaurant', // Dynamic route: /api/restaurant/{id}
+    RESTAURANTS_UPDATE: '/api/restaurants/update',
+    RESTAURANTS_GET_BY_ID: '/api/restaurant',
+    RESTAURANTS_SEARCH: '/api/restaurants/search',
     
-    // Legacy endpoints (removed or deprecated)
-    // RESTAURANTS_SELLOUT: '/api/restaurants/sellout', // Endpoint removed
-    // RESTAURANTS_AVAILABILITY: '/api/restaurants/availability', // Endpoint removed
-    // RESTAURANTS_AVAILABILITY_SUMMARY: '/api/restaurants/availability-summary', // Endpoint removed
-    // RESTAURANTS_DAILY_AVAILABILITY: '/api/restaurants/daily-availability', // Endpoint removed
-    // RESTAURANTS_OFFICE_AVAILABILITY: '/api/restaurants/office-availability', // Endpoint removed
+    // Sync endpoints
+    SYNC: '/api/sync',
   },
 
   // Extension settings
   SETTINGS: {
-    SCRAPE_INTERVAL: 300000, // 5 minutes
-    MAX_HISTORY_ITEMS: 50,
-    RETRY_ATTEMPTS: 3,
-    RETRY_DELAY: 1000, // 1 second
+    // API client settings (used in apiClient.js)
+    API_RETRY_ATTEMPTS: 3,
+    API_RETRY_DELAY: 1000, // 1 second
     
-    // Menu tracking settings
-    MENU_TRACKING_ENABLED: true,
-    MENU_UPDATE_DELAY: 1000, // 1 second delay before parsing menu
-    MENU_CACHE_DURATION: 300000, // 5 minutes - how long to cache menu data
+    // Content script timing settings
+    PAGE_LOAD_DELAY: 300, // Delay before scraping restaurant availability
+    RESTAURANT_STATS_DELAY: 500, // Delay before showing restaurant stats
+    FLOATING_BUTTON_DELAY: 2000, // Delay before showing floating rating button
+    
+    // DOM cache settings
+    DOM_CACHE_TIMEOUT: 5000, // 5 seconds - how long to cache DOM queries
+    
+    // Local storage settings
+    MAX_DAILY_RECORDS: 100, // Max records to keep per day in localStorage
   },
 
   // User identification
@@ -45,19 +47,6 @@ const CONFIG = {
     GENERATE_IF_MISSING: true,
   },
 
-  // LanchDrap specific selectors
-  SELECTORS: {
-    RESTAURANT_GRID: 'div.mx-4.my-8.sm\\:my-2',
-    RESTAURANT_CARDS: 'a[href*="/app/"]',
-    TIME_SLOT: '.text-base.font-bold.text-center',
-    STATUS: '.text-sm.text-center',
-    RESTAURANT_IMAGE: 'img',
-    
-    // Menu selectors for parsing restaurant menus
-    MENU_SECTIONS: '.my-16',
-    MENU_ITEMS: '.my-4.text-lg.cursor-pointer',
-    MENU_ITEM_NAME: '.flex.items-center.font-bold span',
-  },
 
   // Status indicators
   STATUS_INDICATORS: {
@@ -87,7 +76,7 @@ const CONFIG = {
     UPDATE_REQUEST: {
       RESTAURANT_ID: 'restaurantId', // Required: Restaurant identifier
       RESTAURANT_NAME: 'restaurantName', // Optional: Restaurant display name
-      MENU_HTML: 'menuHtml', // Optional: HTML content to parse for menu items
+      MENU_ITEMS: 'menuItems', // Optional: Array of parsed menu item names
     },
   },
 };

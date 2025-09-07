@@ -4,6 +4,18 @@
 import { createApiResponse, createErrorResponse } from '../utils/response.js';
 import { parseMenuItems, compareMenus } from '../utils/restaurants.js';
 
+// Helper function to get restaurant ID by name
+async function getRestaurantIdByName(env, restaurantName) {
+  try {
+    const nameKey = `restaurant_name:${restaurantName}`;
+    const restaurantId = await env.LANCHDRAP_RATINGS.get(nameKey);
+    return restaurantId;
+  } catch (error) {
+    console.error('Error getting restaurant ID by name:', error);
+    return null;
+  }
+}
+
 // Track restaurant appearances with proper KV structure
 async function trackRestaurantAppearances(env, restaurants, date) {
   try {
@@ -36,6 +48,13 @@ async function trackRestaurantAppearances(env, restaurants, date) {
           lastSeen: date,
           createdAt: new Date().toISOString()
         };
+        
+        // Create name mapping for new restaurant if name is different from ID
+        if (restaurantName && restaurantName !== restaurantId) {
+          const nameKey = `restaurant_name:${restaurantName}`;
+          await env.LANCHDRAP_RATINGS.put(nameKey, restaurantId);
+          console.log(`Created name mapping for new restaurant: ${restaurantName} -> ${restaurantId}`);
+        }
       }
       
       // Add date to appearances if not already present
@@ -74,11 +93,29 @@ async function trackRestaurantAppearances(env, restaurants, date) {
       }
         
         // Update restaurant name if we have a better one and it's different
-        if (restaurantName && restaurantName !== restaurantId && restaurantName.length > 3 && restaurantData.name !== restaurantName) {
+        if (restaurantName && restaurantName !== restaurantId && restaurantData.name !== restaurantName) {
+          const oldName = restaurantData.name;
           restaurantData.name = restaurantName;
+          
+          // Remove old name mapping if it exists
+          if (oldName && oldName !== restaurantId) {
+            const oldNameKey = `restaurant_name:${oldName}`;
+            await env.LANCHDRAP_RATINGS.delete(oldNameKey);
+          }
+          
+          // Add new name mapping
+          const nameKey = `restaurant_name:${restaurantName}`;
+          await env.LANCHDRAP_RATINGS.put(nameKey, restaurantId);
+          console.log(`Added name mapping: ${restaurantName} -> ${restaurantId}`);
         } else if (restaurantName === restaurantId && restaurantData.name === restaurantId) {
           // If both the incoming name and stored name are the ID, set stored name to null
           restaurantData.name = null;
+        } else if (restaurantName && restaurantName !== restaurantId && !restaurantData.name) {
+          // If we have a name but the restaurant doesn't have one stored, set it and create mapping
+          restaurantData.name = restaurantName;
+          const nameKey = `restaurant_name:${restaurantName}`;
+          await env.LANCHDRAP_RATINGS.put(nameKey, restaurantId);
+          console.log(`Created name mapping for existing restaurant: ${restaurantName} -> ${restaurantId}`);
         }
         
         // Update color if provided and different
@@ -94,6 +131,16 @@ async function trackRestaurantAppearances(env, restaurants, date) {
             restaurantData.menu = restaurantInfo.menu;
             restaurantData.updatedAt = new Date().toISOString();
             console.log(`Menu updated for restaurant ${restaurantData.id}:`, restaurantInfo.menu);
+          }
+        }
+        
+        // Ensure name mapping exists if restaurant has a name
+        if (restaurantData.name && restaurantData.name !== restaurantId) {
+          const nameKey = `restaurant_name:${restaurantData.name}`;
+          const existingMapping = await env.LANCHDRAP_RATINGS.get(nameKey);
+          if (!existingMapping) {
+            await env.LANCHDRAP_RATINGS.put(nameKey, restaurantId);
+            console.log(`Ensured name mapping exists: ${restaurantData.name} -> ${restaurantId}`);
           }
         }
         
@@ -249,7 +296,7 @@ export async function getAppearances(request, env) {
 // Update restaurant (name, menu, etc.)
 export async function update(request, env) {
   try {
-    const { restaurantId, restaurantName, menuHtml } = await request.json();
+    const { restaurantId, restaurantName, menuItems } = await request.json();
     
     if (!restaurantId) {
       return createErrorResponse('Restaurant ID is required', 400);
@@ -288,25 +335,40 @@ export async function update(request, env) {
     const updates = [];
     let hasChanges = false;
     
-    // Parse menu from HTML if provided
-    let newMenu = [];
-    if (menuHtml) {
-      newMenu = parseMenuItems(menuHtml);
-      const menuChanged = compareMenus(restaurantData.menu, newMenu);
+    // Update menu if provided
+    if (menuItems && Array.isArray(menuItems)) {
+      const menuChanged = compareMenus(restaurantData.menu, menuItems);
       if (menuChanged) {
-        restaurantData.menu = newMenu;
+        restaurantData.menu = menuItems;
         updates.push('menu');
         hasChanges = true;
-        console.log(`Menu updated for restaurant ${restaurantId}:`, newMenu);
+        console.log(`Menu updated for restaurant ${restaurantId}:`, menuItems);
       }
     }
     
     // Check if the name is actually different
     if (restaurantName && restaurantData.name !== restaurantName) {
       const oldName = restaurantData.name;
+      
+      // Remove old name mapping if it exists
+      if (oldName && oldName !== restaurantId) {
+        const oldNameKey = `restaurant_name:${oldName}`;
+        await env.LANCHDRAP_RATINGS.delete(oldNameKey);
+        console.log(`Removed old name mapping: ${oldName} -> ${restaurantId}`);
+      }
+      
+      // Update restaurant name
       restaurantData.name = restaurantName;
       updates.push('name');
       hasChanges = true;
+      
+      // Add new name mapping (only if name is different from ID)
+      if (restaurantName !== restaurantId) {
+        const nameKey = `restaurant_name:${restaurantName}`;
+        await env.LANCHDRAP_RATINGS.put(nameKey, restaurantId);
+        console.log(`Added name mapping: ${restaurantName} -> ${restaurantId}`);
+      }
+      
       console.log(`Name updated for restaurant ${restaurantId}: "${oldName}" -> "${restaurantName}"`);
     }
     
@@ -323,6 +385,16 @@ export async function update(request, env) {
           timestamp: new Date().toISOString()
         }
       }, 200);
+    }
+    
+    // Ensure name mapping exists if restaurant has a name
+    if (restaurantData.name && restaurantData.name !== restaurantId) {
+      const nameKey = `restaurant_name:${restaurantData.name}`;
+      const existingMapping = await env.LANCHDRAP_RATINGS.get(nameKey);
+      if (!existingMapping) {
+        await env.LANCHDRAP_RATINGS.put(nameKey, restaurantId);
+        console.log(`Ensured name mapping exists in update: ${restaurantData.name} -> ${restaurantId}`);
+      }
     }
     
     // Update timestamp and save to KV
@@ -384,12 +456,12 @@ export async function getAllRestaurants(_request, env) {
   }
 }
 
-// Get restaurant by ID
+// Get restaurant by ID or name
 export async function getRestaurantById(request, env) {
   try {
     const url = new URL(request.url);
     const pathParts = url.pathname.split('/');
-    const restaurantId = pathParts[pathParts.length - 1]; // Get ID from URL path
+    let restaurantId = pathParts[pathParts.length - 1]; // Get ID from URL path
     
     if (!restaurantId) {
       return createErrorResponse('Restaurant ID is required', 400);
@@ -397,10 +469,22 @@ export async function getRestaurantById(request, env) {
 
     // Check if a name is provided in query params for potential update
     const providedName = url.searchParams.get('name');
-
-    // Get restaurant data from KV
-    const restaurantKey = `restaurant:${restaurantId}`;
-    const restaurantData = await env.LANCHDRAP_RATINGS.get(restaurantKey);
+    
+    // Check if the provided ID is actually a restaurant name
+    // If we can't find a restaurant with this ID, try looking it up as a name
+    let restaurantKey = `restaurant:${restaurantId}`;
+    let restaurantData = await env.LANCHDRAP_RATINGS.get(restaurantKey);
+    
+    if (!restaurantData) {
+      // Try to find by name
+      const foundId = await getRestaurantIdByName(env, restaurantId);
+      if (foundId) {
+        restaurantId = foundId;
+        restaurantKey = `restaurant:${restaurantId}`;
+        restaurantData = await env.LANCHDRAP_RATINGS.get(restaurantKey);
+        console.log(`Found restaurant by name: ${pathParts[pathParts.length - 1]} -> ${restaurantId}`);
+      }
+    }
     
     if (!restaurantData) {
       return createErrorResponse('Restaurant not found', 404);
@@ -409,6 +493,16 @@ export async function getRestaurantById(request, env) {
     const data = JSON.parse(restaurantData);
     const appearances = data.appearances || [];
     const soldOutDates = data.soldOutDates || [];
+    
+    // Ensure name mapping exists if restaurant has a name
+    if (data.name && data.name !== restaurantId) {
+      const nameKey = `restaurant_name:${data.name}`;
+      const existingMapping = await env.LANCHDRAP_RATINGS.get(nameKey);
+      if (!existingMapping) {
+        await env.LANCHDRAP_RATINGS.put(nameKey, restaurantId);
+        console.log(`Ensured name mapping exists in getRestaurantById: ${data.name} -> ${restaurantId}`);
+      }
+    }
     
     // Update name if provided and different from stored name
     let nameUpdated = false;
@@ -462,6 +556,78 @@ export async function getRestaurantById(request, env) {
   } catch (error) {
     console.error('Error getting restaurant by ID:', error);
     return createErrorResponse('Failed to get restaurant', 500, { error: error.message });
+  }
+}
+
+// Search restaurant by name
+export async function searchRestaurantByName(request, env) {
+  try {
+    const url = new URL(request.url);
+    const restaurantName = url.searchParams.get('name');
+    
+    if (!restaurantName) {
+      return createErrorResponse('Restaurant name is required', 400);
+    }
+
+    // Try to find restaurant ID by name
+    const restaurantId = await getRestaurantIdByName(env, restaurantName);
+    
+    if (!restaurantId) {
+      return createErrorResponse('Restaurant not found', 404);
+    }
+
+    // Get restaurant data
+    const restaurantKey = `restaurant:${restaurantId}`;
+    const restaurantData = await env.LANCHDRAP_RATINGS.get(restaurantKey);
+    
+    if (!restaurantData) {
+      return createErrorResponse('Restaurant data not found', 404);
+    }
+
+    const data = JSON.parse(restaurantData);
+    const appearances = data.appearances || [];
+    const soldOutDates = data.soldOutDates || [];
+    
+    // Calculate stats
+    const totalAppearances = appearances.length;
+    const totalSoldOuts = soldOutDates.length;
+    const lastAppearance = appearances.length > 0 ? appearances[appearances.length - 1] : null;
+    const firstSeen = data.firstSeen || (appearances.length > 0 ? appearances[0] : null);
+    
+    // Calculate appearance rate (appearances per week)
+    const appearanceRate = totalAppearances > 0 ? (totalAppearances / 7).toFixed(2) : 0;
+    
+    // Calculate sold out rate (decimal 0-1, extension will convert to percentage)
+    const soldOutRate = totalAppearances > 0 ? (totalSoldOuts / totalAppearances).toFixed(3) : 0;
+    
+    return new Response(JSON.stringify({
+      name: data.name || restaurantName,
+      id: data.id || restaurantId,
+      color: data.color || null,
+      menu: data.menu || [],
+      timeRange: 'all',
+      totalDays: 7,
+      totalAppearances,
+      appearancesInRange: totalAppearances,
+      appearanceRate: parseFloat(appearanceRate),
+      totalSoldOuts,
+      soldOutRate: parseFloat(soldOutRate),
+      lastAppearance,
+      firstSeen,
+      lastUpdated: data.updatedAt || data.createdAt || new Date().toISOString(),
+      appearances: appearances,
+      timezone: 'America/Chicago',
+      foundByName: true // Indicate this was found by name lookup
+    }), {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*',
+      },
+    });
+  } catch (error) {
+    console.error('Error searching restaurant by name:', error);
+    return createErrorResponse('Failed to search restaurant', 500, { error: error.message });
   }
 }
 

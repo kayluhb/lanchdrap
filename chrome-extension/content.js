@@ -103,8 +103,19 @@
 
       const restaurantName = orderData?.restaurant || 'Unknown Restaurant';
 
-      // Daily rating check endpoint removed - no longer checking if restaurant was rated today
-
+      // Get restaurant menu items for selection
+      let menuItems = [];
+      try {
+        if (typeof LanchDrapApiClient !== 'undefined' && typeof LanchDrapConfig !== 'undefined') {
+          const apiClient = new LanchDrapApiClient.ApiClient(LanchDrapConfig.CONFIG.API_BASE_URL, LanchDrapConfig.CONFIG.ENDPOINTS);
+          const restaurantData = await apiClient.searchRestaurantByName(restaurantName);
+          menuItems = restaurantData.menu || [];
+        }
+      } catch (error) {
+        console.log('Could not fetch restaurant menu:', error);
+        // Fallback to parsing menu from current page
+        menuItems = parseMenuFromPage();
+      }
 
       const widget = document.createElement('div');
       widget.id = 'lunchdrop-rating-widget';
@@ -116,6 +127,14 @@
                 </div>
                 <div class="ld-restaurant-name">
                     <span class="ld-restaurant-title">${restaurantName}</span>
+                </div>
+                <div class="ld-menu-selection">
+                    <label class="ld-menu-label">What did you order?</label>
+                    <div class="ld-menu-autocomplete">
+                        <input type="text" id="ld-menu-search" placeholder="Search menu items..." autocomplete="off">
+                        <div class="ld-menu-dropdown" id="ld-menu-dropdown"></div>
+                    </div>
+                    <div class="ld-selected-items" id="ld-selected-items"></div>
                 </div>
                 <div class="ld-rating-stars">
                     <span class="ld-star" data-rating="1">🤠</span>
@@ -144,17 +163,108 @@
       ratingWidget = widget;
 
       // Add event listeners
-      setupRatingWidgetEvents();
+      setupRatingWidgetEvents(menuItems);
     }
 
-    function setupRatingWidgetEvents() {
+    function setupRatingWidgetEvents(menuItems = []) {
       const stars = ratingWidget.querySelectorAll('.ld-star');
       const ratingDisplay = ratingWidget.querySelector('#ld-current-rating');
       const commentInput = ratingWidget.querySelector('.ld-rating-comment');
       const submitButton = ratingWidget.querySelector('#ld-rating-submit');
       const closeButton = ratingWidget.querySelector('#ld-rating-close');
+      const menuSearch = ratingWidget.querySelector('#ld-menu-search');
+      const menuDropdown = ratingWidget.querySelector('#ld-menu-dropdown');
+      const selectedItems = ratingWidget.querySelector('#ld-selected-items');
 
       let currentRating = 0;
+      let selectedMenuItems = [];
+
+      // Menu search functionality
+      function filterMenuItems(searchTerm) {
+        if (!searchTerm) {
+          return menuItems;
+        }
+        return menuItems.filter(item => 
+          item.toLowerCase().includes(searchTerm.toLowerCase())
+        );
+      }
+
+      function renderMenuDropdown(items) {
+        menuDropdown.innerHTML = '';
+        if (items.length === 0) {
+          menuDropdown.style.display = 'none';
+          return;
+        }
+
+        items.forEach(item => {
+          if (selectedMenuItems.includes(item)) return; // Skip already selected items
+          
+          const option = document.createElement('div');
+          option.className = 'ld-menu-option';
+          option.textContent = item;
+          option.addEventListener('click', () => {
+            selectMenuItem(item);
+            menuSearch.value = '';
+            menuDropdown.style.display = 'none';
+          });
+          menuDropdown.appendChild(option);
+        });
+        
+        menuDropdown.style.display = 'block';
+      }
+
+      function selectMenuItem(item) {
+        if (!selectedMenuItems.includes(item)) {
+          selectedMenuItems.push(item);
+          renderSelectedItems();
+        }
+      }
+
+      function removeMenuItem(item) {
+        selectedMenuItems = selectedMenuItems.filter(i => i !== item);
+        renderSelectedItems();
+      }
+
+      function renderSelectedItems() {
+        selectedItems.innerHTML = '';
+        selectedMenuItems.forEach(item => {
+          const tag = document.createElement('div');
+          tag.className = 'ld-selected-item';
+          tag.innerHTML = `
+            <span>${item}</span>
+            <button class="ld-remove-item" data-item="${item}">×</button>
+          `;
+          selectedItems.appendChild(tag);
+        });
+
+        // Add event listeners for remove buttons
+        selectedItems.querySelectorAll('.ld-remove-item').forEach(btn => {
+          btn.addEventListener('click', (e) => {
+            removeMenuItem(e.target.dataset.item);
+          });
+        });
+      }
+
+      // Menu search event listeners
+      menuSearch.addEventListener('input', (e) => {
+        const searchTerm = e.target.value;
+        const filteredItems = filterMenuItems(searchTerm);
+        renderMenuDropdown(filteredItems);
+      });
+
+      menuSearch.addEventListener('focus', () => {
+        if (menuSearch.value) {
+          const filteredItems = filterMenuItems(menuSearch.value);
+          renderMenuDropdown(filteredItems);
+        }
+      });
+
+      // Hide dropdown when clicking outside
+      document.addEventListener('click', (e) => {
+        if (!menuSearch.contains(e.target) && !menuDropdown.contains(e.target)) {
+          menuDropdown.style.display = 'none';
+        }
+      });
 
       stars.forEach((star) => {
         star.addEventListener('click', function () {
@@ -216,7 +326,7 @@
           const ratingData = {
             orderId: orderData?.orderId || generateOrderId(),
             restaurant: orderData?.restaurant || 'Unknown Restaurant',
-            items: orderData?.items || ['Unknown Items'],
+            items: selectedMenuItems.length > 0 ? selectedMenuItems : (orderData?.items || ['Unknown Items']),
             rating: currentRating,
             comment: comment,
             timestamp: new Date().toISOString(),
@@ -225,7 +335,7 @@
 
           // Send to Cloudflare Worker
           const response = await fetch(
-            'https://lunchdrop-ratings.caleb-brown.workers.dev/api/ratings',
+            LanchDrapConfig.getApiUrl(LanchDrapConfig.CONFIG.ENDPOINTS.RATINGS),
             {
               method: 'POST',
               headers: {
@@ -647,7 +757,7 @@
           return;
         }
 
-        const apiClient = new LanchDrapApiClient.ApiClient(LanchDrapConfig.CONFIG.API_BASE_URL);
+        const apiClient = new LanchDrapApiClient.ApiClient(LanchDrapConfig.CONFIG.API_BASE_URL, LanchDrapConfig.CONFIG.ENDPOINTS);
         const timeSlot = availabilityData[0]?.timeSlot?.full || 'unknown';
 
         const trackingData = {
@@ -902,7 +1012,7 @@
           return;
         }
 
-        const apiClient = new LanchDrapApiClient.ApiClient(LanchDrapConfig.CONFIG.API_BASE_URL);
+        const apiClient = new LanchDrapApiClient.ApiClient(LanchDrapConfig.CONFIG.API_BASE_URL, LanchDrapConfig.CONFIG.ENDPOINTS);
         let stats = null;
 
         try {
@@ -937,9 +1047,14 @@
         const statsContainer = renderStatsComponent(stats, 'lunchdrop-restaurant-stats', 'Selected Restaurant Stats');
 
         // Insert the stats after the restaurant title element
-        const restaurantNameElement = document.querySelector('#app > div:nth-child(1) > div:nth-child(2) > div:nth-child(2) > div:nth-child(7) > div > div > div:nth-child(1) > div:nth-child(1)');
+        let restaurantNameElement = document.querySelector('.text-3xl.font-bold');
+        if (!restaurantNameElement) {
+          restaurantNameElement = document.querySelector('#app > div:nth-child(1) > div:nth-child(2) > div:nth-child(2) > div:nth-child(7) > div > div > div:nth-child(1) > div:nth-child(1)');
+        }
+        
         if (restaurantNameElement) {
-          restaurantNameElement.parentNode.insertBefore(statsContainer, restaurantNameElement.nextSibling);
+          const insertionPoint = restaurantNameElement.parentNode || restaurantNameElement;
+          insertionPoint.insertBefore(statsContainer, restaurantNameElement.nextSibling);
         }
 
       } catch (error) {
@@ -977,30 +1092,17 @@
       }
     }
 
-    // Function to get menu HTML for parsing
-    function getMenuHtml() {
-      try {
-        // Look for menu sections with the structure provided by the user
-        const menuSections = document.querySelectorAll('.my-16');
-        let menuHtml = '';
-        
-        menuSections.forEach(section => {
-          // Get the HTML content of the menu section
-          menuHtml += section.outerHTML;
-        });
-        
-        return menuHtml;
-      } catch (error) {
-        console.error('Error getting menu HTML:', error);
-        return '';
-      }
-    }
 
     // Function to display restaurant tracking information on detail pages
     async function displayRestaurantTrackingInfo() {
       try {
-        // Check if we're on a restaurant detail page
-        const restaurantNameElement = document.querySelector('#app > div:nth-child(1) > div:nth-child(2) > div:nth-child(2) > div:nth-child(7) > div > div > div:nth-child(1) > div:nth-child(1)');
+        // Check if we're on a restaurant detail page by looking for the restaurant name
+        // Try multiple selectors to find the restaurant name
+        let restaurantNameElement = document.querySelector('.text-3xl.font-bold');
+        if (!restaurantNameElement) {
+          restaurantNameElement = document.querySelector('#app > div:nth-child(1) > div:nth-child(2) > div:nth-child(2) > div:nth-child(7) > div > div > div:nth-child(1) > div:nth-child(1)');
+        }
+        
         if (!restaurantNameElement) {
           return; // Not on a detail page
         }
@@ -1016,7 +1118,7 @@
         }
 
         // Create API client instance
-        const apiClient = new LanchDrapApiClient.ApiClient(LanchDrapConfig.CONFIG.API_BASE_URL);
+        const apiClient = new LanchDrapApiClient.ApiClient(LanchDrapConfig.CONFIG.API_BASE_URL, LanchDrapConfig.CONFIG.ENDPOINTS);
 
         // Store the restaurant name for future use (extract identifier from URL)
         const urlParts = window.location.pathname.split('/');
@@ -1050,17 +1152,17 @@
                                    restaurantName.length > 3 && 
                                    stats.name !== restaurantName;
             
-            // Get menu HTML for parsing
-            const menuHtml = getMenuHtml();
-            const needsMenuUpdate = menuHtml.length > 0;
+            // Parse menu items from the page
+            const menuItems = parseMenuFromPage();
+            const needsMenuUpdate = menuItems.length > 0;
             
             if (needsNameUpdate || needsMenuUpdate) {
               try {
-                await apiClient.updateRestaurant(restaurantId, restaurantName, menuHtml);
+                await apiClient.updateRestaurant(restaurantId, restaurantName, menuItems);
                 console.log('LanchDrap Rating Extension: Updated restaurant data:', {
                   restaurantId,
                   restaurantName,
-                  menuItems: parseMenuFromPage()
+                  menuItems: menuItems
                 });
               } catch (error) {
                 // Silently handle the error for now since the endpoint may not be available
@@ -1100,7 +1202,9 @@
         const trackingInfo = renderStatsComponent(stats, 'lunchdrop-restaurant-stats', 'Restaurant Stats');
 
         // Insert the tracking info near the restaurant name
-        restaurantNameElement.parentNode.insertBefore(trackingInfo, restaurantNameElement.nextSibling);
+        // Try to find a good insertion point near the restaurant name
+        const insertionPoint = restaurantNameElement.parentNode || restaurantNameElement;
+        insertionPoint.insertBefore(trackingInfo, restaurantNameElement.nextSibling);
       } catch (error) {
         console.error('Error displaying restaurant tracking info:', error);
       }

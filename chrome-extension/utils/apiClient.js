@@ -1,7 +1,8 @@
 // API client utility for communicating with Cloudflare Worker
 class ApiClient {
-  constructor(baseUrl) {
+  constructor(baseUrl, endpoints = null) {
     this.baseUrl = baseUrl;
+    this.endpoints = endpoints;
     this.retryAttempts = 3;
     this.retryDelay = 1000;
   }
@@ -9,6 +10,15 @@ class ApiClient {
   // Get full API URL
   getUrl(endpoint) {
     return `${this.baseUrl}${endpoint}`;
+  }
+
+  // Get endpoint from config or fallback to direct path
+  getEndpoint(endpointKey) {
+    if (this.endpoints?.[endpointKey]) {
+      return this.endpoints[endpointKey];
+    }
+    // Fallback to direct path if config not available
+    return endpointKey.toLowerCase().replace(/_/g, '-');
   }
 
   // Make HTTP request with retry logic and enhanced error handling
@@ -36,7 +46,7 @@ class ApiClient {
           try {
             errorBody = await response.text();
             console.log(`LanchDrap API: Error response body:`, errorBody);
-          } catch (e) {
+          } catch {
             console.log(`LanchDrap API: Could not read error response body`);
           }
           
@@ -78,13 +88,11 @@ class ApiClient {
 
   // Submit a rating
   async submitRating(ratingData) {
-    return this.request('/api/ratings', {
+    return this.request(this.getEndpoint('RATINGS'), {
       method: 'POST',
       body: JSON.stringify(ratingData),
     });
   }
-
-  // Get ratings endpoint removed
 
   // Get rating statistics
   async getRatingStats(options = {}) {
@@ -92,32 +100,9 @@ class ApiClient {
     if (options.restaurant) params.append('restaurant', options.restaurant);
     if (options.timeRange) params.append('timeRange', options.timeRange);
 
-    const endpoint = `/api/ratings/stats${params.toString() ? `?${params.toString()}` : ''}`;
+    const endpoint = `${this.getEndpoint('RATINGS_STATS')}${params.toString() ? `?${params.toString()}` : ''}`;
     return this.request(endpoint);
   }
-
-  // Get restaurant list endpoint removed
-
-  // Report restaurant sellout status
-  async reportSelloutStatus(selloutData) {
-    return this.request('/api/restaurants/sellout', {
-      method: 'POST',
-      body: JSON.stringify(selloutData),
-    });
-  }
-
-  // Get restaurant availability statistics
-  async getRestaurantAvailability(options = {}) {
-    const params = new URLSearchParams();
-    if (options.restaurant) params.append('restaurant', options.restaurant);
-    if (options.timeRange) params.append('timeRange', options.timeRange);
-    if (options.includeDetails) params.append('includeDetails', options.includeDetails);
-
-    const endpoint = `/api/restaurants/availability${params.toString() ? `?${params.toString()}` : ''}`;
-    return this.request(endpoint);
-  }
-
-  // Submit availability summary endpoint removed
 
   // Get daily availability data
   async getDailyAvailability(date) {
@@ -125,19 +110,9 @@ class ApiClient {
     return this.request(endpoint);
   }
 
-  // Get office availability trends
-  async getOfficeAvailability(options = {}) {
-    const params = new URLSearchParams();
-    if (options.startDate) params.append('startDate', options.startDate);
-    if (options.endDate) params.append('endDate', options.endDate);
-
-    const endpoint = `/api/restaurants/office-availability${params.toString() ? `?${params.toString()}` : ''}`;
-    return this.request(endpoint);
-  }
-
   // Get restaurant by ID
   async getRestaurantById(restaurantId, restaurantName = null) {
-    let endpoint = `/api/restaurant/${restaurantId}`;
+    let endpoint = `${this.getEndpoint('RESTAURANTS_GET_BY_ID')}/${restaurantId}`;
     
     // Add name as query parameter if provided
     if (restaurantName && restaurantName !== restaurantId) {
@@ -149,38 +124,31 @@ class ApiClient {
     return this.request(endpoint);
   }
 
-  // Get restaurant appearance statistics endpoint removed - use getRestaurantById instead
+  // Search restaurant by name
+  async searchRestaurantByName(restaurantName) {
+    const params = new URLSearchParams();
+    params.append('name', restaurantName);
+    const endpoint = `${this.getEndpoint('RESTAURANTS_SEARCH')}?${params.toString()}`;
+    
+    return this.request(endpoint);
+  }
 
   // Track restaurant appearances from daily pages
   async trackRestaurantAppearances(appearanceData) {
-    return this.request('/api/restaurants/appearances/track', {
+    return this.request(this.getEndpoint('RESTAURANTS_APPEARANCES_TRACK'), {
       method: 'POST',
       body: JSON.stringify(appearanceData),
     });
   }
 
-  // Check daily rating endpoint removed
-
   // Update restaurant (name, menu, etc.)
-  async updateRestaurant(restaurantId, restaurantName = null, menuHtml = null) {
-    return this.request('/api/restaurants/update', {
+  async updateRestaurant(restaurantId, restaurantName = null, menuItems = null) {
+    return this.request(this.getEndpoint('RESTAURANTS_UPDATE'), {
       method: 'POST',
-      body: JSON.stringify({ restaurantId, restaurantName, menuHtml }),
+      body: JSON.stringify({ restaurantId, restaurantName, menuItems }),
     });
   }
 
-  // Legacy method for backward compatibility
-  async updateRestaurantName(restaurantId, restaurantName) {
-    return this.updateRestaurant(restaurantId, restaurantName);
-  }
-
-  // Sync ratings from local storage
-  async syncRatings(ratings) {
-    return this.request('/api/sync', {
-      method: 'POST',
-      body: JSON.stringify({ ratings }),
-    });
-  }
 }
 
 // Export for use in other files

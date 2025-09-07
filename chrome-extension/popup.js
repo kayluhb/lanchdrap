@@ -112,7 +112,7 @@ document.addEventListener('DOMContentLoaded', () => {
       };
 
       // Use API client to submit rating
-      const apiClient = new LunchDropApiClient.ApiClient(LunchDropConfig.CONFIG.API_BASE_URL);
+      const apiClient = new LunchDropApiClient.ApiClient(LunchDropConfig.CONFIG.API_BASE_URL, LunchDropConfig.CONFIG.ENDPOINTS);
       return await apiClient.submitRating(ratingDataWithUser);
     } catch (error) {
       console.error('Error sending rating to server:', error);
@@ -153,7 +153,6 @@ document.addEventListener('DOMContentLoaded', () => {
   async function loadRatingHistory() {
     try {
       // Try to load from server first
-      const apiClient = new LunchDropApiClient.ApiClient(LunchDropConfig.CONFIG.API_BASE_URL);
       // Ratings endpoint removed - can't fetch ratings from server anymore
       const serverHistory = null;
 
@@ -206,7 +205,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Load restaurant statistics
   async function loadRestaurantStats() {
     try {
-      const apiClient = new LunchDropApiClient.ApiClient(LunchDropConfig.CONFIG.API_BASE_URL);
+      const apiClient = new LunchDropApiClient.ApiClient(LunchDropConfig.CONFIG.API_BASE_URL, LunchDropConfig.CONFIG.ENDPOINTS);
 
       // Get overall restaurant stats
       const overallStats = await apiClient.getRatingStats({ timeRange: 'all' });
@@ -325,7 +324,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Load availability data
   async function loadAvailabilityStats() {
     try {
-      const apiClient = new LunchDropApiClient.ApiClient(LunchDropConfig.CONFIG.API_BASE_URL);
+      const apiClient = new LunchDropApiClient.ApiClient(LunchDropConfig.CONFIG.API_BASE_URL, LunchDropConfig.CONFIG.ENDPOINTS);
       const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
 
       const availability = await apiClient.getDailyAvailability(today);

@@ -62,7 +62,7 @@ function syncRatingsToServer() {
     if (!lastSync || now - lastSync > 3600000) {
       if (ratingHistory && ratingHistory.length > 0) {
         // Send ratings to server
-        fetch('https://lunchdrop-ratings.caleb-brown.workers.dev/api/sync', {
+        fetch(LunchDropConfig.getApiUrl(LunchDropConfig.CONFIG.ENDPOINTS.SYNC), {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

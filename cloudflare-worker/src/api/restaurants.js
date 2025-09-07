@@ -662,7 +662,7 @@ export async function submitAvailabilitySummary(request, _env) {
 }
 
 // Store user order history
-async function storeUserOrder(request, env) {
+export async function storeUserOrder(request, env) {
   try {
     const { userId, restaurantId, orderData } = await request.json();
 
@@ -722,7 +722,7 @@ async function storeUserOrder(request, env) {
 }
 
 // Get user order history
-async function getUserOrderHistory(request, env) {
+export async function getUserOrderHistory(request, env) {
   try {
     const url = new URL(request.url);
     const userId = url.searchParams.get('userId');
@@ -790,7 +790,7 @@ async function getUserOrderHistory(request, env) {
 }
 
 // Get user's restaurant order summary (all restaurants they've ordered from)
-async function getUserRestaurantSummary(request, env) {
+export async function getUserRestaurantSummary(request, env) {
   try {
     const url = new URL(request.url);
     const userId = url.searchParams.get('userId');
@@ -853,14 +853,4 @@ async function getUserRestaurantSummary(request, env) {
   }
 }
 
-// Export the API functions
-export {
-  trackRestaurantAppearances,
-  update,
-  getRestaurantById,
-  searchRestaurantByName,
-  getAllRestaurants,
-  storeUserOrder,
-  getUserOrderHistory,
-  getUserRestaurantSummary,
-};
+// Functions are already exported individually above

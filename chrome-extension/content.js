@@ -1069,13 +1069,66 @@
       }
     }
 
+    // Function to parse order items from the order confirmation page
+    function parseOrderItemsFromPage() {
+      try {
+        // Look for the order confirmation container
+        const orderContainer = document.querySelector('[id^="w"]');
+        console.log('LanchDrap: Order container for items parsing', orderContainer);
+        if (!orderContainer) {
+          console.log('LanchDrap: No order container found for items parsing');
+          return [];
+        }
+
+        // Parse order items from the table
+        const orderItems = [];
+        const itemRows = orderContainer.querySelectorAll('tbody tr');
+        console.log('LanchDrap: Found item rows', itemRows.length);
+
+        for (const row of itemRows) {
+          const itemCell = row.querySelector('td:nth-child(2)');
+          console.log('LanchDrap: Processing row', row, 'itemCell', itemCell);
+          if (itemCell) {
+            const itemNameElement = itemCell.querySelector('.text-lg.font-medium, .font-medium');
+            const optionsElement = itemCell.querySelector('.text-gray-500');
+            console.log('LanchDrap: Item elements', { itemNameElement, optionsElement });
+
+            if (itemNameElement) {
+              const itemName = itemNameElement.textContent.trim();
+              const options = optionsElement ? optionsElement.textContent.trim() : '';
+
+              // Parse quantity if present (e.g., "2× Chicken Fajita")
+              const quantityMatch = itemName.match(/^(\d+)×\s*(.+)$/);
+              const quantity = quantityMatch ? parseInt(quantityMatch[1], 10) : 1;
+              const name = quantityMatch ? quantityMatch[2] : itemName;
+
+              const orderItem = {
+                name: name,
+                quantity: quantity,
+                options: options,
+                fullDescription: `${itemName}${options ? ` (${options})` : ''}`,
+              };
+              console.log('LanchDrap: Parsed order item', orderItem);
+              orderItems.push(orderItem);
+            }
+          }
+        }
+
+        return orderItems;
+      } catch (_error) {
+        return [];
+      }
+    }
+
     // Function to parse order details from the order confirmation page
     function parseOrderFromPage() {
       try {
         // Look for the order confirmation container
         const orderContainer =
           document.querySelector('[id^="w"]') || document.querySelector('.my-8.last\\:mb-0');
+        console.log('LanchDrap: Order container found', orderContainer);
         if (!orderContainer) {
+          console.log('LanchDrap: No order container found');
           return null;
         }
 
@@ -1087,13 +1140,25 @@
         // Try to get restaurant name from various sources
         let restaurantName = null;
 
-        // Method 1: Look for restaurant name in the page title or headers
-        const titleElement = document.querySelector('h1, .text-3xl, .text-2xl');
-        if (titleElement && !titleElement.textContent.includes('Your order has been placed')) {
-          restaurantName = titleElement.textContent.trim();
+        // Method 1: Extract restaurant name from URL (most reliable for order confirmation pages)
+        const urlParts = url.split('/');
+        const restaurantIndex = urlParts.findIndex((part) => part.match(/\d{4}-\d{2}-\d{2}/)) + 1;
+        if (restaurantIndex < urlParts.length) {
+          restaurantName = urlParts[restaurantIndex];
+          console.log('LanchDrap: Restaurant name from URL', restaurantName);
         }
 
-        // Method 2: Look for restaurant name in navigation or breadcrumbs
+        // Method 2: Look for restaurant name in the page title or headers (fallback)
+        if (!restaurantName) {
+          const titleElement = document.querySelector('h1, .text-3xl, .text-2xl');
+          console.log('LanchDrap: Title element found', titleElement?.textContent);
+          if (titleElement && !titleElement.textContent.includes('Your order has been placed')) {
+            restaurantName = titleElement.textContent.trim();
+            console.log('LanchDrap: Restaurant name from title', restaurantName);
+          }
+        }
+
+        // Method 3: Look for restaurant name in navigation or breadcrumbs
         if (!restaurantName) {
           const navElements = document.querySelectorAll('nav a, .breadcrumb a, [href*="/app/"]');
           for (const nav of navElements) {
@@ -1107,16 +1172,6 @@
               restaurantName = text;
               break;
             }
-          }
-        }
-
-        // Method 3: Extract from URL path if available
-        if (!restaurantName) {
-          const pathParts = url.split('/');
-          const restaurantIndex =
-            pathParts.findIndex((part) => part.match(/\d{4}-\d{2}-\d{2}/)) + 1;
-          if (restaurantIndex < pathParts.length) {
-            restaurantName = pathParts[restaurantIndex];
           }
         }
 
@@ -1150,14 +1205,17 @@
         });
 
         if (orderItems.length === 0) {
+          console.log('LanchDrap: No order items found');
           return null;
         }
 
-        return {
+        const result = {
           date: date,
           restaurantName: restaurantName,
           items: orderItems,
         };
+        console.log('LanchDrap: Final parsed order result', result);
+        return result;
       } catch (_error) {
         return null;
       }
@@ -1167,42 +1225,106 @@
     async function detectAndStoreOrder() {
       try {
         // Check if this is an order confirmation page
-        const orderConfirmationText = document.querySelector('text-3xl.font-bold, .text-xl');
+        // First, look for the order confirmation container (the div with id starting with "w")
+        const orderContainer = document.querySelector('[id^="w"]');
+        if (!orderContainer) {
+          console.log('LanchDrap: No order container found, not an order confirmation page');
+          return;
+        }
+
+        // Then look for the specific "Your order has been placed!" text within that container
+        const orderConfirmationText = orderContainer.querySelector(
+          'div.text-3xl.font-bold, div.text-xl'
+        );
         const isOrderPage =
           orderConfirmationText &&
           (orderConfirmationText.textContent.includes('Your order has been placed') ||
             orderConfirmationText.textContent.includes('order has been placed'));
 
+        console.log('LanchDrap: Order detection check', {
+          orderConfirmationText: orderConfirmationText?.textContent,
+          isOrderPage,
+        });
+
         if (!isOrderPage) {
           return;
         }
 
-        // Parse the order from the page
-        const orderData = parseOrderFromPage();
-        if (!orderData) {
+        // Get restaurant information from existing context (use the same logic as displaySelectedRestaurantStats)
+        let restaurantId = null;
+        let restaurantName = null;
+
+        // First, try to get restaurant info from the availability data (same as stats display)
+        try {
+          const availabilityData = await scrapeRestaurantAvailability();
+          if (availabilityData && availabilityData.length > 0) {
+            const selectedRestaurant = availabilityData.find((restaurant) => restaurant.isSelected);
+            if (selectedRestaurant) {
+              restaurantId = selectedRestaurant.id;
+              restaurantName = selectedRestaurant.name;
+              console.log('LanchDrap: Found selected restaurant from availability data', {
+                restaurantId,
+                restaurantName,
+              });
+            }
+          }
+        } catch (error) {
+          console.log('LanchDrap: Could not get availability data', error);
+        }
+
+        // Fallback: if not found in availability data, try URL extraction
+        if (!restaurantId) {
+          console.log('LanchDrap: Trying URL extraction as fallback');
+          const urlParts = window.location.pathname.split('/');
+          if (urlParts.length >= 4 && urlParts[1] === 'app') {
+            restaurantId = urlParts[urlParts.length - 1];
+            const localKey = `restaurant_name:${restaurantId}`;
+            restaurantName = localStorage.getItem(localKey);
+            console.log('LanchDrap: URL fallback result', { restaurantId, restaurantName });
+          }
+        }
+
+        // Final fallback: extract restaurant name from page
+        if (!restaurantName) {
+          console.log('LanchDrap: Trying to extract restaurant name from page');
+          const titleElement = document.querySelector('h1, .text-3xl, .text-2xl');
+          if (titleElement && !titleElement.textContent.includes('Your order has been placed')) {
+            restaurantName = titleElement.textContent.trim();
+            if (restaurantId) {
+              localStorage.setItem(`restaurant_name:${restaurantId}`, restaurantName);
+            }
+            console.log('LanchDrap: Extracted restaurant name from page:', restaurantName);
+          }
+        }
+
+        if (!restaurantId) {
+          console.log('LanchDrap: Could not determine restaurant ID');
           return;
         }
 
         // Get user ID
-        const userId = await getUserId();
+        const userId = await lanchDrapUserIdManager.getUserId();
+        console.log('LanchDrap: User ID', userId);
         if (!userId) {
+          console.log('LanchDrap: No user ID available');
           return;
         }
 
-        // Get restaurant ID by name
-        let restaurantId = orderData.restaurantName;
-        if (typeof LanchDrapApiClient !== 'undefined' && typeof LanchDrapConfig !== 'undefined') {
-          try {
-            const apiClient = new LanchDrapApiClient.ApiClient(
-              LanchDrapConfig.CONFIG.API_BASE_URL,
-              LanchDrapConfig.CONFIG.ENDPOINTS
-            );
-            const restaurantData = await apiClient.searchRestaurantByName(orderData.restaurantName);
-            if (restaurantData?.id) {
-              restaurantId = restaurantData.id;
-            }
-          } catch (_error) {}
+        // Parse order items from the page
+        const orderItems = parseOrderItemsFromPage();
+        console.log('LanchDrap: Parsed order items', orderItems);
+
+        if (!orderItems || orderItems.length === 0) {
+          console.log('LanchDrap: No order items found');
+          return;
         }
+
+        // Create order data using existing restaurant context
+        const orderData = {
+          date: new Date().toISOString().split('T')[0],
+          restaurantName: restaurantName || restaurantId,
+          items: orderItems,
+        };
 
         // Store the order
         if (typeof LanchDrapApiClient !== 'undefined' && typeof LanchDrapConfig !== 'undefined') {
@@ -1211,8 +1333,14 @@
               LanchDrapConfig.CONFIG.API_BASE_URL,
               LanchDrapConfig.CONFIG.ENDPOINTS
             );
-            await apiClient.storeUserOrder(userId, restaurantId, orderData);
-          } catch (_error) {}
+            console.log('LanchDrap: Storing order', { userId, restaurantId, orderData });
+            const result = await apiClient.storeUserOrder(userId, restaurantId, orderData);
+            console.log('LanchDrap: Order stored successfully', result);
+          } catch (error) {
+            console.error('LanchDrap: Failed to store order', error);
+          }
+        } else {
+          console.log('LanchDrap: API client not available, cannot store order');
         }
       } catch (_error) {}
     }

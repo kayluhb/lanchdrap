@@ -1,0 +1,306 @@
+/* Styles for LunchDrop Rating Extension - Content Script Injected Elements */
+
+/* Rating Widget Styles */
+#lunchdrop-rating-widget {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 10000;
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+  padding: 24px;
+  min-width: 350px;
+  max-width: 500px;
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+}
+
+#lunchdrop-rating-widget .ld-rating-container {
+  position: relative;
+}
+
+#lunchdrop-rating-widget .ld-rating-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+#lunchdrop-rating-widget .ld-rating-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #333;
+}
+
+#lunchdrop-rating-widget .ld-rating-close {
+  background: none;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  color: #999;
+  padding: 0;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: all 0.2s ease;
+}
+
+#lunchdrop-rating-widget .ld-rating-close:hover {
+  background: #f0f0f0;
+  color: #333;
+}
+
+#lunchdrop-rating-widget .ld-restaurant-name {
+  text-align: center;
+  margin-bottom: 20px;
+  padding: 12px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  border-left: 4px solid #ff6b6b;
+}
+
+#lunchdrop-rating-widget .ld-restaurant-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #333;
+  display: block;
+}
+
+#lunchdrop-rating-widget .ld-rating-stars {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  margin-bottom: 20px;
+}
+
+#lunchdrop-rating-widget .ld-star {
+  font-size: 32px;
+  cursor: pointer;
+  color: #ccc;
+  transition: all 0.2s ease;
+  user-select: none;
+}
+
+#lunchdrop-rating-widget .ld-star:hover {
+  color: #ffd700;
+  transform: scale(1.1);
+}
+
+#lunchdrop-rating-widget .ld-star.active {
+  color: #ffd700;
+  transform: scale(1.1);
+}
+
+#lunchdrop-rating-widget .ld-rating-display {
+  text-align: center;
+  font-size: 18px;
+  font-weight: 600;
+  color: #666;
+  margin-bottom: 20px;
+}
+
+#lunchdrop-rating-widget .ld-rating-display span {
+  color: #ff6b6b;
+  font-size: 24px;
+}
+
+#lunchdrop-rating-widget .ld-rating-comment {
+  margin-bottom: 20px;
+}
+
+#lunchdrop-rating-widget .ld-rating-comment textarea {
+  width: 100%;
+  border: 2px solid #e0e0e0;
+  border-radius: 12px;
+  padding: 16px;
+  font-family: inherit;
+  font-size: 14px;
+  resize: vertical;
+  min-height: 100px;
+  transition: border-color 0.2s ease;
+  box-sizing: border-box;
+}
+
+#lunchdrop-rating-widget .ld-rating-comment textarea:focus {
+  outline: none;
+  border-color: #ff6b6b;
+}
+
+#lunchdrop-rating-widget .ld-rating-submit {
+  width: 100%;
+  padding: 12px 24px;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background: linear-gradient(135deg, #ff6b6b 0%, #ff8e53 100%);
+  color: white;
+}
+
+#lunchdrop-rating-widget .ld-rating-submit:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(255, 107, 107, 0.3);
+}
+
+#lunchdrop-rating-widget .ld-rating-submit:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+/* Floating Button Styles */
+#lunchdrop-rating-trigger {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 9999;
+  background: #ff6b6b;
+  color: white;
+  padding: 12px 20px;
+  border-radius: 25px;
+  cursor: pointer;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-weight: 600;
+  box-shadow: 0 4px 16px rgba(255, 107, 107, 0.3);
+  transition: all 0.2s ease;
+  user-select: none;
+}
+
+#lunchdrop-rating-trigger:hover {
+  transform: scale(1.05);
+  box-shadow: 0 6px 20px rgba(255, 107, 107, 0.4);
+}
+
+/* Overlay for modal */
+#lunchdrop-rating-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 9999;
+  display: none;
+}
+
+#lunchdrop-rating-overlay.show {
+  display: block;
+}
+
+/* Restaurant Tracking Info Styles */
+#lunchdrop-tracking-info {
+  margin: 16px 0;
+  padding: 16px;
+  background: #f8f9fa;
+  border-radius: 12px;
+  border-left: 4px solid #007bff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+}
+
+#lunchdrop-tracking-info .ld-tracking-container {
+  position: relative;
+}
+
+#lunchdrop-tracking-info .ld-tracking-header {
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+#lunchdrop-tracking-info .ld-tracking-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #333;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+#lunchdrop-tracking-info .ld-tracking-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+}
+
+#lunchdrop-tracking-info .ld-stat-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background: white;
+  border-radius: 8px;
+  border: 1px solid #e0e0e0;
+}
+
+#lunchdrop-tracking-info .ld-stat-label {
+  font-size: 14px;
+  color: #666;
+  font-weight: 500;
+}
+
+#lunchdrop-tracking-info .ld-stat-value {
+  font-size: 14px;
+  font-weight: 600;
+  color: #333;
+}
+
+#lunchdrop-tracking-info .ld-status-available {
+  color: #28a745;
+}
+
+#lunchdrop-tracking-info .ld-status-soldout {
+  color: #dc3545;
+}
+
+#lunchdrop-tracking-info .ld-status-limited {
+  color: #ffc107;
+}
+
+#lunchdrop-tracking-info .ld-status-unknown {
+  color: #6c757d;
+}
+
+/* Responsive design */
+@media (max-width: 480px) {
+  #lunchdrop-rating-widget {
+    min-width: 300px;
+    margin: 20px;
+    padding: 20px;
+  }
+
+  #lunchdrop-rating-widget .ld-star {
+    font-size: 28px;
+  }
+
+  #lunchdrop-rating-widget .ld-button-section {
+    flex-direction: column;
+  }
+
+  #lunchdrop-rating-trigger {
+    bottom: 10px;
+    right: 10px;
+    padding: 10px 16px;
+    font-size: 14px;
+  }
+
+  #lunchdrop-tracking-info .ld-tracking-stats {
+    grid-template-columns: 1fr;
+  }
+
+  #lunchdrop-tracking-info .ld-stat-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+}

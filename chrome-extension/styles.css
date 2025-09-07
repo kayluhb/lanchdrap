@@ -1,0 +1,551 @@
+/* Styles for LunchDrop Rating Extension Popup - Namespaced to prevent conflicts */
+
+.lunchdrop-extension-popup * {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+.lunchdrop-extension-popup .lunchdrop-extension-popup {
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  min-height: 100vh;
+  color: #333;
+}
+
+.lunchdrop-extension-popup .container {
+  width: 400px;
+  min-height: 500px;
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+}
+
+.lunchdrop-extension-popup header {
+  background: linear-gradient(135deg, #ff6b6b 0%, #ff8e53 100%);
+  color: white;
+  padding: 24px;
+  text-align: center;
+}
+
+.lunchdrop-extension-popup header h1 {
+  font-size: 24px;
+  font-weight: 700;
+  margin: 0;
+}
+
+.lunchdrop-extension-popup .rating-section {
+  padding: 24px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.rating-section h3 {
+  font-size: 18px;
+  font-weight: 600;
+  margin-bottom: 16px;
+  color: #333;
+}
+
+.lunchdrop-extension-popup .stars {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  margin-bottom: 16px;
+}
+
+.lunchdrop-extension-popup .star {
+  font-size: 32px;
+  cursor: pointer;
+  color: #ccc;
+  transition: all 0.2s ease;
+  user-select: none;
+}
+
+.star:hover {
+  color: #ffd700;
+  transform: scale(1.1);
+}
+
+.star.active {
+  color: #ffd700;
+  transform: scale(1.1);
+}
+
+.lunchdrop-extension-popup .rating-display {
+  text-align: center;
+  font-size: 18px;
+  font-weight: 600;
+  color: #666;
+  margin-bottom: 20px;
+}
+
+.rating-display span {
+  color: #ff6b6b;
+  font-size: 24px;
+}
+
+.lunchdrop-extension-popup .comment-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.comment-section textarea {
+  border: 2px solid #e0e0e0;
+  border-radius: 12px;
+  padding: 16px;
+  font-family: inherit;
+  font-size: 14px;
+  resize: vertical;
+  min-height: 100px;
+  transition: border-color 0.2s ease;
+}
+
+.comment-section textarea:focus {
+  outline: none;
+  border-color: #ff6b6b;
+}
+
+.lunchdrop-extension-popup .btn-primary {
+  background: linear-gradient(135deg, #ff6b6b 0%, #ff8e53 100%);
+  color: white;
+  border: none;
+  border-radius: 12px;
+  padding: 16px 24px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 16px rgba(255, 107, 107, 0.3);
+}
+
+.btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(255, 107, 107, 0.4);
+}
+
+.btn-primary:active {
+  transform: translateY(0);
+}
+
+.btn-primary:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.lunchdrop-extension-popup .stats-section {
+  padding: 24px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.stats-section h3 {
+  font-size: 18px;
+  font-weight: 600;
+  margin-bottom: 16px;
+  color: #333;
+}
+
+.lunchdrop-extension-popup .stats-list {
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.lunchdrop-extension-popup .stats-item {
+  background: #f8f9fa;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 12px;
+  border-left: 4px solid #ff6b6b;
+}
+
+.lunchdrop-extension-popup .stats-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.lunchdrop-extension-popup .restaurant-name {
+  font-weight: 600;
+  color: #333;
+  font-size: 14px;
+}
+
+.lunchdrop-extension-popup .avg-rating {
+  color: #ff6b6b;
+  font-weight: 600;
+  font-size: 16px;
+}
+
+.lunchdrop-extension-popup .stats-details {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: #666;
+}
+
+.lunchdrop-extension-popup .no-stats {
+  text-align: center;
+  color: #999;
+  font-style: italic;
+  padding: 20px;
+}
+
+.lunchdrop-extension-popup .stats-main {
+  margin: 12px 0;
+}
+
+.lunchdrop-extension-popup .stats-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+
+.lunchdrop-extension-popup .stat-label {
+  color: #666;
+  font-weight: 500;
+}
+
+.lunchdrop-extension-popup .stat-value {
+  font-weight: 600;
+  color: #333;
+}
+
+.lunchdrop-extension-popup .stat-value.high-sellout {
+  color: #e74c3c;
+}
+
+.lunchdrop-extension-popup .stat-value.low-sellout {
+  color: #27ae60;
+}
+
+.lunchdrop-extension-popup .status-available {
+  color: #27ae60;
+}
+
+.lunchdrop-extension-popup .status-soldout {
+  color: #e74c3c;
+}
+
+.lunchdrop-extension-popup .status-limited {
+  color: #f39c12;
+}
+
+.lunchdrop-extension-popup .status-unknown {
+  color: #95a5a6;
+}
+
+.lunchdrop-extension-popup .rating-distribution {
+  margin: 12px 0;
+  padding: 12px;
+  background: #f8f9fa;
+  border-radius: 8px;
+}
+
+.lunchdrop-extension-popup .distribution-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #666;
+  margin-bottom: 8px;
+  text-align: center;
+}
+
+.lunchdrop-extension-popup .rating-bar {
+  display: flex;
+  align-items: center;
+  margin-bottom: 4px;
+  font-size: 11px;
+}
+
+.lunchdrop-extension-popup .rating-label {
+  width: 30px;
+  color: #666;
+}
+
+.lunchdrop-extension-popup .rating-bar-bg {
+  flex: 1;
+  height: 8px;
+  background: #e0e0e0;
+  border-radius: 4px;
+  margin: 0 8px;
+  overflow: hidden;
+}
+
+.lunchdrop-extension-popup .rating-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #ff6b6b, #ffd700);
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+.lunchdrop-extension-popup .rating-count {
+  width: 20px;
+  text-align: right;
+  color: #666;
+  font-weight: 500;
+}
+
+.lunchdrop-extension-popup .stats-footer {
+  border-top: 1px solid #e0e0e0;
+  padding-top: 8px;
+  margin-top: 8px;
+}
+
+.lunchdrop-extension-popup .last-appearance {
+  font-size: 11px;
+  color: #999;
+  font-style: italic;
+}
+
+.lunchdrop-extension-popup .availability-section {
+  padding: 24px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.lunchdrop-extension-popup .availability-section h3 {
+  font-size: 18px;
+  font-weight: 600;
+  margin-bottom: 16px;
+  color: #333;
+}
+
+.lunchdrop-extension-popup .availability-list {
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.lunchdrop-extension-popup .availability-item {
+  background: #f8f9fa;
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 8px;
+  border-left: 4px solid #95a5a6;
+}
+
+.lunchdrop-extension-popup .availability-item.status-available {
+  border-left-color: #27ae60;
+  background: #f0f9f0;
+}
+
+.lunchdrop-extension-popup .availability-item.status-soldout {
+  border-left-color: #e74c3c;
+  background: #fdf2f2;
+}
+
+.lunchdrop-extension-popup .availability-item.status-limited {
+  border-left-color: #f39c12;
+  background: #fef9e7;
+}
+
+.lunchdrop-extension-popup .availability-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.lunchdrop-extension-popup .availability-header .restaurant-name {
+  font-weight: 600;
+  color: #333;
+  font-size: 14px;
+}
+
+.lunchdrop-extension-popup .availability-status {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 12px;
+  text-transform: uppercase;
+}
+
+.lunchdrop-extension-popup .availability-item.status-available .availability-status {
+  background: #27ae60;
+  color: white;
+}
+
+.lunchdrop-extension-popup .availability-item.status-soldout .availability-status {
+  background: #e74c3c;
+  color: white;
+}
+
+.lunchdrop-extension-popup .availability-item.status-limited .availability-status {
+  background: #f39c12;
+  color: white;
+}
+
+.lunchdrop-extension-popup .availability-details {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: #666;
+}
+
+.lunchdrop-extension-popup .time-slot {
+  font-weight: 500;
+}
+
+.lunchdrop-extension-popup .last-seen {
+  font-style: italic;
+}
+
+.lunchdrop-extension-popup .no-availability {
+  text-align: center;
+  color: #999;
+  font-style: italic;
+  padding: 20px;
+}
+
+.lunchdrop-extension-popup .history-section {
+  padding: 24px;
+}
+
+.history-section h3 {
+  font-size: 18px;
+  font-weight: 600;
+  margin-bottom: 16px;
+  color: #333;
+}
+
+.lunchdrop-extension-popup .history-list {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.lunchdrop-extension-popup .history-item {
+  background: #f8f9fa;
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 12px;
+  border-left: 4px solid #ff6b6b;
+}
+
+.lunchdrop-extension-popup .history-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.lunchdrop-extension-popup .restaurant {
+  font-weight: 600;
+  color: #333;
+  font-size: 14px;
+}
+
+.lunchdrop-extension-popup .rating {
+  font-size: 12px;
+  color: #ffd700;
+}
+
+.lunchdrop-extension-popup .history-details {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  font-size: 12px;
+  color: #666;
+}
+
+.lunchdrop-extension-popup .items {
+  flex: 1;
+  margin-right: 16px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lunchdrop-extension-popup .total {
+  font-weight: 600;
+  color: #ff6b6b;
+}
+
+.lunchdrop-extension-popup .comment {
+  font-style: italic;
+  color: #666;
+  font-size: 12px;
+  margin-bottom: 8px;
+  padding: 8px;
+  background: white;
+  border-radius: 8px;
+  border-left: 3px solid #ffd700;
+}
+
+.lunchdrop-extension-popup .timestamp {
+  font-size: 11px;
+  color: #999;
+  text-align: right;
+}
+
+.lunchdrop-extension-popup .no-ratings {
+  text-align: center;
+  color: #999;
+  font-style: italic;
+  padding: 40px 20px;
+}
+
+.lunchdrop-extension-popup .status {
+  padding: 16px 24px;
+  text-align: center;
+  font-weight: 500;
+  transition: all 0.3s ease;
+  opacity: 0;
+  max-height: 0;
+  overflow: hidden;
+}
+
+.status.success {
+  background: #d4edda;
+  color: #155724;
+  border-top: 1px solid #c3e6cb;
+  opacity: 1;
+  max-height: 100px;
+}
+
+.status.error {
+  background: #f8d7da;
+  color: #721c24;
+  border-top: 1px solid #f5c6cb;
+  opacity: 1;
+  max-height: 100px;
+}
+
+/* Scrollbar styling */
+.lunchdrop-extension-popup .history-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.lunchdrop-extension-popup .history-list::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 3px;
+}
+
+.lunchdrop-extension-popup .history-list::-webkit-scrollbar-thumb {
+  background: #ff6b6b;
+  border-radius: 3px;
+}
+
+.lunchdrop-extension-popup .history-list::-webkit-scrollbar-thumb:hover {
+  background: #ff5252;
+}
+
+/* Responsive design */
+@media (max-width: 400px) {
+  .lunchdrop-extension-popup .container {
+    width: 100%;
+    border-radius: 0;
+  }
+
+  .lunchdrop-extension-popup .stars {
+    gap: 4px;
+  }
+
+  .lunchdrop-extension-popup .star {
+    font-size: 28px;
+  }
+}

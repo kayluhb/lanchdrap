@@ -1,0 +1,30 @@
+{
+  "name": "lunchdrop-ratings-worker",
+  "version": "1.0.0",
+  "description": "Cloudflare Worker for LunchDrop rating system",
+  "main": "src/index.js",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "deploy:staging": "wrangler deploy --env staging",
+    "deploy:prod": "wrangler deploy --env production",
+    "test": "echo \"No tests specified\" && exit 0"
+  },
+  "packageManager": "pnpm@8.0.0",
+  "keywords": [
+    "cloudflare",
+    "worker",
+    "lunchdrop",
+    "ratings",
+    "api"
+  ],
+  "author": "Your Name",
+  "license": "MIT",
+  "devDependencies": {
+    "wrangler": "^3.0.0"
+  },
+  "dependencies": {},
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

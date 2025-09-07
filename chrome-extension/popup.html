@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LunchDrop Ratings</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body class="lunchdrop-extension-popup">
+    <div class="container">
+      <header>
+        <h1>🍽️ LunchDrop Ratings</h1>
+      </header>
+
+      <div class="rating-section">
+        <h3>Rate Current Order</h3>
+        <div class="stars">
+          <span class="star" data-rating="1">⭐</span>
+          <span class="star" data-rating="2">⭐</span>
+          <span class="star" data-rating="3">⭐</span>
+          <span class="star" data-rating="4">⭐</span>
+          <span class="star" data-rating="5">⭐</span>
+        </div>
+        <div class="rating-display">
+          <span id="current-rating">0</span>/5
+        </div>
+
+        <div class="comment-section">
+          <textarea id="comment" placeholder="Add a comment about your order..."></textarea>
+          <button id="submit-rating" class="btn-primary">Submit Rating</button>
+        </div>
+      </div>
+
+      <div class="stats-section">
+        <h3>Restaurant Statistics</h3>
+        <div id="restaurant-stats" class="stats-list">
+          <!-- Restaurant stats will be populated here -->
+        </div>
+      </div>
+
+      <div class="availability-section">
+        <h3>Today's Availability</h3>
+        <div id="availability-stats" class="availability-list">
+          <!-- Availability stats will be populated here -->
+        </div>
+      </div>
+
+      <div class="history-section">
+        <h3>Rating History</h3>
+        <div id="rating-history" class="history-list">
+          <!-- Rating history will be populated here -->
+        </div>
+      </div>
+
+      <div class="status" id="status"></div>
+    </div>
+
+    <script src="utils/userId.js"></script>
+    <script src="utils/apiClient.js"></script>
+    <script src="config.js"></script>
+    <script src="popup.js"></script>
+  </body>
+</html>

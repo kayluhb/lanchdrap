@@ -1,0 +1,27 @@
+name = "lunchdrop-ratings"
+main = "src/index.js"
+compatibility_date = "2024-01-01"
+
+[env.production]
+name = "lunchdrop-ratings-prod"
+
+[env.staging]
+name = "lunchdrop-ratings-staging"
+
+# KV namespace for storing ratings
+[[kv_namespaces]]
+binding = "LANCHDRAP_RATINGS"
+id = "ff49cf376e6845309a35349c3d19097d"
+
+# Durable Object for real-time features (optional)
+# [[durable_objects.bindings]]
+# name = "RATINGS_DO"
+# class_name = "RatingsDurableObject"
+
+# Environment variables
+[vars]
+MAX_RATINGS_PER_USER = "100"
+RATE_LIMIT_PER_MINUTE = "10"
+
+[observability.logs]
+enabled = true

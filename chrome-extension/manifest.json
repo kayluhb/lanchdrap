@@ -12,7 +12,17 @@
   "content_scripts": [
     {
       "matches": ["https://lunchdrop.com/*", "https://*.lunchdrop.com/*"],
-      "js": ["utils/userId.js", "utils/apiClient.js", "config.js", "content.js"]
+      "js": [
+        "utils/userId.js",
+        "utils/apiClient.js",
+        "config.js",
+        "utils/dom-utils.js",
+        "utils/order-parser.js",
+        "utils/restaurant-scraper.js",
+        "utils/stats-display.js",
+        "utils/rating-widget.js",
+        "content.js"
+      ]
     }
   ],
   "background": {

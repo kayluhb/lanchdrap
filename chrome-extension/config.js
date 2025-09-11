@@ -18,6 +18,7 @@ const CONFIG = {
     RESTAURANTS_UPDATE: '/api/restaurants/update',
     RESTAURANTS_GET_BY_ID: '/api/restaurant',
     RESTAURANTS_SEARCH: '/api/restaurants/search',
+    RESTAURANTS_STATS: '/api/restaurants/stats',
 
     // Sync endpoints
     SYNC: '/api/sync',
@@ -43,6 +44,10 @@ const CONFIG = {
 
     // Local storage settings
     MAX_DAILY_RECORDS: 100, // Max records to keep per day in localStorage
+
+    // Sell out indicator settings
+    SELL_OUT_THRESHOLD: 0.8, // Threshold (0-1) for showing "likely to sell out" indicator
+    SELL_OUT_MIN_DIFFERENCE: 0.2, // Minimum difference (0-1) between highest and second highest rate
   },
 
   // User identification

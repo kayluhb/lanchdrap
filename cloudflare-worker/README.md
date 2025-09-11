@@ -224,6 +224,58 @@ GET /api/restaurants/office-availability?startDate=2025-01-01&endDate=2025-01-31
 - Daily breakdowns
 - Trend analysis
 
+### Restaurant Stats with User History
+
+```http
+GET /api/restaurants/stats?restaurant=pizza-place&userId=user123&timeRange=all
+```
+
+**Parameters:**
+- `restaurant` (required): Restaurant ID or name
+- `userId` (optional): User ID to include personal order history
+- `timeRange` (optional): Time range filter (default: "all")
+
+**Response includes:**
+- Restaurant appearance statistics
+- Sold out rates and dates
+- User order history (if userId provided):
+  - Total orders from this restaurant
+  - Last order date
+  - Last item purchased
+  - All order dates
+  - Recent orders (last 5)
+
+### User Order History
+
+```http
+GET /api/orders?userId=user123&restaurantId=pizza-place
+```
+
+**Parameters:**
+- `userId` (required): User ID
+- `restaurantId` (optional): Filter by specific restaurant
+
+**Response includes:**
+- Complete order history for user
+- Filtered by restaurant if specified
+- Order dates and items
+
+### Store User Order
+
+```http
+POST /api/orders
+Content-Type: application/json
+
+{
+  "userId": "user123",
+  "restaurantId": "pizza-place",
+  "orderData": {
+    "date": "2024-01-15",
+    "items": ["Margherita Pizza", "Caesar Salad"]
+  }
+}
+```
+
 ### Sync Ratings
 
 ```http
@@ -255,6 +307,7 @@ The worker uses Cloudflare KV for data storage with the following key patterns:
 - `stats:overall:{timeRange}` - Overall system statistics by time range
 - `restaurants:list` - Master list of all restaurants for discovery
 - `rate_limit:{clientIP}` - Rate limiting data
+- `user_restaurant_history:{userId}:{restaurantId}` - Individual user-restaurant order history records
 
 **Time Ranges Supported:**
 - `all` - All-time statistics

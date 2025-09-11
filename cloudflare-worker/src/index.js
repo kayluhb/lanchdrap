@@ -1,11 +1,11 @@
 // Main Cloudflare Worker with API Routes Pattern
 // Following modern patterns similar to React Router Cloudflare template
-
 // Import API route handlers
 import { health } from './api/health.js';
 import { submitRating } from './api/ratings.js';
 import {
   getRestaurantById,
+  getRestaurantStatsWithUserHistory,
   getUserOrderHistory,
   getUserRestaurantSummary,
   searchRestaurantByName,
@@ -27,6 +27,7 @@ const routes = {
 
   // Restaurant search endpoints
   'GET /api/restaurants/search': searchRestaurantByName,
+  'GET /api/restaurants/stats': getRestaurantStatsWithUserHistory,
 
   // User order history endpoints
   'POST /api/orders': storeUserOrder,

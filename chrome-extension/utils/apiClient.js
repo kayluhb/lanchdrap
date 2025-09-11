@@ -162,6 +162,15 @@ class ApiClient {
     const endpoint = `${this.getEndpoint('ORDERS_SUMMARY')}?${params.toString()}`;
     return this.request(endpoint);
   }
+
+  // Get restaurant stats with user order history
+  async getRestaurantStatsWithUserHistory(restaurantId, userId) {
+    const params = new URLSearchParams();
+    params.append('restaurant', restaurantId);
+    params.append('userId', userId);
+    const endpoint = `${this.getEndpoint('RESTAURANTS_STATS')}?${params.toString()}`;
+    return this.request(endpoint);
+  }
 }
 
 // Export for use in other files

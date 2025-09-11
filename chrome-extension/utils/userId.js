@@ -7,10 +7,19 @@ class LanchDrapUserIdManager {
 
   // Generate a unique user ID
   generateUserId() {
-    const timestamp = Date.now();
-    const random = Math.random().toString(36).substring(2, 15);
-    const userAgent = navigator.userAgent.substring(0, 10);
-    return `user_${timestamp}_${random}_${userAgent}`;
+    return Math.random().toString(36).substring(2, 15);
+  }
+
+  // Check if user ID is in old format and needs migration
+  isOldFormatUserId(userId) {
+    // Old format: user:user_1757167705474_07ap9dr3ewzr_Mozilla/5.
+    // New format: simple random string like abc123def456
+    return (
+      userId &&
+      (userId.startsWith('user:user_') ||
+        userId.includes('Mozilla') ||
+        (userId.includes('_') && userId.length > 20))
+    );
   }
 
   // Get or create user ID
@@ -23,12 +32,27 @@ class LanchDrapUserIdManager {
       // Try to get existing user ID from storage
       const result = await chrome.storage.local.get([this.storageKey]);
       if (result[this.storageKey]) {
-        this.userId = result[this.storageKey];
+        const storedUserId = result[this.storageKey];
+
+        // Check if it's an old format user ID that needs migration
+        if (this.isOldFormatUserId(storedUserId)) {
+          console.info('LanchDrap: Migrating old format user ID to new format', {
+            oldId: `${storedUserId.substring(0, 30)}...`,
+            newId: this.generateUserId(),
+          });
+          // Generate new user ID and replace the old one
+          this.userId = this.generateUserId();
+          await chrome.storage.local.set({ [this.storageKey]: this.userId });
+          return this.userId;
+        }
+
+        this.userId = storedUserId;
         return this.userId;
       }
 
       // Generate new user ID if none exists
       this.userId = this.generateUserId();
+      console.info('LanchDrap: Generated new user ID', this.userId);
 
       // Store the new user ID
       await chrome.storage.local.set({ [this.storageKey]: this.userId });

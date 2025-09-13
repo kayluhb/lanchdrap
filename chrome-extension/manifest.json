@@ -16,6 +16,7 @@
         "utils/userId.js",
         "utils/apiClient.js",
         "config.js",
+        "utils/key-manager.js",
         "utils/dom-utils.js",
         "utils/order-parser.js",
         "utils/restaurant-scraper.js",

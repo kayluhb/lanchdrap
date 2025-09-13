@@ -32,8 +32,7 @@ async function initializeExtension() {
 
       // Clear the pending prompt
       localStorage.removeItem('lanchdrap_pending_rating_prompt');
-    } catch (_error) {
-    }
+    } catch (_error) {}
   }
 
   isInitialized = true;
@@ -41,7 +40,6 @@ async function initializeExtension() {
 
 // Main function to handle page changes
 async function handlePageChange() {
-
   try {
     // Skip if on login page
     if (window.LanchDrapDOMUtils.isLoginPage()) {
@@ -53,7 +51,6 @@ async function handlePageChange() {
 
     // Handle restaurant grid pages (daily pages)
     if (window.LanchDrapDOMUtils.isRestaurantGridPage()) {
-
       // Show skeleton loading state immediately
       if (window.LanchDrapStatsDisplay?.showSkeletonLoading) {
         window.LanchDrapStatsDisplay.showSkeletonLoading();
@@ -79,7 +76,6 @@ async function handlePageChange() {
 
     // Handle restaurant detail pages
     if (window.LanchDrapDOMUtils.isRestaurantDetailPage()) {
-
       // Display restaurant tracking info
       await window.LanchDrapStatsDisplay.displayRestaurantTrackingInfo();
     }
@@ -89,8 +85,7 @@ async function handlePageChange() {
 
     // Check for LanchDrap rating prompt
     window.LanchDrapRatingWidget.detectLunchDropRatingPrompt();
-  } catch (_error) {
-  }
+  } catch (_error) {}
 }
 
 // Handle URL changes (SPA navigation)
@@ -104,9 +99,7 @@ function handleUrlChange() {
     window.LanchDrapDOMUtils.clearDomCache();
 
     // Clear restaurant availability data on URL change
-    if (
-      window.LanchDrapRestaurantScraper?.clearRestaurantAvailabilityData
-    ) {
+    if (window.LanchDrapRestaurantScraper?.clearRestaurantAvailabilityData) {
       window.LanchDrapRestaurantScraper.clearRestaurantAvailabilityData();
     }
 

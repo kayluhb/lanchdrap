@@ -39,39 +39,71 @@ window.LanchDrapRatingWidget = (() => {
         : [];
     }
 
-    const widget = document.createElement('div');
-    widget.id = 'lunchdrop-rating-widget';
-    widget.innerHTML = `
-          <div class="ld-rating-container">
-              <div class="ld-rating-header">
-                  <span class="ld-rating-title">Rate your order</span>
-                  <button class="ld-rating-close" id="ld-rating-close">×</button>
-              </div>
-              <div class="ld-restaurant-name">
-                  <span class="ld-restaurant-title">${restaurantName}</span>
-              </div>
-              <div class="ld-menu-selection">
-                  <label class="ld-menu-label">What did you order?</label>
-                  <div class="ld-menu-autocomplete">
-                      <input type="text" id="ld-menu-search" placeholder="Search menu items..." autocomplete="off">
-                      <div class="ld-menu-dropdown" id="ld-menu-dropdown"></div>
-                  </div>
-                  <div class="ld-selected-items" id="ld-selected-items"></div>
-              </div>
-              <div class="ld-rating-stars">
-                  <span class="ld-star" data-rating="1">🤠</span>
-                  <span class="ld-star" data-rating="2">🤠</span>
-                  <span class="ld-star" data-rating="3">🤠</span>
-                  <span class="ld-star" data-rating="4">🤠</span>
-                  <span class="ld-star" data-rating="5">🤠</span>
-              </div>
-              <div class="ld-rating-display">
-                  <span id="ld-current-rating">0</span>/5
-              </div>
-              <textarea class="ld-rating-comment" placeholder="Add a comment about your order..."></textarea>
-              <button class="ld-rating-submit" id="ld-rating-submit">Submit Rating</button>
+    // Create backdrop overlay (similar to editing dialog)
+    const backdropOverlay = document.createElement('div');
+    backdropOverlay.id = 'lunchdrop-rating-widget';
+    backdropOverlay.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 10000;
+      backdrop-filter: blur(5px);
+    `;
+
+    // Create dialog content
+    const dialogContent = document.createElement('div');
+    dialogContent.style.cssText = `
+      background: white;
+      border-radius: 16px;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+      padding: 24px;
+      min-width: 350px;
+      max-width: 500px;
+      max-height: 80vh;
+      overflow-y: auto;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    `;
+
+    dialogContent.innerHTML = `
+      <div class="ld-rating-container">
+          <div class="ld-rating-header">
+              <span class="ld-rating-title">Rate your order</span>
+              <button class="ld-rating-close" id="ld-rating-close">×</button>
           </div>
-      `;
+          <div class="ld-restaurant-name">
+              <span class="ld-restaurant-title">${restaurantName}</span>
+          </div>
+          <div class="ld-menu-selection">
+              <label class="ld-menu-label">What did you order?</label>
+              <div class="ld-menu-autocomplete">
+                  <input type="text" id="ld-menu-search" placeholder="Search menu items..." autocomplete="off">
+                  <div class="ld-menu-dropdown" id="ld-menu-dropdown"></div>
+              </div>
+              <div class="ld-selected-items" id="ld-selected-items"></div>
+          </div>
+          <div class="ld-rating-stars">
+              <span class="ld-star" data-rating="1">🤠</span>
+              <span class="ld-star" data-rating="2">🤠</span>
+              <span class="ld-star" data-rating="3">🤠</span>
+              <span class="ld-star" data-rating="4">🤠</span>
+              <span class="ld-star" data-rating="5">🤠</span>
+          </div>
+          <div class="ld-rating-display">
+              <span id="ld-current-rating">0</span>/5
+          </div>
+          <textarea class="ld-rating-comment" placeholder="Add a comment about your order..."></textarea>
+          <button class="ld-rating-submit" id="ld-rating-submit">Submit Rating</button>
+      </div>
+    `;
+
+    backdropOverlay.appendChild(dialogContent);
+    const widget = backdropOverlay;
 
     // Inject the CSS styles
     if (!document.getElementById('lanchdrap-extension-styles')) {
@@ -95,6 +127,13 @@ window.LanchDrapRatingWidget = (() => {
 
     // Add event listeners
     setupRatingWidgetEvents(menuItems);
+
+    // Add backdrop click handler to close dialog
+    backdropOverlay.addEventListener('click', (e) => {
+      if (e.target === backdropOverlay) {
+        hideRatingWidget();
+      }
+    });
   }
 
   function setupRatingWidgetEvents(menuItems = []) {
@@ -445,21 +484,33 @@ window.LanchDrapRatingWidget = (() => {
     });
 
     button.addEventListener('click', async () => {
+      console.log('LanchDrap: Rate button clicked!', {
+        ratingWidget: !!ratingWidget,
+        pageText: document.body.textContent.substring(0, 500),
+        url: window.location.href,
+      });
+
       if (!ratingWidget) {
         // First try to detect LunchDrop rating prompt
         const hasPrompt = detectLunchDropRatingPrompt();
+        console.log('LanchDrap: Prompt detection result:', hasPrompt);
 
         if (hasPrompt) {
+          console.log('LanchDrap: Injecting rating widget with prompt data');
           await injectRatingWidget();
         } else {
+          console.log('LanchDrap: No prompt found, attempting manual rating');
           // Try to extract restaurant information from the current page
           const restaurantInfo = extractRestaurantInfoFromPage();
+          console.log('LanchDrap: Extracted restaurant info:', restaurantInfo);
 
           if (restaurantInfo) {
             // Set the order data with extracted information
             orderData = restaurantInfo;
+            console.log('LanchDrap: Injecting rating widget with extracted data');
             await injectRatingWidget();
           } else {
+            console.log('LanchDrap: Could not extract restaurant info, showing error message');
             button.style.background = '#ffa500';
             button.innerHTML = '🍽️ No Restaurant';
             setTimeout(() => {
@@ -469,6 +520,7 @@ window.LanchDrapRatingWidget = (() => {
           }
         }
       } else {
+        console.log('LanchDrap: Hiding rating widget');
         hideRatingWidget();
       }
     });

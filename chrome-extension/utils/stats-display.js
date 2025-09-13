@@ -6,6 +6,60 @@ window.LanchDrapStatsDisplay = (() => {
   // Request tracking for race condition protection
   let currentStatsRequestId = 0;
 
+  // Utility function to create key elements with consistent styling
+  function createKeyElement(keyText, title = 'Click to select key') {
+    const keysVisible = window.LanchDrapKeyManager
+      ? window.LanchDrapKeyManager.areKeysVisible()
+      : false;
+    return `
+      <span style="
+        font-size: 12px;
+        font-weight: 500;
+        color: #4a4a4a;
+        background: rgba(0, 0, 0, 0.05);
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-family: monospace;
+        cursor: pointer;
+        user-select: all;
+        display: ${keysVisible ? 'inline' : 'none'};
+      " title="${title}" class="ld-key-element">${keyText}</span>
+    `;
+  }
+
+  // Utility function to get edit trigger properties
+  function getEditTriggerProps(restaurantId, restaurantName) {
+    const keysVisible = window.LanchDrapKeyManager
+      ? window.LanchDrapKeyManager.areKeysVisible()
+      : false;
+    return {
+      cursor: keysVisible ? 'pointer' : 'default',
+      title: keysVisible
+        ? 'Click to edit restaurant stats'
+        : 'Enable keys visibility to edit stats',
+      dataRestaurantId: restaurantId,
+      dataRestaurantName: restaurantName,
+    };
+  }
+
+  // Utility function to create proper possessive form
+  function createPossessive(name) {
+    if (!name) return '';
+
+    // If the name already ends with an apostrophe and 's' (like "Mary's"), don't add anything
+    if (name.endsWith("'s") || name.endsWith("'S")) {
+      return name;
+    }
+
+    // If the name ends with just 's' (like "Tacos"), add an apostrophe
+    if (name.endsWith('s') || name.endsWith('S')) {
+      return `${name}'`;
+    }
+
+    // Otherwise, add apostrophe + s
+    return `${name}'s`;
+  }
+
   // Konami code detection
   const konamiCode = [
     'ArrowUp',
@@ -309,7 +363,12 @@ window.LanchDrapStatsDisplay = (() => {
   function renderStatsComponent(stats, containerId, _title) {
     // Ensure key visibility is initialized before rendering
     if (!window.lanchdrapKonamiInitialized) {
-      initializeKonamiCode();
+      // Use centralized key manager if available, otherwise fallback to local implementation
+      if (window.LanchDrapKeyManager) {
+        window.LanchDrapKeyManager.initializeKonamiCode();
+      } else {
+        initializeKonamiCode();
+      }
       window.lanchdrapKonamiInitialized = true;
     } else {
     }
@@ -382,7 +441,7 @@ window.LanchDrapStatsDisplay = (() => {
     const cardBackgroundColor = 'rgba(255, 255, 255, 0.15)'; // Slightly more opaque card backgrounds
 
     const restaurantName = stats.name || stats.id;
-    const displayTitle = `📊 ${restaurantName}'s Stats`;
+    const displayTitle = `📊 ${createPossessive(restaurantName)} Stats`;
 
     const statsHTML = `
       <div class="ld-tracking-container" style="
@@ -414,19 +473,9 @@ window.LanchDrapStatsDisplay = (() => {
             border-radius: 12px;
             box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
             border: 1px solid rgba(0, 0, 0, 0.05);
-            cursor: ${keysVisible ? 'pointer' : 'default'};
+            cursor: ${getEditTriggerProps(stats.id, stats.name).cursor};
             transition: all 0.2s ease;
-          " data-restaurant-id="${stats.id || 'unknown'}" data-restaurant-name="${(stats.name || '').replace(/"/g, '&quot;')}" title="${keysVisible ? 'Click to edit restaurant stats' : 'Enable keys visibility to edit stats'}">${displayTitle} <span style="
-            font-size: 12px;
-            font-weight: 500;
-            color: ${secondaryTextColor};
-            background: rgba(0, 0, 0, 0.05);
-            padding: 2px 6px;
-            border-radius: 4px;
-            font-family: monospace;
-            cursor: pointer;
-            user-select: all;
-          " title="Click to select restaurant key" class="ld-key-element">restaurant:${stats.id || 'unknown'}</span></span>
+          " data-restaurant-id="${stats.id || 'unknown'}" data-restaurant-name="${(stats.name || '').replace(/"/g, '&quot;')}" title="${getEditTriggerProps(stats.id, stats.name).title}">${displayTitle}             ${createKeyElement(`restaurant:${stats.id || 'unknown'}`, 'Click to select restaurant key')}</span>
           ${apiErrorIndicator}
         </div>
         <div class="ld-tracking-stats" style="padding: 20px;">
@@ -577,17 +626,7 @@ window.LanchDrapStatsDisplay = (() => {
             ">
               <div style="display: flex; align-items: center; gap: 8px;">👤 Your Order History</div>
               <div style="display: flex; flex-direction: column; gap: 4px;">
-                <span style="
-                  font-size: 12px;
-                  font-weight: 500;
-                  color: ${secondaryTextColor};
-                  background: rgba(0, 0, 0, 0.05);
-                  padding: 2px 6px;
-                  border-radius: 4px;
-                  font-family: monospace;
-                  cursor: pointer;
-                  user-select: all;
-                " title="Click to select user history key" class="ld-key-element">user_restaurant_history:${stats.userId || 'unknown'}:${stats.id || 'unknown'}</span>
+                ${createKeyElement(`user_restaurant_history:${stats.userId || 'unknown'}:${stats.id || 'unknown'}`, 'Click to select user history key')}
               </div>
             </div>
             <!-- User Order History Row -->
@@ -730,7 +769,11 @@ window.LanchDrapStatsDisplay = (() => {
         e.stopPropagation();
 
         // Check if keys are visible before allowing edit
+        const keysVisible = window.LanchDrapKeyManager
+          ? window.LanchDrapKeyManager.areKeysVisible()
+          : false;
         if (!keysVisible) {
+          console.log('LanchDrap: Edit trigger clicked but keys are not visible, ignoring');
           return;
         }
 
@@ -755,7 +798,6 @@ window.LanchDrapStatsDisplay = (() => {
 
   // Function to display stats for selected restaurant on daily pages
   async function displaySelectedRestaurantStats(availabilityData) {
-
     try {
       if (typeof LanchDrapApiClient === 'undefined' || typeof LanchDrapConfig === 'undefined') {
         return;
@@ -846,7 +888,6 @@ window.LanchDrapStatsDisplay = (() => {
 
       Promise.all([combinedStatsPromise])
         .then(([stats]) => {
-
           // Check if this is still the current request
           if (requestId !== currentStatsRequestId) {
             return;
@@ -918,7 +959,11 @@ window.LanchDrapStatsDisplay = (() => {
       if (restaurantNameElement) {
         const insertionPoint = restaurantNameElement.parentNode || restaurantNameElement;
         insertionPoint.insertBefore(statsContainer, restaurantNameElement.nextSibling);
-        updateKeyVisibility();
+        if (window.LanchDrapKeyManager) {
+          window.LanchDrapKeyManager.forceUpdateKeyVisibility();
+        } else {
+          updateKeyVisibility();
+        }
       }
     } catch (_error) {
       // Clear the processing flag on error
@@ -931,7 +976,6 @@ window.LanchDrapStatsDisplay = (() => {
 
   // Function to display restaurant tracking information on detail pages
   async function displayRestaurantTrackingInfo() {
-
     try {
       // Check if we're on a restaurant detail page by looking for the restaurant name
       // Try multiple selectors to find the restaurant name
@@ -1024,8 +1068,9 @@ window.LanchDrapStatsDisplay = (() => {
           const needsMenuUpdate = menuItems.length > 0;
 
           if (needsNameUpdate || needsMenuUpdate) {
-            apiClient.updateRestaurant(restaurantId, restaurantName, menuItems).catch((_error) => {
-            });
+            apiClient
+              .updateRestaurant(restaurantId, restaurantName, menuItems)
+              .catch((_error) => {});
           }
         } catch (_apiError) {
           // Check if this is still the current request
@@ -1104,7 +1149,6 @@ window.LanchDrapStatsDisplay = (() => {
 
   // Open edit dialog for restaurant stats
   function openEditDialog(restaurantId, restaurantName) {
-
     // Remove existing dialog if any
     const existingDialog = document.getElementById('lanchdrap-edit-dialog');
     if (existingDialog) {
@@ -1145,7 +1189,7 @@ window.LanchDrapStatsDisplay = (() => {
     dialogContent.innerHTML = `
       <div style="margin-bottom: 20px;">
         <h2 style="margin: 0 0 8px 0; color: #1a1a1a; font-size: 20px; font-weight: 700;">
-          Edit ${restaurantName || restaurantId} Stats
+          Edit ${createPossessive(restaurantName || restaurantId)} Stats
         </h2>
         <p style="margin: 0; color: #666; font-size: 14px;">
           Edit appearance dates and sold out dates for this restaurant
@@ -1277,8 +1321,7 @@ window.LanchDrapStatsDisplay = (() => {
           soldoutDatesTextarea.value = soldOutDates.join('\n');
         }
       }
-    } catch (_error) {
-    }
+    } catch (_error) {}
   }
 
   // Setup dialog event listeners

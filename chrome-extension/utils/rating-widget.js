@@ -8,7 +8,16 @@ window.LanchDrapRatingWidget = (() => {
 
   // Function to inject rating widget into the page
   async function injectRatingWidget() {
-    if (ratingWidget) return; // Already injected
+    console.log('LanchDrap: injectRatingWidget called', {
+      ratingWidget: !!ratingWidget,
+      orderData: orderData,
+      restaurantName: orderData?.restaurant || 'Unknown Restaurant',
+    });
+
+    if (ratingWidget) {
+      console.log('LanchDrap: Rating widget already exists, returning');
+      return; // Already injected
+    }
 
     const restaurantName = orderData?.restaurant || 'Unknown Restaurant';
 
@@ -31,7 +40,7 @@ window.LanchDrapRatingWidget = (() => {
     }
 
     const widget = document.createElement('div');
-    widget.id = 'lanchdrap-rating-widget';
+    widget.id = 'lunchdrop-rating-widget';
     widget.innerHTML = `
           <div class="ld-rating-container">
               <div class="ld-rating-header">
@@ -74,6 +83,15 @@ window.LanchDrapRatingWidget = (() => {
     }
     document.body.appendChild(widget);
     ratingWidget = widget;
+
+    console.log('LanchDrap: Rating widget injected successfully', {
+      widgetId: widget.id,
+      restaurantName: restaurantName,
+      menuItemsCount: menuItems.length,
+      widgetElement: widget,
+      widgetVisible: widget.offsetParent !== null,
+      widgetStyle: window.getComputedStyle(widget).display,
+    });
 
     // Add event listeners
     setupRatingWidgetEvents(menuItems);
@@ -294,7 +312,6 @@ window.LanchDrapRatingWidget = (() => {
   // Function to extract restaurant information from the current page
   function extractRestaurantInfoFromPage() {
     try {
-
       // Try to get restaurant name from the page title or restaurant name element
       let restaurantName = null;
 
@@ -428,7 +445,6 @@ window.LanchDrapRatingWidget = (() => {
     });
 
     button.addEventListener('click', async () => {
-
       if (!ratingWidget) {
         // First try to detect LunchDrop rating prompt
         const hasPrompt = detectLunchDropRatingPrompt();
@@ -436,7 +452,6 @@ window.LanchDrapRatingWidget = (() => {
         if (hasPrompt) {
           await injectRatingWidget();
         } else {
-
           // Try to extract restaurant information from the current page
           const restaurantInfo = extractRestaurantInfoFromPage();
 

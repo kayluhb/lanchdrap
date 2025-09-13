@@ -31,15 +31,15 @@ function updateRestaurantTimestamp(restaurantData) {
   restaurantData.updatedAt = new Date().toISOString();
 }
 
-// Helper function to calculate sold out rate excluding today's date
+// Helper function to calculate sold out rate excluding today's date from sold out count
 function calculateSoldOutRateExcludingToday(appearances, soldOutDates) {
   const today = new Date().toISOString().split('T')[0]; // Get today's date in YYYY-MM-DD format
 
-  // Filter out today's date from both arrays
-  const appearancesExcludingToday = appearances.filter((date) => date !== today);
-  const soldOutDatesExcludingToday = soldOutDates.filter((date) => date !== today);
+  // Include all appearances (including today)
+  const totalAppearances = appearances.length;
 
-  const totalAppearances = appearancesExcludingToday.length;
+  // Filter out today's date from sold out dates only
+  const soldOutDatesExcludingToday = soldOutDates.filter((date) => date !== today);
   const totalSoldOuts = soldOutDatesExcludingToday.length;
 
   return {
@@ -89,6 +89,12 @@ async function trackRestaurantAppearances(env, restaurants, date) {
     let dataChanged = false;
 
     // Add date to appearances if not already present
+    console.log(`Processing restaurant ${restaurantId} (${restaurantName}) for date ${date}`, {
+      currentAppearances: restaurantData.appearances,
+      dateToAdd: date,
+      alreadyExists: restaurantData.appearances.includes(date),
+    });
+
     if (!restaurantData.appearances.includes(date)) {
       console.log(`Adding date ${date} to restaurant ${restaurantId} (${restaurantName})`);
       restaurantData.appearances.push(date);
@@ -101,6 +107,11 @@ async function trackRestaurantAppearances(env, restaurants, date) {
       if (date < restaurantData.firstSeen) {
         restaurantData.firstSeen = date;
       }
+
+      console.log(
+        `After adding date ${date}, restaurant ${restaurantId} now has appearances:`,
+        restaurantData.appearances
+      );
     } else {
       console.log(`Date ${date} already exists for restaurant ${restaurantId} (${restaurantName})`);
     }
@@ -226,6 +237,8 @@ export async function trackAppearances(request, env) {
       restaurantCount: restaurants?.length,
       restaurantIds: restaurants?.map((r) => r.id),
       restaurantNames: restaurants?.map((r) => r.name),
+      timestamp: new Date().toISOString(),
+      url: request.url,
     });
 
     if (!restaurants || !Array.isArray(restaurants) || !date) {
@@ -392,6 +405,107 @@ export async function getAppearances(request, env) {
     );
   } catch (error) {
     return createErrorResponse('Failed to get restaurant appearances', 500, {
+      error: error.message,
+    });
+  }
+}
+
+// Update restaurant appearances and sold out dates
+export async function updateAppearances(request, env) {
+  try {
+    const { restaurantId, appearanceDates, soldoutDates } = await request.json();
+
+    if (!restaurantId) {
+      return createErrorResponse('Restaurant ID is required', 400);
+    }
+
+    if (!appearanceDates || !Array.isArray(appearanceDates)) {
+      return createErrorResponse('Appearance dates array is required', 400);
+    }
+
+    if (!soldoutDates || !Array.isArray(soldoutDates)) {
+      return createErrorResponse('Sold out dates array is required', 400);
+    }
+
+    // Validate date format
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+    const invalidAppearanceDates = appearanceDates.filter((date) => !dateRegex.test(date));
+    const invalidSoldoutDates = soldoutDates.filter((date) => !dateRegex.test(date));
+
+    if (invalidAppearanceDates.length > 0) {
+      return createErrorResponse(
+        `Invalid appearance date format: ${invalidAppearanceDates.join(', ')}. Use YYYY-MM-DD format.`,
+        400
+      );
+    }
+
+    if (invalidSoldoutDates.length > 0) {
+      return createErrorResponse(
+        `Invalid sold out date format: ${invalidSoldoutDates.join(', ')}. Use YYYY-MM-DD format.`,
+        400
+      );
+    }
+
+    // Get existing restaurant data from KV
+    const restaurantKey = `restaurant:${restaurantId}`;
+    const existingData = await env.LANCHDRAP_RATINGS.get(restaurantKey);
+
+    let restaurantData;
+    if (existingData) {
+      restaurantData = JSON.parse(existingData);
+    } else {
+      // Create new restaurant record if it doesn't exist
+      restaurantData = {
+        id: restaurantId,
+        name: restaurantId, // Use ID as name if no name exists
+        appearances: [],
+        soldOutDates: [],
+        menu: [],
+        firstSeen: null,
+        lastSeen: null,
+        createdAt: new Date().toISOString(),
+      };
+    }
+
+    // Sort dates to ensure proper ordering
+    const sortedAppearanceDates = [...new Set(appearanceDates)].sort();
+    const sortedSoldoutDates = [...new Set(soldoutDates)].sort();
+
+    // Update the data
+    restaurantData.appearances = sortedAppearanceDates;
+    restaurantData.soldOutDates = sortedSoldoutDates;
+
+    // Update first seen and last seen
+    if (sortedAppearanceDates.length > 0) {
+      restaurantData.firstSeen = sortedAppearanceDates[0];
+      restaurantData.lastSeen = sortedAppearanceDates[sortedAppearanceDates.length - 1];
+    } else {
+      restaurantData.firstSeen = null;
+      restaurantData.lastSeen = null;
+    }
+
+    // Update timestamp and save to KV
+    updateRestaurantTimestamp(restaurantData);
+    await env.LANCHDRAP_RATINGS.put(restaurantKey, JSON.stringify(restaurantData));
+
+    return createApiResponse(
+      {
+        success: true,
+        message: `Updated restaurant appearances and sold out dates`,
+        data: {
+          restaurantId,
+          name: restaurantData.name,
+          totalAppearances: sortedAppearanceDates.length,
+          totalSoldOuts: sortedSoldoutDates.length,
+          firstSeen: restaurantData.firstSeen,
+          lastSeen: restaurantData.lastSeen,
+          updatedAt: restaurantData.updatedAt,
+        },
+      },
+      200
+    );
+  } catch (error) {
+    return createErrorResponse('Failed to update restaurant appearances', 500, {
       error: error.message,
     });
   }
@@ -618,7 +732,7 @@ export async function getRestaurantById(request, env) {
         name: data.name || restaurantId, // Use ID as fallback if no name
         id: data.id || restaurantId,
         color: data.color || null, // Include the color
-        totalAppearances: soldOutStats.totalAppearances,
+        totalAppearances: appearances.length,
         totalSoldOuts: soldOutStats.totalSoldOuts,
         soldOutRate: parseFloat(soldOutRate),
         lastAppearance,
@@ -688,8 +802,8 @@ export async function searchRestaurantByName(request, env) {
         menu: data.menu || [],
         timeRange: 'all',
         totalDays: 7,
-        totalAppearances: soldOutStats.totalAppearances,
-        appearancesInRange: soldOutStats.totalAppearances,
+        totalAppearances: appearances.length,
+        appearancesInRange: appearances.length,
         appearanceRate: 1.0, // Since we're searching by name, we found it (100% appearance rate)
         totalSoldOuts: soldOutStats.totalSoldOuts,
         soldOutRate: parseFloat(soldOutRate),
@@ -1317,7 +1431,7 @@ export async function getRestaurantStatsWithUserHistory(request, env) {
         name: data.name || restaurant,
         id: data.id || restaurant,
         color: data.color || null,
-        totalAppearances: soldOutStats.totalAppearances,
+        totalAppearances: appearances.length,
         totalSoldOuts: soldOutStats.totalSoldOuts,
         soldOutRate: parseFloat(soldOutRate),
         lastAppearance,

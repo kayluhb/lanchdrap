@@ -18,7 +18,7 @@ async function initializeExtension() {
   window.LanchDrapRatingWidget.addFloatingButton();
 
   // Check for pending rating prompt from before utilities were loaded
-  const pendingPrompt = localStorage.getItem('lunchdrop_pending_rating_prompt');
+  const pendingPrompt = localStorage.getItem('lanchdrap_pending_rating_prompt');
   if (pendingPrompt) {
     try {
       const promptData = JSON.parse(pendingPrompt);
@@ -34,7 +34,7 @@ async function initializeExtension() {
       window.LanchDrapRatingWidget.setOrderData(orderData);
 
       // Clear the pending prompt
-      localStorage.removeItem('lunchdrop_pending_rating_prompt');
+      localStorage.removeItem('lanchdrap_pending_rating_prompt');
     } catch (error) {
       console.info('LanchDrap: Error processing pending prompt', error);
     }
@@ -45,9 +45,15 @@ async function initializeExtension() {
 
 // Main function to handle page changes
 async function handlePageChange() {
+  console.log('LanchDrap: handlePageChange called', {
+    url: window.location.href,
+    timestamp: new Date().toISOString(),
+  });
+
   try {
     // Skip if on login page
     if (window.LanchDrapDOMUtils.isLoginPage()) {
+      console.log('LanchDrap: Skipping login page');
       return;
     }
 
@@ -91,7 +97,11 @@ function handleUrlChange() {
   const currentUrl = window.location.href;
 
   if (currentUrl !== lastUrl) {
-    console.info('LanchDrap: URL changed, handling page change');
+    console.info('LanchDrap: URL changed, handling page change', {
+      from: lastUrl,
+      to: currentUrl,
+      timestamp: new Date().toISOString(),
+    });
     lastUrl = currentUrl;
 
     // Clear DOM cache on URL change

@@ -12,6 +12,7 @@ import {
   storeUserOrder,
   trackAppearances,
   update,
+  updateAppearances,
 } from './api/restaurants.js';
 import { createCorsResponse } from './utils/response.js';
 
@@ -24,6 +25,7 @@ const routes = {
   'POST /api/ratings': submitRating,
   'POST /api/restaurants/appearances/track': trackAppearances,
   'POST /api/restaurants/update': update,
+  'POST /api/restaurants/update-appearances': updateAppearances,
 
   // Restaurant search endpoints
   'GET /api/restaurants/search': searchRestaurantByName,

@@ -310,6 +310,19 @@ window.LanchDrapRestaurantScraper = (() => {
     } catch (_error) {}
   }
 
+  // Cleanup function to cancel all tracking when page unloads
+  function cleanupTrackingOnUnload() {
+    if (window.lanchDrapTrackingAbortController) {
+      console.log('LanchDrap: Cleaning up tracking on page unload');
+      window.lanchDrapTrackingAbortController.abort();
+      window.lanchDrapTrackingAbortController = null;
+    }
+  }
+
+  // Add cleanup listeners
+  window.addEventListener('beforeunload', cleanupTrackingOnUnload);
+  window.addEventListener('pagehide', cleanupTrackingOnUnload);
+
   // Function to track restaurant appearances on daily pages
   async function trackRestaurantAppearances(availabilityData) {
     try {
@@ -317,10 +330,26 @@ window.LanchDrapRestaurantScraper = (() => {
         return;
       }
 
+      // Use a single global abort controller for tracking (like stats display)
+      if (window.lanchDrapTrackingAbortController) {
+        window.lanchDrapTrackingAbortController.abort();
+      }
+      window.lanchDrapTrackingAbortController = new AbortController();
+
+      // Store current URL to validate against when response comes back
+      const currentUrl = window.location.href;
+
       const urlDate = window.LanchDrapDOMUtils.extractDateFromUrl();
       if (!urlDate) {
+        console.warn('LanchDrap: No date found in URL, skipping tracking');
         return;
       }
+
+      console.log('LanchDrap: Extracted date from URL:', {
+        urlDate,
+        currentUrl: window.location.href,
+        timestamp: new Date().toISOString(),
+      });
 
       // Don't send empty restaurant arrays to the API
       if (!availabilityData || availabilityData.length === 0) {
@@ -358,7 +387,28 @@ window.LanchDrapRestaurantScraper = (() => {
         fullTrackingData: trackingData,
       });
 
-      const result = await apiClient.trackRestaurantAppearances(trackingData);
+      const result = await apiClient.trackRestaurantAppearances(
+        trackingData,
+        window.lanchDrapTrackingAbortController.signal
+      );
+
+      // Check if the request was aborted
+      if (window.lanchDrapTrackingAbortController.signal.aborted) {
+        console.log('LanchDrap: Tracking request was aborted for URL:', window.location.href);
+        return null;
+      }
+
+      // Validate that we're still on the same page
+      if (window.location.href !== currentUrl) {
+        console.log(
+          'LanchDrap: URL changed during tracking request, ignoring response',
+          'Current URL:',
+          window.location.href,
+          'Original URL:',
+          currentUrl
+        );
+        return null;
+      }
 
       // Log the result for debugging
       if (result && result.success) {
@@ -371,7 +421,29 @@ window.LanchDrapRestaurantScraper = (() => {
 
       return result; // Return the result so it can be used in the main flow
     } catch (_error) {
+      if (_error.name === 'AbortError') {
+        console.log('LanchDrap: Tracking request was aborted for URL:', window.location.href);
+        return null;
+      }
+
+      // Also check if URL changed during the request
+      if (window.location.href !== currentUrl) {
+        console.log(
+          'LanchDrap: URL changed during tracking request error, ignoring',
+          'Current URL:',
+          window.location.href,
+          'Original URL:',
+          currentUrl
+        );
+        return null;
+      }
+
       console.error('LanchDrap: Restaurant tracking failed for date', urlDate, _error);
+    } finally {
+      // Clear the abort controller
+      if (window.lanchDrapTrackingAbortController) {
+        window.lanchDrapTrackingAbortController = null;
+      }
     }
   }
 

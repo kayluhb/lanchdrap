@@ -30,6 +30,7 @@ class ApiClient {
       try {
         const response = await fetch(url, {
           ...options,
+          signal: options.signal, // Explicitly pass the abort signal
           headers: {
             'Content-Type': 'application/json',
             ...options.headers,
@@ -121,18 +122,20 @@ class ApiClient {
   }
 
   // Track restaurant appearances from daily pages
-  async trackRestaurantAppearances(appearanceData) {
+  async trackRestaurantAppearances(appearanceData, signal = null) {
     return this.request(this.getEndpoint('RESTAURANTS_APPEARANCES_TRACK'), {
       method: 'POST',
       body: JSON.stringify(appearanceData),
+      signal: signal,
     });
   }
 
   // Update restaurant (name, menu, etc.)
-  async updateRestaurant(restaurantId, restaurantName = null, menuItems = null) {
+  async updateRestaurant(restaurantId, restaurantName = null, menuItems = null, signal = null) {
     return this.request(this.getEndpoint('RESTAURANTS_UPDATE'), {
       method: 'POST',
       body: JSON.stringify({ restaurantId, restaurantName, menuItems }),
+      signal: signal,
     });
   }
 
@@ -164,12 +167,24 @@ class ApiClient {
   }
 
   // Get restaurant stats with user order history
-  async getRestaurantStatsWithUserHistory(restaurantId, userId) {
+  async getRestaurantStatsWithUserHistory(restaurantId, userId, signal = null) {
     const params = new URLSearchParams();
     params.append('restaurant', restaurantId);
     params.append('userId', userId);
     const endpoint = `${this.getEndpoint('RESTAURANTS_STATS')}?${params.toString()}`;
-    return this.request(endpoint);
+    return this.request(endpoint, { signal: signal });
+  }
+
+  // Update restaurant appearances and sold out dates
+  async updateRestaurantAppearances(restaurantId, appearanceDates, soldoutDates) {
+    return this.request(this.getEndpoint('RESTAURANTS_UPDATE_APPEARANCES'), {
+      method: 'POST',
+      body: JSON.stringify({
+        restaurantId,
+        appearanceDates,
+        soldoutDates,
+      }),
+    });
   }
 }
 

@@ -16,6 +16,7 @@ const CONFIG = {
     RESTAURANTS: '/api/restaurants',
     RESTAURANTS_APPEARANCES_TRACK: '/api/restaurants/appearances/track',
     RESTAURANTS_UPDATE: '/api/restaurants/update',
+    RESTAURANTS_UPDATE_APPEARANCES: '/api/restaurants/update-appearances',
     RESTAURANTS_GET_BY_ID: '/api/restaurant',
     RESTAURANTS_SEARCH: '/api/restaurants/search',
     RESTAURANTS_STATS: '/api/restaurants/stats',
@@ -52,7 +53,7 @@ const CONFIG = {
 
   // User identification
   USER_ID: {
-    STORAGE_KEY: 'lunchdrop_user_id',
+    STORAGE_KEY: 'lanchdrap_user_id',
     GENERATE_IF_MISSING: true,
   },
 

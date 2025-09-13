@@ -31,7 +31,7 @@ window.LanchDrapRatingWidget = (() => {
     }
 
     const widget = document.createElement('div');
-    widget.id = 'lunchdrop-rating-widget';
+    widget.id = 'lanchdrap-rating-widget';
     widget.innerHTML = `
           <div class="ld-rating-container">
               <div class="ld-rating-header">
@@ -65,9 +65,9 @@ window.LanchDrapRatingWidget = (() => {
       `;
 
     // Inject the CSS styles
-    if (!document.getElementById('lunchdrop-extension-styles')) {
+    if (!document.getElementById('lanchdrap-extension-styles')) {
       const styleLink = document.createElement('link');
-      styleLink.id = 'lunchdrop-extension-styles';
+      styleLink.id = 'lanchdrap-extension-styles';
       styleLink.rel = 'stylesheet';
       styleLink.href = chrome.runtime.getURL('content-styles.css');
       document.head.appendChild(styleLink);
@@ -315,7 +315,7 @@ window.LanchDrapRatingWidget = (() => {
         if (typeof LanchDrapApiClient === 'undefined' || typeof LanchDrapConfig === 'undefined') {
           // Store the prompt detection for later processing
           localStorage.setItem(
-            'lunchdrop_pending_rating_prompt',
+            'lanchdrap_pending_rating_prompt',
             JSON.stringify({
               restaurant: restaurantName,
               timestamp: new Date().toISOString(),
@@ -344,7 +344,7 @@ window.LanchDrapRatingWidget = (() => {
   // Add a floating button to manually trigger the rating widget
   function addFloatingButton() {
     const button = document.createElement('div');
-    button.id = 'lunchdrop-rating-trigger';
+    button.id = 'lanchdrap-rating-trigger';
     button.innerHTML = '🍽️ Rate';
     button.style.cssText = `
           position: fixed;

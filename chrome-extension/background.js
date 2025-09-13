@@ -1,4 +1,4 @@
-// Background service worker for LunchDrop Rating Extension
+// Background service worker for LanchDrap Rating Extension
 
 // Handle extension installation
 chrome.runtime.onInstalled.addListener((details) => {
@@ -81,8 +81,8 @@ chrome.runtime.onInstalled.addListener(() => {
   // Check if contextMenus API is available
   if (chrome.contextMenus) {
     chrome.contextMenus.create({
-      id: 'rateLunchDrop',
-      title: 'Rate this LunchDrop order',
+      id: 'rateLanchDrap',
+      title: 'Rate this LanchDrap order',
       contexts: ['page'],
       documentUrlPatterns: ['https://lunchdrop.com/*', 'https://*.lunchdrop.com/*'],
     });
@@ -92,7 +92,7 @@ chrome.runtime.onInstalled.addListener(() => {
 // Only add the listener if contextMenus API is available
 if (chrome.contextMenus) {
   chrome.contextMenus.onClicked.addListener((info, tab) => {
-    if (info.menuItemId === 'rateLunchDrop') {
+    if (info.menuItemId === 'rateLanchDrap') {
       // Send message to content script to show rating widget
       chrome.tabs.sendMessage(tab.id, { action: 'showRatingWidget' });
     }

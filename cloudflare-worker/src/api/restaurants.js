@@ -88,15 +88,7 @@ async function trackRestaurantAppearances(env, restaurants, date) {
     // Track if any changes were made to avoid unnecessary KV writes
     let dataChanged = false;
 
-    // Add date to appearances if not already present
-    console.log(`Processing restaurant ${restaurantId} (${restaurantName}) for date ${date}`, {
-      currentAppearances: restaurantData.appearances,
-      dateToAdd: date,
-      alreadyExists: restaurantData.appearances.includes(date),
-    });
-
     if (!restaurantData.appearances.includes(date)) {
-      console.log(`Adding date ${date} to restaurant ${restaurantId} (${restaurantName})`);
       restaurantData.appearances.push(date);
       restaurantData.appearances.sort(); // Keep dates sorted
       restaurantData.lastSeen = date;
@@ -107,13 +99,7 @@ async function trackRestaurantAppearances(env, restaurants, date) {
       if (date < restaurantData.firstSeen) {
         restaurantData.firstSeen = date;
       }
-
-      console.log(
-        `After adding date ${date}, restaurant ${restaurantId} now has appearances:`,
-        restaurantData.appearances
-      );
     } else {
-      console.log(`Date ${date} already exists for restaurant ${restaurantId} (${restaurantName})`);
     }
 
     // Initialize soldOutDates array if it doesn't exist (for existing records)
@@ -230,16 +216,6 @@ export async function trackAppearances(request, env) {
   try {
     const trackingData = await request.json();
     const { restaurants, date } = trackingData;
-
-    // Debug logging
-    console.log('TrackAppearances received:', {
-      date,
-      restaurantCount: restaurants?.length,
-      restaurantIds: restaurants?.map((r) => r.id),
-      restaurantNames: restaurants?.map((r) => r.name),
-      timestamp: new Date().toISOString(),
-      url: request.url,
-    });
 
     if (!restaurants || !Array.isArray(restaurants) || !date) {
       return createErrorResponse(

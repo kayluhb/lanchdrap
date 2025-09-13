@@ -2,7 +2,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const statusDiv = document.getElementById('status');
   const historyDiv = document.getElementById('rating-history');
 
-  function showStatus(message, type) {
+  function _showStatus(message, type) {
     statusDiv.textContent = message;
     statusDiv.className = `status ${type}`;
     setTimeout(() => {
@@ -273,8 +273,7 @@ document.addEventListener('DOMContentLoaded', () => {
       );
 
       displayOrderHistory(orderHistory, restaurantInfo.restaurantName);
-    } catch (error) {
-      console.error('Error loading order history:', error);
+    } catch (_error) {
       document.getElementById('order-history').innerHTML =
         '<p class="no-orders">Error loading order history</p>';
     }
@@ -287,8 +286,7 @@ document.addEventListener('DOMContentLoaded', () => {
         action: 'getRestaurantInfo',
       });
       return response;
-    } catch (error) {
-      console.error('Error getting restaurant info:', error);
+    } catch (_error) {
       return null;
     }
   }

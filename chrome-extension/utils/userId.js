@@ -36,10 +36,6 @@ class LanchDrapUserIdManager {
 
         // Check if it's an old format user ID that needs migration
         if (this.isOldFormatUserId(storedUserId)) {
-          console.info('LanchDrap: Migrating old format user ID to new format', {
-            oldId: `${storedUserId.substring(0, 30)}...`,
-            newId: this.generateUserId(),
-          });
           // Generate new user ID and replace the old one
           this.userId = this.generateUserId();
           await chrome.storage.local.set({ [this.storageKey]: this.userId });
@@ -52,7 +48,6 @@ class LanchDrapUserIdManager {
 
       // Generate new user ID if none exists
       this.userId = this.generateUserId();
-      console.info('LanchDrap: Generated new user ID', this.userId);
 
       // Store the new user ID
       await chrome.storage.local.set({ [this.storageKey]: this.userId });

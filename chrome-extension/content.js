@@ -9,8 +9,6 @@ let lastUrl = window.location.href;
 async function initializeExtension() {
   if (isInitialized) return;
 
-  console.info('LanchDrap: Initializing extension');
-
   // Clear any existing DOM cache
   window.LanchDrapDOMUtils.clearDomCache();
 
@@ -22,7 +20,6 @@ async function initializeExtension() {
   if (pendingPrompt) {
     try {
       const promptData = JSON.parse(pendingPrompt);
-      console.info('LanchDrap: Processing pending rating prompt', promptData);
 
       // Create order data from pending prompt
       const orderData = {
@@ -35,8 +32,7 @@ async function initializeExtension() {
 
       // Clear the pending prompt
       localStorage.removeItem('lanchdrap_pending_rating_prompt');
-    } catch (error) {
-      console.info('LanchDrap: Error processing pending prompt', error);
+    } catch (_error) {
     }
   }
 
@@ -45,15 +41,10 @@ async function initializeExtension() {
 
 // Main function to handle page changes
 async function handlePageChange() {
-  console.log('LanchDrap: handlePageChange called', {
-    url: window.location.href,
-    timestamp: new Date().toISOString(),
-  });
 
   try {
     // Skip if on login page
     if (window.LanchDrapDOMUtils.isLoginPage()) {
-      console.log('LanchDrap: Skipping login page');
       return;
     }
 
@@ -62,10 +53,9 @@ async function handlePageChange() {
 
     // Handle restaurant grid pages (daily pages)
     if (window.LanchDrapDOMUtils.isRestaurantGridPage()) {
-      console.info('LanchDrap: Restaurant grid page detected');
 
       // Show skeleton loading state immediately
-      if (window.LanchDrapStatsDisplay && window.LanchDrapStatsDisplay.showSkeletonLoading) {
+      if (window.LanchDrapStatsDisplay?.showSkeletonLoading) {
         window.LanchDrapStatsDisplay.showSkeletonLoading();
       }
 
@@ -73,7 +63,6 @@ async function handlePageChange() {
       setTimeout(async () => {
         // Double-check we're still on a restaurant grid page
         if (!window.LanchDrapDOMUtils.isRestaurantGridPage()) {
-          console.log('LanchDrap: No longer on restaurant grid page, skipping stats');
           return;
         }
 
@@ -90,7 +79,6 @@ async function handlePageChange() {
 
     // Handle restaurant detail pages
     if (window.LanchDrapDOMUtils.isRestaurantDetailPage()) {
-      console.info('LanchDrap: Restaurant detail page detected');
 
       // Display restaurant tracking info
       await window.LanchDrapStatsDisplay.displayRestaurantTrackingInfo();
@@ -101,8 +89,7 @@ async function handlePageChange() {
 
     // Check for LanchDrap rating prompt
     window.LanchDrapRatingWidget.detectLunchDropRatingPrompt();
-  } catch (error) {
-    console.error('LanchDrap: Error in handlePageChange', error);
+  } catch (_error) {
   }
 }
 
@@ -111,11 +98,6 @@ function handleUrlChange() {
   const currentUrl = window.location.href;
 
   if (currentUrl !== lastUrl) {
-    console.info('LanchDrap: URL changed, handling page change', {
-      from: lastUrl,
-      to: currentUrl,
-      timestamp: new Date().toISOString(),
-    });
     lastUrl = currentUrl;
 
     // Clear DOM cache on URL change
@@ -123,8 +105,7 @@ function handleUrlChange() {
 
     // Clear restaurant availability data on URL change
     if (
-      window.LanchDrapRestaurantScraper &&
-      window.LanchDrapRestaurantScraper.clearRestaurantAvailabilityData
+      window.LanchDrapRestaurantScraper?.clearRestaurantAvailabilityData
     ) {
       window.LanchDrapRestaurantScraper.clearRestaurantAvailabilityData();
     }
@@ -219,7 +200,7 @@ function setupEventListeners() {
 setupEventListeners();
 
 // Listen for messages from popup
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
   if (request.action === 'getRestaurantInfo') {
     try {
       // Try to get restaurant info from the current page
@@ -252,8 +233,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       }
 
       sendResponse(restaurantInfo);
-    } catch (error) {
-      console.error('Error getting restaurant info:', error);
+    } catch (_error) {
       sendResponse(null);
     }
     return true; // Keep message channel open for async response

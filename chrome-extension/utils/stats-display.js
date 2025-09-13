@@ -26,10 +26,6 @@ window.LanchDrapStatsDisplay = (() => {
   // Initialize key visibility from localStorage
   function initializeKeyVisibility() {
     const stored = localStorage.getItem('lanchdrap_keys_visible');
-    console.log('LanchDrap: initializeKeyVisibility called', {
-      stored,
-      currentKeysVisible: keysVisible,
-    });
 
     // Default to false (hidden) if no stored value exists
     keysVisible = stored === 'true';
@@ -39,8 +35,6 @@ window.LanchDrapStatsDisplay = (() => {
       keysVisible = false;
       localStorage.setItem('lanchdrap_keys_visible', 'false');
     }
-
-    console.log('LanchDrap: Key visibility initialized', { keysVisible, stored });
   }
 
   // Toggle key visibility
@@ -58,21 +52,9 @@ window.LanchDrapStatsDisplay = (() => {
   // Update visibility of all key elements
   function updateKeyVisibility() {
     const keyElements = document.querySelectorAll('.ld-key-element');
-    console.log('LanchDrap: updateKeyVisibility called', {
-      keysVisible,
-      keyElementsCount: keyElements.length,
-      keyElements: Array.from(keyElements).map((el) => el.textContent),
-    });
     keyElements.forEach((element) => {
       const newDisplay = keysVisible ? 'inline' : 'none';
       element.style.display = newDisplay;
-      console.log('LanchDrap: Updated element visibility', {
-        text: element.textContent,
-        oldDisplay: element.style.display,
-        newDisplay,
-        keysVisible,
-        element: element,
-      });
     });
 
     // Also update edit triggers cursor and title
@@ -311,9 +293,7 @@ window.LanchDrapStatsDisplay = (() => {
       const skeleton = createSkeletonComponent();
       const insertionPoint = restaurantNameElement.parentNode || restaurantNameElement;
       insertionPoint.insertBefore(skeleton, restaurantNameElement.nextSibling);
-      console.log('LanchDrap: Skeleton loading state displayed');
     } else {
-      console.warn('LanchDrap: Could not find insertion point for skeleton');
     }
   }
 
@@ -322,7 +302,6 @@ window.LanchDrapStatsDisplay = (() => {
     const skeleton = document.getElementById('lanchdrap-restaurant-stats-skeleton');
     if (skeleton) {
       skeleton.remove();
-      console.log('LanchDrap: Skeleton loading state removed');
     }
   }
 
@@ -330,23 +309,10 @@ window.LanchDrapStatsDisplay = (() => {
   function renderStatsComponent(stats, containerId, _title) {
     // Ensure key visibility is initialized before rendering
     if (!window.lanchdrapKonamiInitialized) {
-      console.log('LanchDrap: Initializing key visibility before rendering');
       initializeKonamiCode();
       window.lanchdrapKonamiInitialized = true;
     } else {
-      console.log('LanchDrap: Key visibility already initialized', { keysVisible });
     }
-
-    console.info('LanchDrap: renderStatsComponent called with stats', {
-      totalAppearances: stats.totalAppearances,
-      lastAppearance: stats.lastAppearance,
-      loading: stats.loading,
-      apiError: stats.apiError,
-      containerId,
-      restaurantId: stats.id,
-      restaurantName: stats.name,
-      url: window.location.href,
-    });
 
     // Add API error indicator if applicable
     const apiErrorIndicator = stats.apiError
@@ -371,9 +337,9 @@ window.LanchDrapStatsDisplay = (() => {
       const match = rgb.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
       if (!match) return { h: 0, s: 0, l: 50 };
 
-      const r = parseInt(match[1]) / 255;
-      const g = parseInt(match[2]) / 255;
-      const b = parseInt(match[3]) / 255;
+      const r = parseInt(match[1], 10) / 255;
+      const g = parseInt(match[2], 10) / 255;
+      const b = parseInt(match[3], 10) / 255;
 
       const max = Math.max(r, g, b);
       const min = Math.min(r, g, b);
@@ -758,27 +724,21 @@ window.LanchDrapStatsDisplay = (() => {
 
     // Add event listener for edit dialog
     const editTrigger = container.querySelector('.ld-edit-stats-trigger');
-    console.log('LanchDrap: Edit trigger found:', editTrigger);
     if (editTrigger) {
-      console.log('LanchDrap: Adding click event listener to edit trigger');
       editTrigger.addEventListener('click', (e) => {
-        console.log('LanchDrap: Edit trigger clicked!');
         e.preventDefault();
         e.stopPropagation();
 
         // Check if keys are visible before allowing edit
         if (!keysVisible) {
-          console.log('LanchDrap: Edit trigger clicked but keys are not visible, ignoring');
           return;
         }
 
         const restaurantId = editTrigger.dataset.restaurantId;
         const restaurantName = editTrigger.dataset.restaurantName;
-        console.log('LanchDrap: Opening edit dialog for:', { restaurantId, restaurantName });
         openEditDialog(restaurantId, restaurantName);
       });
     } else {
-      console.log('LanchDrap: Edit trigger not found in container');
     }
 
     // Add styles
@@ -795,11 +755,6 @@ window.LanchDrapStatsDisplay = (() => {
 
   // Function to display stats for selected restaurant on daily pages
   async function displaySelectedRestaurantStats(availabilityData) {
-    console.log('LanchDrap: displaySelectedRestaurantStats called', {
-      url: window.location.href,
-      availabilityDataLength: availabilityData?.length,
-      timestamp: new Date().toISOString(),
-    });
 
     try {
       if (typeof LanchDrapApiClient === 'undefined' || typeof LanchDrapConfig === 'undefined') {
@@ -811,20 +766,7 @@ window.LanchDrapStatsDisplay = (() => {
         const currentUrlDate = window.LanchDrapDOMUtils.extractDateFromUrl();
         const dataUrlDate = availabilityData[0]?.urlDate;
 
-        console.log('LanchDrap: Validating availability data for stats display', {
-          currentUrlDate,
-          dataUrlDate,
-          currentUrl: window.location.href,
-          dataLength: availabilityData.length,
-          firstDataItem: availabilityData[0],
-        });
-
         if (currentUrlDate && dataUrlDate && currentUrlDate !== dataUrlDate) {
-          console.error('LanchDrap: URL date mismatch, ignoring stats display', {
-            currentUrlDate,
-            dataUrlDate,
-            currentUrl: window.location.href,
-          });
           return;
         }
       }
@@ -894,14 +836,7 @@ window.LanchDrapStatsDisplay = (() => {
       // Generate unique request ID for this stats request
       const requestId = ++currentStatsRequestId;
       const currentUrl = window.location.href;
-      const currentRestaurantId = selectedRestaurant.id;
-
-      console.log('LanchDrap: Starting stats request', {
-        requestId,
-        restaurantId: selectedRestaurant.id,
-        url: currentUrl,
-        currentStatsRequestId,
-      });
+      const _currentRestaurantId = selectedRestaurant.id;
 
       // Fetch combined stats with user order history in background and update UI when ready
       const combinedStatsPromise = apiClient.getRestaurantStatsWithUserHistory(
@@ -911,38 +846,14 @@ window.LanchDrapStatsDisplay = (() => {
 
       Promise.all([combinedStatsPromise])
         .then(([stats]) => {
-          console.log('LanchDrap: Stats response received', {
-            requestId,
-            currentStatsRequestId,
-            restaurantId: currentRestaurantId,
-            url: window.location.href,
-            originalUrl: currentUrl,
-          });
 
           // Check if this is still the current request
           if (requestId !== currentStatsRequestId) {
-            console.log(
-              'LanchDrap: Stats request is stale, ignoring response',
-              'Request ID:',
-              requestId,
-              'Current Request ID:',
-              currentStatsRequestId,
-              'Restaurant:',
-              currentRestaurantId
-            );
             return;
           }
 
           // Validate that we're still on the same page and restaurant
           if (window.location.href !== currentUrl) {
-            console.log(
-              'LanchDrap: URL changed during stats request, ignoring response for restaurant:',
-              currentRestaurantId,
-              'Current URL:',
-              window.location.href,
-              'Original URL:',
-              currentUrl
-            );
             return;
           }
 
@@ -954,29 +865,6 @@ window.LanchDrapStatsDisplay = (() => {
           // Add userId to stats for display
           stats.userId = userId;
 
-          // userOrderHistory is already included in the combined stats response
-
-          console.info('LanchDrap: Received API stats for restaurant', {
-            restaurantId: selectedRestaurant.id,
-            totalAppearances: stats.totalAppearances,
-            lastAppearance: stats.lastAppearance,
-            appearances: stats.appearances?.length || 0,
-            hasUserOrderHistory: !!stats.userOrderHistory,
-            statsObject: stats,
-          });
-
-          // Update the stats display with real data
-          console.log('LanchDrap: About to render stats component', {
-            requestId,
-            restaurantId: currentRestaurantId,
-            stats: {
-              totalAppearances: stats.totalAppearances,
-              lastAppearance: stats.lastAppearance,
-              name: stats.name,
-              id: stats.id,
-            },
-          });
-
           const updatedContainer = renderStatsComponent(
             stats,
             'lanchdrap-restaurant-stats',
@@ -986,50 +874,18 @@ window.LanchDrapStatsDisplay = (() => {
           // Check if the container was actually updated
           const existingContainer = document.getElementById('lanchdrap-restaurant-stats');
           if (existingContainer) {
-            console.log('LanchDrap: Replacing existing stats container', {
-              requestId,
-              restaurantId: currentRestaurantId,
-              existingContainerExists: true,
-              newStats: {
-                totalAppearances: stats.totalAppearances,
-                lastAppearance: stats.lastAppearance,
-                name: stats.name,
-                id: stats.id,
-              },
-            });
             existingContainer.replaceWith(updatedContainer);
-            console.info('LanchDrap: Replaced existing stats container with updated data');
           } else {
-            console.info('LanchDrap: No existing stats container found to replace');
           }
-
-          console.info('LanchDrap: Updated restaurant stats with API data');
         })
-        .catch((error) => {
+        .catch((_error) => {
           // Check if this is still the current request
           if (requestId !== currentStatsRequestId) {
-            console.log(
-              'LanchDrap: Stats request error is stale, ignoring',
-              'Request ID:',
-              requestId,
-              'Current Request ID:',
-              currentStatsRequestId,
-              'Restaurant:',
-              currentRestaurantId
-            );
             return;
           }
 
           // Check if URL changed during the request
           if (window.location.href !== currentUrl) {
-            console.log(
-              'LanchDrap: URL changed during stats request error, ignoring for restaurant:',
-              currentRestaurantId,
-              'Current URL:',
-              window.location.href,
-              'Original URL:',
-              currentUrl
-            );
             return;
           }
 
@@ -1045,7 +901,6 @@ window.LanchDrapStatsDisplay = (() => {
             'lanchdrap-restaurant-stats',
             'Selected Restaurant Stats'
           );
-          console.info('LanchDrap: Restaurant stats API failed, showing fallback', error.message);
         })
         .finally(() => {
           // Clear the processing flag
@@ -1063,9 +918,6 @@ window.LanchDrapStatsDisplay = (() => {
       if (restaurantNameElement) {
         const insertionPoint = restaurantNameElement.parentNode || restaurantNameElement;
         insertionPoint.insertBefore(statsContainer, restaurantNameElement.nextSibling);
-
-        // Update key visibility after container is inserted into DOM
-        console.log('LanchDrap: About to update key visibility after insertion', { keysVisible });
         updateKeyVisibility();
       }
     } catch (_error) {
@@ -1079,10 +931,6 @@ window.LanchDrapStatsDisplay = (() => {
 
   // Function to display restaurant tracking information on detail pages
   async function displayRestaurantTrackingInfo() {
-    console.log('LanchDrap: displayRestaurantTrackingInfo called', {
-      url: window.location.href,
-      timestamp: new Date().toISOString(),
-    });
 
     try {
       // Check if we're on a restaurant detail page by looking for the restaurant name
@@ -1140,14 +988,7 @@ window.LanchDrapStatsDisplay = (() => {
           // Generate unique request ID for this stats request
           const requestId = ++currentStatsRequestId;
           const currentUrl = window.location.href;
-          const currentRestaurantId = restaurantId;
-
-          console.log('LanchDrap: Starting restaurant tracking stats request', {
-            requestId,
-            restaurantId,
-            url: currentUrl,
-            currentStatsRequestId,
-          });
+          const _currentRestaurantId = restaurantId;
 
           // Fetch combined restaurant stats with user order history
           stats = await apiClient.getRestaurantStatsWithUserHistory(restaurantId, userId);
@@ -1158,28 +999,11 @@ window.LanchDrapStatsDisplay = (() => {
 
           // Check if this is still the current request
           if (requestId !== currentStatsRequestId) {
-            console.log(
-              'LanchDrap: Restaurant tracking stats request is stale, ignoring response',
-              'Request ID:',
-              requestId,
-              'Current Request ID:',
-              currentStatsRequestId,
-              'Restaurant:',
-              currentRestaurantId
-            );
             return;
           }
 
           // Validate that we're still on the same page and restaurant
           if (window.location.href !== currentUrl) {
-            console.log(
-              'LanchDrap: URL changed during stats request, ignoring response for restaurant:',
-              currentRestaurantId,
-              'Current URL:',
-              window.location.href,
-              'Original URL:',
-              currentUrl
-            );
             return;
           }
 
@@ -1200,41 +1024,17 @@ window.LanchDrapStatsDisplay = (() => {
           const needsMenuUpdate = menuItems.length > 0;
 
           if (needsNameUpdate || needsMenuUpdate) {
-            // Update restaurant info in background (don't block UI)
-            console.info('LanchDrap: Starting background restaurant update', {
-              restaurantId,
-              needsNameUpdate,
-              needsMenuUpdate,
-            });
-            apiClient.updateRestaurant(restaurantId, restaurantName, menuItems).catch((error) => {
-              console.info('LanchDrap: Background restaurant update failed', error.message);
+            apiClient.updateRestaurant(restaurantId, restaurantName, menuItems).catch((_error) => {
             });
           }
         } catch (_apiError) {
           // Check if this is still the current request
           if (requestId !== currentStatsRequestId) {
-            console.log(
-              'LanchDrap: Restaurant tracking stats request error is stale, ignoring',
-              'Request ID:',
-              requestId,
-              'Current Request ID:',
-              currentStatsRequestId,
-              'Restaurant:',
-              currentRestaurantId
-            );
             return;
           }
 
           // Check if URL changed during the request
           if (window.location.href !== currentUrl) {
-            console.log(
-              'LanchDrap: URL changed during stats request error, ignoring for restaurant:',
-              currentRestaurantId,
-              'Current URL:',
-              window.location.href,
-              'Original URL:',
-              currentUrl
-            );
             return;
           }
 
@@ -1292,11 +1092,6 @@ window.LanchDrapStatsDisplay = (() => {
       // Try to find a good insertion point near the restaurant name
       const insertionPoint = restaurantNameElement.parentNode || restaurantNameElement;
       insertionPoint.insertBefore(trackingInfo, restaurantNameElement.nextSibling);
-
-      // Update key visibility after container is inserted into DOM
-      console.log('LanchDrap: About to update key visibility after tracking info insertion', {
-        keysVisible,
-      });
       updateKeyVisibility();
     } catch (_error) {
       // Clear the processing flag on error
@@ -1309,7 +1104,6 @@ window.LanchDrapStatsDisplay = (() => {
 
   // Open edit dialog for restaurant stats
   function openEditDialog(restaurantId, restaurantName) {
-    console.log('LanchDrap: Opening edit dialog for restaurant', { restaurantId, restaurantName });
 
     // Remove existing dialog if any
     const existingDialog = document.getElementById('lanchdrap-edit-dialog');
@@ -1458,7 +1252,6 @@ window.LanchDrapStatsDisplay = (() => {
   async function loadCurrentData(restaurantId) {
     try {
       if (typeof LanchDrapApiClient === 'undefined' || typeof LanchDrapConfig === 'undefined') {
-        console.error('LanchDrap: API client not available');
         return;
       }
 
@@ -1469,14 +1262,6 @@ window.LanchDrapStatsDisplay = (() => {
 
       // Get current restaurant data
       const restaurantData = await apiClient.getRestaurantById(restaurantId);
-
-      console.log('LanchDrap: Restaurant data loaded for edit dialog', {
-        restaurantId,
-        restaurantData,
-        hasAppearances: !!restaurantData?.appearances,
-        hasSoldOutDates: !!restaurantData?.soldOutDates,
-        soldOutDatesLength: restaurantData?.soldOutDates?.length || 0,
-      });
 
       if (restaurantData?.appearances) {
         const appearanceDatesTextarea = document.getElementById('appearance-dates');
@@ -1490,14 +1275,9 @@ window.LanchDrapStatsDisplay = (() => {
           // Handle both cases: soldOutDates exists and is an array, or it's undefined/null
           const soldOutDates = restaurantData.soldOutDates || [];
           soldoutDatesTextarea.value = soldOutDates.join('\n');
-          console.log('LanchDrap: Set sold out dates in textarea', {
-            soldOutDates,
-            textareaValue: soldoutDatesTextarea.value,
-          });
         }
       }
-    } catch (error) {
-      console.error('LanchDrap: Error loading current data', error);
+    } catch (_error) {
     }
   }
 
@@ -1573,8 +1353,7 @@ window.LanchDrapStatsDisplay = (() => {
             }
           }
         }
-      } catch (error) {
-        console.error('LanchDrap: Error saving restaurant data', error);
+      } catch (_error) {
         alert('Error saving changes. Please try again.');
       } finally {
         saveButton.disabled = false;

@@ -64,14 +64,28 @@ async function handlePageChange() {
     if (window.LanchDrapDOMUtils.isRestaurantGridPage()) {
       console.info('LanchDrap: Restaurant grid page detected');
 
-      // Scrape restaurant availability and display stats
-      const availabilityData =
-        await window.LanchDrapRestaurantScraper.scrapeRestaurantAvailability();
-
-      if (availabilityData && availabilityData.length > 0) {
-        // Display stats for selected restaurant
-        await window.LanchDrapStatsDisplay.displaySelectedRestaurantStats(availabilityData);
+      // Show skeleton loading state immediately
+      if (window.LanchDrapStatsDisplay && window.LanchDrapStatsDisplay.showSkeletonLoading) {
+        window.LanchDrapStatsDisplay.showSkeletonLoading();
       }
+
+      // Wait for navigation to settle before scraping and displaying stats
+      setTimeout(async () => {
+        // Double-check we're still on a restaurant grid page
+        if (!window.LanchDrapDOMUtils.isRestaurantGridPage()) {
+          console.log('LanchDrap: No longer on restaurant grid page, skipping stats');
+          return;
+        }
+
+        // Scrape restaurant availability and display stats
+        const availabilityData =
+          await window.LanchDrapRestaurantScraper.scrapeRestaurantAvailability();
+
+        if (availabilityData && availabilityData.length > 0) {
+          // Display stats for selected restaurant
+          await window.LanchDrapStatsDisplay.displaySelectedRestaurantStats(availabilityData);
+        }
+      }, 500); // Wait 500ms for navigation to settle
     }
 
     // Handle restaurant detail pages
@@ -107,6 +121,24 @@ function handleUrlChange() {
     // Clear DOM cache on URL change
     window.LanchDrapDOMUtils.clearDomCache();
 
+    // Clear restaurant availability data on URL change
+    if (
+      window.LanchDrapRestaurantScraper &&
+      window.LanchDrapRestaurantScraper.clearRestaurantAvailabilityData
+    ) {
+      window.LanchDrapRestaurantScraper.clearRestaurantAvailabilityData();
+    }
+
+    // Clear any existing stats display on URL change
+    const existingStats = document.getElementById('lanchdrap-restaurant-stats');
+    const existingSkeleton = document.getElementById('lanchdrap-restaurant-stats-skeleton');
+    if (existingStats) {
+      existingStats.remove();
+    }
+    if (existingSkeleton) {
+      existingSkeleton.remove();
+    }
+
     // Handle the page change
     handlePageChange();
   }
@@ -122,19 +154,19 @@ function setupEventListeners() {
   history.pushState = (...args) => {
     originalPushState.apply(history, args);
     clearTimeout(urlChangeTimeout);
-    urlChangeTimeout = setTimeout(handleUrlChange, 100);
+    urlChangeTimeout = setTimeout(handleUrlChange, 300);
   };
 
   history.replaceState = (...args) => {
     originalReplaceState.apply(history, args);
     clearTimeout(urlChangeTimeout);
-    urlChangeTimeout = setTimeout(handleUrlChange, 100);
+    urlChangeTimeout = setTimeout(handleUrlChange, 300);
   };
 
   // Listen for popstate events (back/forward navigation)
   window.addEventListener('popstate', () => {
     clearTimeout(urlChangeTimeout);
-    urlChangeTimeout = setTimeout(handleUrlChange, 100);
+    urlChangeTimeout = setTimeout(handleUrlChange, 300);
   });
 
   // Listen for DOM changes (for dynamic content)
@@ -165,7 +197,7 @@ function setupEventListeners() {
 
     if (shouldHandleChange) {
       clearTimeout(urlChangeTimeout);
-      urlChangeTimeout = setTimeout(handlePageChange, 500);
+      urlChangeTimeout = setTimeout(handlePageChange, 200);
     }
   });
 
@@ -185,6 +217,48 @@ function setupEventListeners() {
 
 // Initialize when the script loads
 setupEventListeners();
+
+// Listen for messages from popup
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  if (request.action === 'getRestaurantInfo') {
+    try {
+      // Try to get restaurant info from the current page
+      let restaurantInfo = null;
+
+      // Method 1: Look for restaurant name in common selectors
+      const restaurantNameElement = document.querySelector('.text-3xl.font-bold');
+      if (restaurantNameElement) {
+        const restaurantName = restaurantNameElement.textContent?.trim();
+
+        // Try to get restaurant ID from URL
+        const urlParts = window.location.pathname.split('/');
+        let restaurantId = null;
+
+        if (urlParts.length >= 4 && urlParts[1] === 'app') {
+          const potentialId = urlParts[urlParts.length - 1];
+          // Check if it's not a date
+          const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+          if (!dateRegex.test(potentialId)) {
+            restaurantId = potentialId;
+          }
+        }
+
+        if (restaurantName && restaurantId) {
+          restaurantInfo = {
+            restaurantName: restaurantName,
+            restaurantId: restaurantId,
+          };
+        }
+      }
+
+      sendResponse(restaurantInfo);
+    } catch (error) {
+      console.error('Error getting restaurant info:', error);
+      sendResponse(null);
+    }
+    return true; // Keep message channel open for async response
+  }
+});
 
 // Export functions for potential external use
 window.LanchDrapExtension = {

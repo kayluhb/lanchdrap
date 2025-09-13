@@ -291,14 +291,87 @@ window.LanchDrapRatingWidget = (() => {
     }
   }
 
+  // Function to extract restaurant information from the current page
+  function extractRestaurantInfoFromPage() {
+    try {
+      console.log('LanchDrap: Extracting restaurant info from page');
+
+      // Try to get restaurant name from the page title or restaurant name element
+      let restaurantName = null;
+
+      // Method 1: Look for restaurant name in common selectors
+      const restaurantNameElement = document.querySelector('.text-3xl.font-bold');
+      if (restaurantNameElement) {
+        restaurantName = restaurantNameElement.textContent?.trim();
+        console.log('LanchDrap: Found restaurant name from .text-3xl.font-bold:', restaurantName);
+      }
+
+      // Method 2: Look for restaurant name in page title
+      if (!restaurantName) {
+        const pageTitle = document.title;
+        if (pageTitle && !pageTitle.includes('LunchDrop')) {
+          restaurantName = pageTitle;
+          console.log('LanchDrap: Using page title as restaurant name:', restaurantName);
+        }
+      }
+
+      // Method 3: Try to extract from URL if on a restaurant detail page
+      if (!restaurantName) {
+        const urlParts = window.location.pathname.split('/');
+        if (urlParts.length >= 4 && urlParts[1] === 'app') {
+          const restaurantId = urlParts[urlParts.length - 1];
+          // Check if it's not a date
+          const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+          if (!dateRegex.test(restaurantId)) {
+            // Try to get name from localStorage
+            const localKey = `restaurant_name:${restaurantId}`;
+            const storedName = localStorage.getItem(localKey);
+            if (storedName) {
+              restaurantName = storedName;
+              console.log('LanchDrap: Found restaurant name from localStorage:', restaurantName);
+            } else {
+              restaurantName = restaurantId; // Use ID as fallback
+              console.log('LanchDrap: Using restaurant ID as name:', restaurantName);
+            }
+          }
+        }
+      }
+
+      if (restaurantName) {
+        const restaurantInfo = {
+          restaurant: restaurantName,
+          items: ['Manual rating - no order detected'],
+          total: 'Unknown',
+          orderId: window.LanchDrapDOMUtils.generateOrderId(),
+        };
+
+        console.log('LanchDrap: Created restaurant info:', restaurantInfo);
+        return restaurantInfo;
+      }
+
+      console.log('LanchDrap: Could not extract restaurant information');
+      return null;
+    } catch (error) {
+      console.log('LanchDrap: Error extracting restaurant info:', error);
+      return null;
+    }
+  }
+
   // Function to detect LanchDrap's rating prompt
   function detectLunchDropRatingPrompt() {
     try {
       // Look for "How was [Restaurant Name]?" pattern
       const ratingPromptMatch = document.body.textContent.match(/How was (.+?)\?/i);
 
+      console.log('LanchDrap: Checking for rating prompt', {
+        pageText: document.body.textContent.substring(0, 1000),
+        ratingPromptMatch: ratingPromptMatch,
+        url: window.location.href,
+      });
+
       if (ratingPromptMatch) {
         const restaurantName = ratingPromptMatch[1].trim();
+        console.log('LanchDrap: Found rating prompt for restaurant:', restaurantName);
 
         // Create order data from the detected restaurant name
         const detectedOrderData = {
@@ -335,8 +408,10 @@ window.LanchDrapRatingWidget = (() => {
         return true;
       }
 
+      console.log('LanchDrap: No rating prompt found');
       return false;
     } catch (_error) {
+      console.log('LanchDrap: Error in detectLunchDropRatingPrompt:', _error);
       return false;
     }
   }
@@ -373,21 +448,47 @@ window.LanchDrapRatingWidget = (() => {
     });
 
     button.addEventListener('click', async () => {
+      console.log('LanchDrap: Rate button clicked!', {
+        ratingWidget: !!ratingWidget,
+        pageText: document.body.textContent.substring(0, 500),
+        url: window.location.href,
+      });
+
       if (!ratingWidget) {
-        // Only show rating widget if there's a LunchDrop rating prompt on the page
-        if (detectLunchDropRatingPrompt()) {
-          // Don't call extractOrderData() - use the restaurant name from the prompt detection
+        // First try to detect LunchDrop rating prompt
+        const hasPrompt = detectLunchDropRatingPrompt();
+        console.log('LanchDrap: Prompt detection result:', hasPrompt);
+
+        if (hasPrompt) {
+          // Use the restaurant name from the prompt detection
+          console.log('LanchDrap: Injecting rating widget with prompt data');
           await injectRatingWidget();
         } else {
-          // Optionally show a brief message to the user
-          button.style.background = '#ffa500';
-          button.innerHTML = '🍽️ No Prompt';
-          setTimeout(() => {
-            button.style.background = '#ff6b6b';
-            button.innerHTML = '🍽️ Rate';
-          }, 2000);
+          // No prompt found, but still allow manual rating
+          console.log('LanchDrap: No prompt found, attempting manual rating');
+
+          // Try to extract restaurant information from the current page
+          const restaurantInfo = extractRestaurantInfoFromPage();
+          console.log('LanchDrap: Extracted restaurant info:', restaurantInfo);
+
+          if (restaurantInfo) {
+            // Set the order data with extracted information
+            orderData = restaurantInfo;
+            console.log('LanchDrap: Injecting rating widget with extracted data');
+            await injectRatingWidget();
+          } else {
+            // Show message that we can't determine restaurant
+            console.log('LanchDrap: Could not extract restaurant info, showing error message');
+            button.style.background = '#ffa500';
+            button.innerHTML = '🍽️ No Restaurant';
+            setTimeout(() => {
+              button.style.background = '#ff6b6b';
+              button.innerHTML = '🍽️ Rate';
+            }, 2000);
+          }
         }
       } else {
+        console.log('LanchDrap: Hiding rating widget');
         hideRatingWidget();
       }
     });

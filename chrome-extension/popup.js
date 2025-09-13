@@ -1,145 +1,6 @@
 document.addEventListener('DOMContentLoaded', () => {
-  let currentRating = 0;
-  const stars = document.querySelectorAll('.star');
-  const ratingDisplay = document.getElementById('current-rating');
-  const commentInput = document.getElementById('comment');
-  const submitButton = document.getElementById('submit-rating');
   const statusDiv = document.getElementById('status');
   const historyDiv = document.getElementById('rating-history');
-
-  // Star rating functionality
-  stars.forEach((star) => {
-    star.addEventListener('click', function () {
-      const rating = parseInt(this.dataset.rating, 10);
-      currentRating = rating;
-      updateStarDisplay();
-      ratingDisplay.textContent = rating;
-    });
-
-    star.addEventListener('mouseenter', function () {
-      const rating = parseInt(this.dataset.rating, 10);
-      highlightStars(rating);
-    });
-
-    star.addEventListener('mouseleave', () => {
-      updateStarDisplay();
-    });
-  });
-
-  function updateStarDisplay() {
-    stars.forEach((star, index) => {
-      if (index < currentRating) {
-        star.style.color = '#ffd700';
-        star.style.transform = 'scale(1.1)';
-      } else {
-        star.style.color = '#ccc';
-        star.style.transform = 'scale(1)';
-      }
-    });
-  }
-
-  function highlightStars(rating) {
-    stars.forEach((star, index) => {
-      if (index < rating) {
-        star.style.color = '#ffd700';
-        star.style.transform = 'scale(1.1)';
-      }
-    });
-  }
-
-  // Submit rating
-  submitButton.addEventListener('click', async () => {
-    if (currentRating === 0) {
-      showStatus('Please select a rating first!', 'error');
-      return;
-    }
-
-    const comment = commentInput.value.trim();
-    const orderData = await getCurrentOrderData();
-
-    if (!orderData) {
-      showStatus('Could not detect current order. Please refresh the page.', 'error');
-      return;
-    }
-
-    try {
-      const ratingData = {
-        orderId: orderData.orderId,
-        restaurant: orderData.restaurant,
-        items: orderData.items,
-        rating: currentRating,
-        comment: comment,
-        timestamp: new Date().toISOString(),
-        orderTotal: orderData.total,
-      };
-
-      // Save to local storage
-      saveRatingToHistory(ratingData);
-
-      // Send to Cloudflare Worker
-      await sendRatingToServer(ratingData);
-
-      showStatus('Rating submitted successfully!', 'success');
-      resetForm();
-      loadRatingHistory();
-    } catch (_error) {
-      showStatus('Error submitting rating. Please try again.', 'error');
-    }
-  });
-
-  async function getCurrentOrderData() {
-    try {
-      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-      const response = await chrome.tabs.sendMessage(tab.id, { action: 'getOrderData' });
-      return response;
-    } catch (_error) {
-      return null;
-    }
-  }
-
-  async function sendRatingToServer(ratingData) {
-    try {
-      // Get user identification
-      const userIdentification = await userIdManager.getUserIdentification();
-
-      // Add user ID to rating data
-      const ratingDataWithUser = {
-        ...ratingData,
-        userId: userIdentification.userId,
-        userFingerprint: userIdentification.fingerprint,
-      };
-
-      // Use API client to submit rating
-      const apiClient = new LunchDropApiClient.ApiClient(
-        LunchDropConfig.CONFIG.API_BASE_URL,
-        LunchDropConfig.CONFIG.ENDPOINTS
-      );
-      return await apiClient.submitRating(ratingDataWithUser);
-    } catch (_error) {
-      throw new Error('Failed to send rating to server');
-    }
-  }
-
-  function saveRatingToHistory(ratingData) {
-    chrome.storage.local.get(['ratingHistory'], (result) => {
-      const history = result.ratingHistory || [];
-      history.unshift(ratingData);
-
-      // Keep only last 50 ratings
-      if (history.length > 50) {
-        history.splice(50);
-      }
-
-      chrome.storage.local.set({ ratingHistory: history });
-    });
-  }
-
-  function resetForm() {
-    currentRating = 0;
-    commentInput.value = '';
-    updateStarDisplay();
-    ratingDisplay.textContent = '0';
-  }
 
   function showStatus(message, type) {
     statusDiv.textContent = message;
@@ -375,8 +236,126 @@ document.addEventListener('DOMContentLoaded', () => {
     availabilityDiv.innerHTML = availabilityHTML;
   }
 
+  // Load order history for current restaurant
+  async function loadOrderHistory() {
+    try {
+      // Get current restaurant info from the active tab
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+
+      // Check if we're on a LunchDrop page
+      if (!tab.url.includes('lunchdrop.com')) {
+        document.getElementById('order-history').innerHTML =
+          '<p class="no-orders">Not on a LunchDrop page</p>';
+        return;
+      }
+
+      // Get restaurant information from the page
+      const restaurantInfo = await getCurrentRestaurantInfo(tab.id);
+
+      if (!restaurantInfo) {
+        document.getElementById('order-history').innerHTML =
+          '<p class="no-orders">Could not detect current restaurant</p>';
+        return;
+      }
+
+      // Get user ID
+      const userIdentification = await userIdManager.getUserIdentification();
+
+      // Get order history from API
+      const apiClient = new LunchDropApiClient.ApiClient(
+        LunchDropConfig.CONFIG.API_BASE_URL,
+        LunchDropConfig.CONFIG.ENDPOINTS
+      );
+
+      const orderHistory = await apiClient.getUserOrderHistory(
+        userIdentification.userId,
+        restaurantInfo.restaurantId
+      );
+
+      displayOrderHistory(orderHistory, restaurantInfo.restaurantName);
+    } catch (error) {
+      console.error('Error loading order history:', error);
+      document.getElementById('order-history').innerHTML =
+        '<p class="no-orders">Error loading order history</p>';
+    }
+  }
+
+  async function getCurrentRestaurantInfo(tabId) {
+    try {
+      // Send message to content script to get restaurant info
+      const response = await chrome.tabs.sendMessage(tabId, {
+        action: 'getRestaurantInfo',
+      });
+      return response;
+    } catch (error) {
+      console.error('Error getting restaurant info:', error);
+      return null;
+    }
+  }
+
+  function displayOrderHistory(orderHistory, restaurantName) {
+    const orderHistoryDiv = document.getElementById('order-history');
+
+    if (!orderHistory || orderHistory.length === 0) {
+      orderHistoryDiv.innerHTML = `<p class="no-orders">No order history found for ${restaurantName}</p>`;
+      return;
+    }
+
+    const orderHistoryHTML = orderHistory
+      .map((order) => {
+        const orderDate = new Date(order.orderDate).toLocaleDateString();
+        const orderTime = new Date(order.orderDate).toLocaleTimeString();
+        const total = order.total || 'Unknown';
+        const items = order.items || [];
+
+        // Format items list
+        const itemsList =
+          items.length > 0
+            ? items.map((item) => item.name || item.fullDescription || 'Unknown Item').join(', ')
+            : 'No items recorded';
+
+        return `
+          <div class="order-history-item">
+            <div class="order-header">
+              <span class="order-date">${orderDate}</span>
+              <span class="order-time">${orderTime}</span>
+              <span class="order-total">$${total}</span>
+            </div>
+            <div class="order-items">
+              <span class="items-label">Items:</span>
+              <span class="items-list">${itemsList}</span>
+            </div>
+            ${
+              order.rating
+                ? `
+              <div class="order-rating">
+                <span class="rating-label">Your Rating:</span>
+                <span class="rating-stars">${'⭐'.repeat(order.rating)}</span>
+              </div>
+            `
+                : ''
+            }
+            ${
+              order.comment
+                ? `
+              <div class="order-comment">
+                <span class="comment-label">Comment:</span>
+                <span class="comment-text">"${order.comment}"</span>
+              </div>
+            `
+                : ''
+            }
+          </div>
+        `;
+      })
+      .join('');
+
+    orderHistoryDiv.innerHTML = orderHistoryHTML;
+  }
+
   // Load data when popup opens
   loadRatingHistory();
   loadRestaurantStats();
   loadAvailabilityStats();
+  loadOrderHistory();
 });

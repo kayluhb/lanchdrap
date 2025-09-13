@@ -27,6 +27,23 @@ window.LanchDrapRestaurantScraper = (() => {
   // Function to process restaurant cards and extract data
   async function processRestaurantCards(restaurantCards, urlDate) {
     try {
+      // CRITICAL: Validate that we're processing cards for the correct date
+      const currentUrlDate = window.LanchDrapDOMUtils.extractDateFromUrl();
+      if (currentUrlDate !== urlDate) {
+        console.error('LanchDrap: Date mismatch in processRestaurantCards', {
+          expectedDate: urlDate,
+          currentUrlDate,
+          currentUrl: window.location.href,
+        });
+        return null;
+      }
+
+      console.log('LanchDrap: Processing restaurant cards', {
+        cardCount: restaurantCards.length,
+        urlDate,
+        currentUrl: window.location.href,
+      });
+
       const availabilityData = [];
       const now = new Date();
 
@@ -188,23 +205,26 @@ window.LanchDrapRestaurantScraper = (() => {
       reportAvailabilitySummary(availabilityData);
 
       // Track restaurant appearances in background (don't block UI)
-      console.info('LanchDrap: Starting background restaurant tracking');
-      trackRestaurantAppearances(availabilityData)
-        .then((result) => {
-          // Add sellout indicators when tracking completes
-          if (result?.data?.data?.restaurants || result?.data?.restaurants) {
-            const restaurants = result.data.data?.restaurants || result.data.restaurants;
-            if (restaurants && Array.isArray(restaurants)) {
-              console.info('LanchDrap: Adding sellout indicators to restaurant cards');
+      // Add a small delay to ensure navigation has settled
+      setTimeout(() => {
+        console.info('LanchDrap: Starting background restaurant tracking');
+        trackRestaurantAppearances(availabilityData)
+          .then((result) => {
+            // Add sellout indicators when tracking completes
+            if (result?.data?.data?.restaurants || result?.data?.restaurants) {
+              const restaurants = result.data.data?.restaurants || result.data.restaurants;
+              if (restaurants && Array.isArray(restaurants)) {
+                console.info('LanchDrap: Adding sellout indicators to restaurant cards');
 
-              // Add indicators
-              addSellOutIndicators(restaurants);
+                // Add indicators
+                addSellOutIndicators(restaurants);
+              }
             }
-          }
-        })
-        .catch((error) => {
-          console.info('LanchDrap: Background tracking failed', error.message);
-        });
+          })
+          .catch((error) => {
+            console.info('LanchDrap: Background tracking failed', error.message);
+          });
+      }, 200); // Small delay to ensure navigation has settled
 
       // Display stats for selected restaurant on daily pages
       if (
@@ -262,7 +282,23 @@ window.LanchDrapRestaurantScraper = (() => {
       const restaurantCards = Array.from(allAppLinks).filter((link) => {
         const href = link.getAttribute('href');
         // More flexible pattern - just check if it contains /app/ and has some identifier
-        return href && /\/app\/.*\/[a-zA-Z0-9]+/.test(href);
+        if (!href || !/\/app\/.*\/[a-zA-Z0-9]+/.test(href)) {
+          return false;
+        }
+
+        // CRITICAL: Only include cards that match the current URL date
+        const hrefDateMatch = href.match(/\/app\/(\d{4}-\d{2}-\d{2})/);
+        if (!hrefDateMatch || hrefDateMatch[1] !== urlDate) {
+          console.log('LanchDrap: Filtering out card with wrong date', {
+            href,
+            hrefDate: hrefDateMatch?.[1],
+            currentUrlDate: urlDate,
+            currentUrl: window.location.href,
+          });
+          return false;
+        }
+
+        return true;
       });
 
       if (restaurantCards.length === 0) {
@@ -271,7 +307,23 @@ window.LanchDrapRestaurantScraper = (() => {
 
         const validPageLinks = Array.from(allPageAppLinks).filter((link) => {
           const href = link.getAttribute('href');
-          return href && /\/app\/.*\/[a-zA-Z0-9]+/.test(href);
+          if (!href || !/\/app\/.*\/[a-zA-Z0-9]+/.test(href)) {
+            return false;
+          }
+
+          // CRITICAL: Only include cards that match the current URL date
+          const hrefDateMatch = href.match(/\/app\/(\d{4}-\d{2}-\d{2})/);
+          if (!hrefDateMatch || hrefDateMatch[1] !== urlDate) {
+            console.log('LanchDrap: Filtering out fallback card with wrong date', {
+              href,
+              hrefDate: hrefDateMatch?.[1],
+              currentUrlDate: urlDate,
+              currentUrl: window.location.href,
+            });
+            return false;
+          }
+
+          return true;
         });
 
         if (validPageLinks.length > 0) {
@@ -289,7 +341,18 @@ window.LanchDrapRestaurantScraper = (() => {
   // Function to store availability data locally
   function storeAvailabilityData(availabilityData) {
     try {
-      const storageKey = `availability:${new Date().toISOString().split('T')[0]}`;
+      if (!availabilityData || availabilityData.length === 0) {
+        return;
+      }
+
+      // Use the date from the first restaurant's URL date (they should all be the same)
+      const urlDate = availabilityData[0]?.urlDate;
+      if (!urlDate) {
+        console.warn('LanchDrap: No URL date found in availability data, skipping storage');
+        return;
+      }
+
+      const storageKey = `availability:${urlDate}`;
       const existingData = localStorage.getItem(storageKey);
       let dailyData = existingData ? JSON.parse(existingData) : [];
 
@@ -307,7 +370,14 @@ window.LanchDrapRestaurantScraper = (() => {
       }
 
       localStorage.setItem(storageKey, JSON.stringify(dailyData));
-    } catch (_error) {}
+      console.log('LanchDrap: Stored availability data', {
+        date: urlDate,
+        recordCount: timestampedData.length,
+        totalRecords: dailyData.length,
+      });
+    } catch (_error) {
+      console.error('LanchDrap: Error storing availability data', _error);
+    }
   }
 
   // Cleanup function to cancel all tracking when page unloads
@@ -398,7 +468,7 @@ window.LanchDrapRestaurantScraper = (() => {
         return null;
       }
 
-      // Validate that we're still on the same page
+      // Validate that we're still on the same page and date
       if (window.location.href !== currentUrl) {
         console.log(
           'LanchDrap: URL changed during tracking request, ignoring response',
@@ -406,6 +476,21 @@ window.LanchDrapRestaurantScraper = (() => {
           window.location.href,
           'Original URL:',
           currentUrl
+        );
+        return null;
+      }
+
+      // Double-check that the date in the current URL still matches what we're tracking
+      const currentUrlDate = window.LanchDrapDOMUtils.extractDateFromUrl();
+      if (currentUrlDate !== urlDate) {
+        console.log(
+          'LanchDrap: Date in URL changed during tracking request, ignoring response',
+          'Current URL date:',
+          currentUrlDate,
+          'Original tracking date:',
+          urlDate,
+          'Current URL:',
+          window.location.href
         );
         return null;
       }
@@ -434,6 +519,21 @@ window.LanchDrapRestaurantScraper = (() => {
           window.location.href,
           'Original URL:',
           currentUrl
+        );
+        return null;
+      }
+
+      // Also check if the date in the URL changed during the request
+      const currentUrlDate = window.LanchDrapDOMUtils.extractDateFromUrl();
+      if (currentUrlDate !== urlDate) {
+        console.log(
+          'LanchDrap: Date in URL changed during tracking request error, ignoring',
+          'Current URL date:',
+          currentUrlDate,
+          'Original tracking date:',
+          urlDate,
+          'Current URL:',
+          window.location.href
         );
         return null;
       }
@@ -659,9 +759,16 @@ window.LanchDrapRestaurantScraper = (() => {
     return restaurantAvailabilityData;
   }
 
+  // Function to clear restaurant availability data (for navigation cleanup)
+  function clearRestaurantAvailabilityData() {
+    restaurantAvailabilityData = null;
+    console.log('LanchDrap: Cleared restaurant availability data');
+  }
+
   // Return public API
   return {
     scrapeRestaurantAvailability,
     getRestaurantAvailabilityData,
+    clearRestaurantAvailabilityData,
   };
 })();

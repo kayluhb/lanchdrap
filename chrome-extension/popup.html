@@ -12,25 +12,6 @@
         <h1>🍽️ LunchDrop Ratings</h1>
       </header>
 
-      <div class="rating-section">
-        <h3>Rate Current Order</h3>
-        <div class="stars">
-          <span class="star" data-rating="1">⭐</span>
-          <span class="star" data-rating="2">⭐</span>
-          <span class="star" data-rating="3">⭐</span>
-          <span class="star" data-rating="4">⭐</span>
-          <span class="star" data-rating="5">⭐</span>
-        </div>
-        <div class="rating-display">
-          <span id="current-rating">0</span>/5
-        </div>
-
-        <div class="comment-section">
-          <textarea id="comment" placeholder="Add a comment about your order..."></textarea>
-          <button id="submit-rating" class="btn-primary">Submit Rating</button>
-        </div>
-      </div>
-
       <div class="stats-section">
         <h3>Restaurant Statistics</h3>
         <div id="restaurant-stats" class="stats-list">
@@ -49,6 +30,13 @@
         <h3>Rating History</h3>
         <div id="rating-history" class="history-list">
           <!-- Rating history will be populated here -->
+        </div>
+      </div>
+
+      <div class="order-history-section">
+        <h3>Order History - Current Restaurant</h3>
+        <div id="order-history" class="order-history-list">
+          <!-- Order history for current restaurant will be populated here -->
         </div>
       </div>
 

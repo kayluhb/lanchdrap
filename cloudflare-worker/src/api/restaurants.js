@@ -739,6 +739,7 @@ export async function getRestaurantById(request, env) {
         firstSeen,
         lastUpdated: data.updatedAt || data.createdAt || new Date().toISOString(),
         appearances: appearances, // Include the actual appearance dates
+        soldOutDates: soldOutDates, // Include the sold out dates for editing
         // Add timezone info to help with date display
         timezone: 'America/Chicago', // LunchDrop appears to be in Central Time
         nameUpdated: nameUpdated, // Indicate if name was updated during this request
@@ -811,6 +812,7 @@ export async function searchRestaurantByName(request, env) {
         firstSeen,
         lastUpdated: data.updatedAt || data.createdAt || new Date().toISOString(),
         appearances: appearances,
+        soldOutDates: soldOutDates, // Include the sold out dates for editing
         timezone: 'America/Chicago',
         foundByName: true, // Indicate this was found by name lookup
       }),

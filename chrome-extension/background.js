@@ -5,7 +5,7 @@ chrome.runtime.onInstalled.addListener((details) => {
   if (details.reason === 'install') {
     // Open welcome page
     chrome.tabs.create({
-      url: 'https://github.com/yourusername/lanchdrap#readme',
+      url: 'https://github.com/kayluhb/lanchdrap#readme',
     });
   }
 });

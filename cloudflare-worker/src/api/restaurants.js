@@ -1217,66 +1217,107 @@ export async function getUserRestaurantSummary(request, env) {
     const list = await env.LANCHDRAP_RATINGS.list({ prefix });
 
     if (list.keys.length === 0) {
+      console.log('getUserRestaurantSummary: No keys found, returning empty result');
       return createApiResponse({
-        success: true,
-        message: 'No order history found',
-        data: {
-          userId,
-          restaurants: [],
-        },
+        userId,
+        totalRestaurants: 0,
+        restaurants: [],
       });
     }
 
     const restaurants = [];
+    console.log('getUserRestaurantSummary: Processing', list.keys.length, 'keys');
 
     for (const key of list.keys) {
+      console.log('getUserRestaurantSummary: Processing key:', key.name);
       // Extract restaurant ID from key: user_restaurant_history:userId:restaurantId
       const keyParts = key.name.split(':');
+      console.log('getUserRestaurantSummary: Key parts:', keyParts);
+
       if (keyParts.length >= 3) {
         const restaurantId = keyParts.slice(2).join(':'); // Handle restaurant IDs with colons
+        console.log('getUserRestaurantSummary: Extracted restaurantId:', restaurantId);
+
         const historyDataRaw = await env.LANCHDRAP_RATINGS.get(key.name);
+        console.log(
+          'getUserRestaurantSummary: Raw history data length:',
+          historyDataRaw ? historyDataRaw.length : 'null'
+        );
 
         if (historyDataRaw) {
-          const historyData = JSON.parse(historyDataRaw);
+          try {
+            console.log('getUserRestaurantSummary: Attempting to parse JSON for key:', key.name);
+            const historyData = JSON.parse(historyDataRaw);
+            console.log(
+              'getUserRestaurantSummary: Successfully parsed JSON, structure:',
+              Object.keys(historyData)
+            );
 
-          // Handle both old and new data structures
-          let orders = [];
-          if (historyData.orders && Array.isArray(historyData.orders)) {
-            // Old structure - already in array format
-            orders = historyData.orders.sort((a, b) => new Date(b.date) - new Date(a.date));
-          } else if (
-            historyData.orders &&
-            typeof historyData.orders === 'object' &&
-            !Array.isArray(historyData.orders)
-          ) {
-            // Handle malformed data where orders is an object but should be the root structure
-            orders = Object.keys(historyData.orders)
-              .map((date) => ({
-                date,
-                items: historyData.orders[date].items || [],
-              }))
-              .sort((a, b) => new Date(b.date) - new Date(a.date)); // Sort by date, newest first
-          } else {
-            // New structure - convert date-keyed structure to array format
-            orders = Object.keys(historyData)
-              .map((date) => ({
-                date,
-                items: historyData[date].items || [],
-              }))
-              .sort((a, b) => new Date(b.date) - new Date(a.date)); // Sort by date, newest first
+            // Handle both old and new data structures
+            let orders = [];
+            if (historyData.orders && Array.isArray(historyData.orders)) {
+              console.log('getUserRestaurantSummary: Using old structure (array format)');
+              // Old structure - already in array format
+              orders = historyData.orders.sort((a, b) => new Date(b.date) - new Date(a.date));
+            } else if (
+              historyData.orders &&
+              typeof historyData.orders === 'object' &&
+              !Array.isArray(historyData.orders)
+            ) {
+              console.log('getUserRestaurantSummary: Using malformed structure (orders object)');
+              // Handle malformed data where orders is an object but should be the root structure
+              orders = Object.keys(historyData.orders)
+                .map((date) => ({
+                  date,
+                  items: historyData.orders[date].items || [],
+                }))
+                .sort((a, b) => new Date(b.date) - new Date(a.date)); // Sort by date, newest first
+            } else {
+              console.log('getUserRestaurantSummary: Using new structure (date-keyed)');
+              // New structure - convert date-keyed structure to array format
+              orders = Object.keys(historyData)
+                .map((date) => ({
+                  date,
+                  items: historyData[date].items || [],
+                }))
+                .sort((a, b) => new Date(b.date) - new Date(a.date)); // Sort by date, newest first
+            }
+
+            console.log(
+              'getUserRestaurantSummary: Processed',
+              orders.length,
+              'orders for restaurant:',
+              restaurantId
+            );
+            const lastOrderDate = orders.length > 0 ? orders[0].date : null; // First item is newest
+
+            restaurants.push({
+              restaurantId,
+              totalOrders: orders.length,
+              lastOrderDate,
+              recentOrders: orders.slice(0, 5), // First 5 orders (newest)
+            });
+          } catch (parseError) {
+            console.error(
+              'getUserRestaurantSummary: JSON parse error for key:',
+              key.name,
+              'Error:',
+              parseError.message
+            );
+            console.error(
+              'getUserRestaurantSummary: Raw data that failed to parse:',
+              historyDataRaw
+            );
           }
-
-          const lastOrderDate = orders.length > 0 ? orders[0].date : null; // First item is newest
-
-          restaurants.push({
-            restaurantId,
-            totalOrders: orders.length,
-            lastOrderDate,
-            recentOrders: orders.slice(0, 5), // First 5 orders (newest)
-          });
+        } else {
+          console.log('getUserRestaurantSummary: No raw data for key:', key.name);
         }
+      } else {
+        console.log('getUserRestaurantSummary: Key parts insufficient for key:', key.name);
       }
     }
+
+    console.log('getUserRestaurantSummary: Processed', restaurants.length, 'restaurants');
 
     // Sort by last order date (most recent first)
     restaurants.sort((a, b) => {
@@ -1286,17 +1327,22 @@ export async function getUserRestaurantSummary(request, env) {
       return new Date(b.lastOrderDate) - new Date(a.lastOrderDate);
     });
 
+    console.log(
+      'getUserRestaurantSummary: Returning success with',
+      restaurants.length,
+      'restaurants'
+    );
     return createApiResponse({
-      success: true,
-      message: 'Restaurant summary retrieved successfully',
-      data: {
-        userId,
-        totalRestaurants: restaurants.length,
-        restaurants,
-      },
+      userId,
+      totalRestaurants: restaurants.length,
+      restaurants,
     });
-  } catch (_error) {
-    return createErrorResponse('Failed to retrieve restaurant summary', 500);
+  } catch (error) {
+    console.error('getUserRestaurantSummary: Unexpected error:', error.message);
+    console.error('getUserRestaurantSummary: Error stack:', error.stack);
+    return createErrorResponse('Failed to retrieve restaurant summary', 500, null, {
+      error: error.message,
+    });
   }
 }
 

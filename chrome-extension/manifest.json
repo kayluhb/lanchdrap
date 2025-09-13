@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "LanchDrap Rating System",
+  "name": "LanchDrap",
   "version": "1.0.0",
   "description": "Rate your lunch drop orders and view rating history",
   "permissions": ["storage", "activeTab", "scripting", "contextMenus"],
@@ -18,6 +18,7 @@
         "config.js",
         "utils/key-manager.js",
         "utils/dom-utils.js",
+        "utils/restaurant-context.js",
         "utils/order-parser.js",
         "utils/restaurant-scraper.js",
         "utils/stats-display.js",

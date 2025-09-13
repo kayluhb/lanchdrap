@@ -10,11 +10,11 @@ window.LanchDrapOrderParser = (() => {
       const menuSections = document.querySelectorAll('.my-16');
       const allMenuItems = [];
 
-      menuSections.forEach((section) => {
+      for (const section of menuSections) {
         // Find all menu item containers within this section
         const menuItems = section.querySelectorAll('.my-4.text-lg.cursor-pointer');
 
-        menuItems.forEach((item) => {
+        for (const item of menuItems) {
           // Extract the menu item name from the span with font-bold class
           const nameElement = item.querySelector('.flex.items-center.font-bold span');
           if (nameElement) {
@@ -23,8 +23,8 @@ window.LanchDrapOrderParser = (() => {
               allMenuItems.push(menuItemName);
             }
           }
-        });
-      });
+        }
+      }
 
       return allMenuItems;
     } catch (_error) {
@@ -110,13 +110,11 @@ window.LanchDrapOrderParser = (() => {
               itemName.toLowerCase().includes('charge to') ||
               itemName.toLowerCase().includes('payment') ||
               itemName.toLowerCase().includes('organizer') ||
-              itemName.toLowerCase().includes('visa') ||
               itemName.toLowerCase().includes('card') ||
               itemName.toLowerCase().includes('meal organizer') ||
               itemName.toLowerCase().includes('paying for') ||
               itemName.toLowerCase().includes('up to $') ||
-              itemName.toLowerCase().includes('-$') ||
-              itemName.toLowerCase().includes('$15.00')
+              itemName.toLowerCase().includes('-$')
             ) {
               continue;
             }
@@ -142,14 +140,123 @@ window.LanchDrapOrderParser = (() => {
     }
   }
 
+  // Function to create a fingerprint of the current order
+  function createOrderFingerprint(orderItems, restaurantId, restaurantName) {
+    if (!orderItems || orderItems.length === 0) {
+      return null;
+    }
+
+    // Create a hash of the order content
+    const orderContent = {
+      restaurantId,
+      restaurantName,
+      items: orderItems.map((item) => ({
+        name: item.name,
+        quantity: item.quantity,
+        options: item.options,
+      })),
+    };
+
+    // Simple hash function for the order content
+    const contentString = JSON.stringify(orderContent);
+    let hash = 0;
+    for (let i = 0; i < contentString.length; i++) {
+      const char = contentString.charCodeAt(i);
+      hash = (hash << 5) - hash + char;
+      hash = hash & hash; // Convert to 32-bit integer
+    }
+
+    return `order_${Math.abs(hash)}`;
+  }
+
   // Function to detect and store order when placed
   async function detectAndStoreOrder() {
     try {
-      // Check if we've already processed an order on this page to prevent duplicates
-      const orderProcessedKey = `order_processed_${window.location.href}`;
-      if (sessionStorage.getItem(orderProcessedKey)) {
+      // Parse order items first to create fingerprint
+      const orderItems = parseOrderItemsFromPage();
+
+      // Debug: Log order items detection
+      // eslint-disable-next-line no-console
+      console.log('=== ORDER ITEMS DETECTION ===');
+      // eslint-disable-next-line no-console
+      console.log('Order items found:', orderItems?.length || 0);
+      if (orderItems && orderItems.length > 0) {
+        // eslint-disable-next-line no-console
+        console.log(
+          'Order items:',
+          orderItems.map((item) => item.name)
+        );
+      }
+      // eslint-disable-next-line no-console
+      console.log('============================');
+
+      if (!orderItems || orderItems.length === 0) {
         return;
       }
+
+      // Get restaurant information using centralized context utility
+      const restaurantContext = window.LanchDrapRestaurantContext.getCurrentRestaurantContext();
+      const restaurantId = restaurantContext.id;
+      const restaurantName = restaurantContext.name;
+
+      // Debug: Log restaurant context information
+      // eslint-disable-next-line no-console
+      console.log('=== RESTAURANT CONTEXT DEBUG ===');
+      // eslint-disable-next-line no-console
+      console.log('Restaurant ID:', restaurantId);
+      // eslint-disable-next-line no-console
+      console.log('Restaurant Name:', restaurantName);
+      // eslint-disable-next-line no-console
+      console.log('Has Valid ID:', restaurantContext.hasValidId);
+      // eslint-disable-next-line no-console
+      console.log('Has Valid Name:', restaurantContext.hasValidName);
+      // eslint-disable-next-line no-console
+      console.log('===============================');
+
+      if (!restaurantId) {
+        return;
+      }
+
+      // Debug: Log restaurant information
+      const urlParts = window.location.pathname.split('/');
+      // eslint-disable-next-line no-console
+      console.log('=== ORDER DETECTION DEBUG ===');
+      // eslint-disable-next-line no-console
+      console.log('Current URL:', window.location.href);
+      // eslint-disable-next-line no-console
+      console.log('URL Path Parts:', urlParts);
+      // eslint-disable-next-line no-console
+      console.log('Restaurant ID:', restaurantId);
+      // eslint-disable-next-line no-console
+      console.log('Restaurant Name:', restaurantName);
+      // eslint-disable-next-line no-console
+      console.log(
+        'Order Items:',
+        orderItems.map((item) => item.name)
+      );
+      // eslint-disable-next-line no-console
+      console.log('=============================');
+
+      // Create order fingerprint based on actual content
+      const orderFingerprint = createOrderFingerprint(orderItems, restaurantId, restaurantName);
+      if (!orderFingerprint) {
+        return;
+      }
+
+      // Check if we've already processed this specific order content
+      const orderProcessedKey = `order_processed_${orderFingerprint}`;
+      if (sessionStorage.getItem(orderProcessedKey)) {
+        // eslint-disable-next-line no-console
+        console.log('Order with this content already processed:', orderFingerprint);
+        return;
+      }
+
+      // Debug: Log current URL and extracted date
+      const extractedDate = window.LanchDrapDOMUtils.extractDateFromUrl();
+      // eslint-disable-next-line no-console
+      console.log('Order detection - Current URL:', window.location.href);
+      // eslint-disable-next-line no-console
+      console.log('Order detection - Extracted date:', extractedDate);
 
       // Try multiple confirmation text patterns
       const confirmationPatterns = [
@@ -162,6 +269,16 @@ window.LanchDrapOrderParser = (() => {
         'Order complete',
       ];
 
+      // Debug: Log confirmation text search
+      // eslint-disable-next-line no-console
+      console.log('=== CONFIRMATION TEXT SEARCH ===');
+      // eslint-disable-next-line no-console
+      console.log('Searching for confirmation patterns:', confirmationPatterns);
+      // eslint-disable-next-line no-console
+      console.log('Page text content preview:', document.body.textContent.substring(0, 500));
+      // eslint-disable-next-line no-console
+      console.log('================================');
+
       let orderConfirmationText = null;
 
       for (const pattern of confirmationPatterns) {
@@ -169,11 +286,15 @@ window.LanchDrapOrderParser = (() => {
           div.textContent.toLowerCase().includes(pattern.toLowerCase())
         );
         if (orderConfirmationText) {
+          // eslint-disable-next-line no-console
+          console.log('Found confirmation text with pattern:', pattern);
           break;
         }
       }
 
       if (!orderConfirmationText) {
+        // eslint-disable-next-line no-console
+        console.log('No order confirmation text found on page');
         return;
       }
 
@@ -193,63 +314,9 @@ window.LanchDrapOrderParser = (() => {
         return;
       }
 
-      // Get restaurant information from existing context (use the same logic as displaySelectedRestaurantStats)
-      let restaurantId = null;
-      let restaurantName = null;
-
-      // First, try to get restaurant info from the availability data (same as stats display)
-      try {
-        if (
-          window.LanchDrapRestaurantScraper?.getRestaurantAvailabilityData
-        ) {
-          const availabilityData =
-            await window.LanchDrapRestaurantScraper.getRestaurantAvailabilityData();
-          if (availabilityData && availabilityData.length > 0) {
-            const selectedRestaurant = availabilityData.find((restaurant) => restaurant.isSelected);
-            if (selectedRestaurant) {
-              restaurantId = selectedRestaurant.id;
-              restaurantName = selectedRestaurant.name;
-            }
-          }
-        }
-      } catch (_error) {
-      }
-
-      // Fallback: if not found in availability data, try URL extraction
-      if (!restaurantId) {
-        const urlParts = window.location.pathname.split('/');
-        if (urlParts.length >= 4 && urlParts[1] === 'app') {
-          restaurantId = urlParts[urlParts.length - 1];
-          const localKey = `restaurant_name:${restaurantId}`;
-          restaurantName = localStorage.getItem(localKey);
-        }
-      }
-
-      // Final fallback: extract restaurant name from page
-      if (!restaurantName) {
-        const titleElement = document.querySelector('h1, .text-3xl, .text-2xl');
-        if (titleElement && !titleElement.textContent.includes('Your order has been placed')) {
-          restaurantName = titleElement.textContent.trim();
-          if (restaurantId) {
-            localStorage.setItem(`restaurant_name:${restaurantId}`, restaurantName);
-          }
-        }
-      }
-
-      if (!restaurantId) {
-        return;
-      }
-
       // Get user ID
       const userId = await lanchDrapUserIdManager.getUserId();
       if (!userId) {
-        return;
-      }
-
-      // Parse order items from the page
-      const orderItems = parseOrderItemsFromPage();
-
-      if (!orderItems || orderItems.length === 0) {
         return;
       }
 
@@ -263,6 +330,19 @@ window.LanchDrapOrderParser = (() => {
       };
 
       // Store the order
+      // eslint-disable-next-line no-console
+      console.log('Attempting to store order:', { userId, restaurantId, orderData });
+
+      // Debug: Check API client availability
+      // eslint-disable-next-line no-console
+      console.log('=== API CLIENT CHECK ===');
+      // eslint-disable-next-line no-console
+      console.log('LanchDrapApiClient available:', typeof LanchDrapApiClient !== 'undefined');
+      // eslint-disable-next-line no-console
+      console.log('LanchDrapConfig available:', typeof LanchDrapConfig !== 'undefined');
+      // eslint-disable-next-line no-console
+      console.log('========================');
+
       if (typeof LanchDrapApiClient !== 'undefined' && typeof LanchDrapConfig !== 'undefined') {
         try {
           const apiClient = new LanchDrapApiClient.ApiClient(
@@ -271,13 +351,28 @@ window.LanchDrapOrderParser = (() => {
           );
           const result = await apiClient.storeUserOrder(userId, restaurantId, orderData);
 
-          // Mark this page as processed to prevent duplicate processing
+          // eslint-disable-next-line no-console
+          console.log('Order storage result:', result);
+
+          // Mark this specific order content as processed to prevent duplicate processing
           if (result?.success) {
             sessionStorage.setItem(orderProcessedKey, 'true');
+            // eslint-disable-next-line no-console
+            console.log(
+              'Order stored successfully and content marked as processed:',
+              orderFingerprint
+            );
+          } else {
+            // eslint-disable-next-line no-console
+            console.log('Order storage failed:', result);
           }
-        } catch (_error) {
+        } catch (error) {
+          // eslint-disable-next-line no-console
+          console.error('Error storing order:', error);
         }
       } else {
+        // eslint-disable-next-line no-console
+        console.log('API client or config not available');
       }
     } catch (_error) {}
   }
@@ -287,5 +382,6 @@ window.LanchDrapOrderParser = (() => {
     parseMenuFromPage,
     parseOrderItemsFromPage,
     detectAndStoreOrder,
+    createOrderFingerprint,
   };
 })();

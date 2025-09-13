@@ -1,6 +1,9 @@
 document.addEventListener('DOMContentLoaded', () => {
   const statusDiv = document.getElementById('status');
-  const historyDiv = document.getElementById('rating-history');
+  const orderHistoryDiv = document.getElementById('order-history');
+
+  // Show loading message
+  orderHistoryDiv.innerHTML = '<p class="no-orders">Loading your restaurant history...</p>';
 
   function _showStatus(message, type) {
     statusDiv.textContent = message;
@@ -11,349 +14,177 @@ document.addEventListener('DOMContentLoaded', () => {
     }, 3000);
   }
 
-  async function loadRatingHistory() {
+  // Silent version of copy function (no popup messages)
+  async function copyLocalStorageToChromeStorageSilent() {
     try {
-      // Try to load from server first
-      // Ratings endpoint removed - can't fetch ratings from server anymore
-      const serverHistory = null;
+      // Get all localStorage keys that start with 'restaurant_name:'
+      const allKeys = Object.keys(localStorage);
+      const restaurantNameKeys = allKeys.filter((key) => key.startsWith('restaurant_name:'));
 
-      if (serverHistory?.ratings) {
-        displayRatingHistory(serverHistory.ratings);
-
-        // Also update local storage
-        chrome.storage.local.set({ ratingHistory: serverHistory.ratings });
-        return;
+      if (restaurantNameKeys.length === 0) {
+        return { copied: 0, message: 'No restaurant names found in localStorage' };
       }
-    } catch (_error) {}
 
-    // Fallback to local storage
-    chrome.storage.local.get(['ratingHistory'], (result) => {
-      const history = result.ratingHistory || [];
-      displayRatingHistory(history);
-    });
-  }
+      // Get all restaurant names from localStorage
+      const restaurantNames = {};
+      for (const key of restaurantNameKeys) {
+        const value = localStorage.getItem(key);
+        if (value) {
+          restaurantNames[key] = value;
+        }
+      }
 
-  function displayRatingHistory(history) {
-    if (history.length === 0) {
-      historyDiv.innerHTML = '<p class="no-ratings">No ratings yet. Rate your first order!</p>';
-      return;
+      // Store them in chrome.storage.local
+      await chrome.storage.local.set(restaurantNames);
+
+      return {
+        copied: Object.keys(restaurantNames).length,
+        message: `Copied ${Object.keys(restaurantNames).length} restaurant names to chrome.storage.local`,
+        names: restaurantNames,
+      };
+    } catch (error) {
+      return { copied: 0, message: `Error copying: ${error.message}` };
     }
-
-    const historyHTML = history
-      .map(
-        (rating) => `
-            <div class="history-item">
-                <div class="history-header">
-                    <span class="restaurant">${rating.restaurant}</span>
-                    <span class="rating">${'⭐'.repeat(rating.rating)}</span>
-                </div>
-                <div class="history-details">
-                    <span class="items">${rating.items.join(', ')}</span>
-                    <span class="total">$${rating.total}</span>
-                </div>
-                ${rating.comment ? `<div class="comment">"${rating.comment}"</div>` : ''}
-                <div class="timestamp">${new Date(rating.timestamp).toLocaleDateString()}</div>
-            </div>
-        `
-      )
-      .join('');
-
-    historyDiv.innerHTML = historyHTML;
   }
 
-  // Load restaurant statistics
-  async function loadRestaurantStats() {
+  // Load last 10 restaurants from user order history
+  async function loadLast10Restaurants() {
+    // Auto-copy localStorage restaurant names to chrome.storage.local (silent version)
+    await copyLocalStorageToChromeStorageSilent();
+
     try {
-      const apiClient = new LunchDropApiClient.ApiClient(
-        LunchDropConfig.CONFIG.API_BASE_URL,
-        LunchDropConfig.CONFIG.ENDPOINTS
-      );
-
-      // Get overall restaurant stats
-      const overallStats = await apiClient.getRatingStats({ timeRange: 'all' });
-
-      // Restaurant list endpoint removed - can't fetch restaurant list anymore
-      const restaurants = { restaurants: [] };
-
-      if (restaurants?.restaurants) {
-        displayRestaurantStats(restaurants.restaurants, overallStats);
-      } else if (overallStats?.restaurants) {
-        displayRestaurantStats(overallStats.restaurants);
-      }
-    } catch (_error) {
-      document.getElementById('restaurant-stats').innerHTML =
-        '<p class="no-stats">Statistics unavailable</p>';
-    }
-  }
-
-  function displayRestaurantStats(restaurants, _overallStats = null) {
-    const statsDiv = document.getElementById('restaurant-stats');
-
-    if (!restaurants || restaurants.length === 0) {
-      statsDiv.innerHTML = '<p class="no-stats">No restaurant statistics available</p>';
-      return;
-    }
-
-    const statsHTML = restaurants
-      .map((restaurant) => {
-        // Get rating distribution if available
-        const ratingDistribution = restaurant.ratingDistribution || {};
-        const totalRatings = restaurant.totalRatings || 0;
-        const averageRating = restaurant.averageRating || 0;
-        const appearanceCount = restaurant.appearanceCount || 0;
-        const lastAppearance = restaurant.lastAppearance;
-        const selloutCount = restaurant.selloutCount || 0;
-        const availabilityStatus = restaurant.availabilityStatus || 'unknown';
-
-        // Calculate sellout percentage
-        const selloutPercentage =
-          appearanceCount > 0 ? ((selloutCount / appearanceCount) * 100).toFixed(1) : '0.0';
-
-        // Create rating distribution bar
-        const ratingBars = [5, 4, 3, 2, 1]
-          .map((rating) => {
-            const count = ratingDistribution[rating] || 0;
-            const percentage = totalRatings > 0 ? ((count / totalRatings) * 100).toFixed(0) : 0;
-            return `
-            <div class="rating-bar">
-              <span class="rating-label">${rating}⭐</span>
-              <div class="rating-bar-bg">
-                <div class="rating-bar-fill" style="width: ${percentage}%"></div>
-              </div>
-              <span class="rating-count">${count}</span>
-            </div>
-          `;
-          })
-          .join('');
-
-        return `
-          <div class="stats-item">
-            <div class="stats-header">
-              <span class="restaurant-name">${restaurant.name}</span>
-              <span class="avg-rating">${averageRating.toFixed(1)}⭐</span>
-            </div>
-            
-            <div class="stats-main">
-              <div class="stats-row">
-                <span class="stat-label">Total Ratings:</span>
-                <span class="stat-value">${totalRatings}</span>
-              </div>
-              
-              <div class="stats-row">
-                <span class="stat-label">Times Seen:</span>
-                <span class="stat-value">${appearanceCount}</span>
-              </div>
-              
-              <div class="stats-row">
-                <span class="stat-label">Times Sold Out:</span>
-                <span class="stat-value">${selloutCount}</span>
-              </div>
-              
-              <div class="stats-row">
-                <span class="stat-label">Sellout Rate:</span>
-                <span class="stat-value ${selloutPercentage > 50 ? 'high-sellout' : 'low-sellout'}">${selloutPercentage}%</span>
-              </div>
-              
-              <div class="stats-row">
-                <span class="stat-label">Status:</span>
-                <span class="stat-value status-${availabilityStatus}">${availabilityStatus}</span>
-              </div>
-            </div>
-
-            ${
-              totalRatings > 0
-                ? `
-              <div class="rating-distribution">
-                <div class="distribution-title">Rating Distribution</div>
-                ${ratingBars}
-              </div>
-            `
-                : ''
-            }
-
-            <div class="stats-footer">
-              <span class="last-appearance">Last seen: ${lastAppearance ? new Date(lastAppearance).toLocaleDateString() : 'Never'}</span>
-            </div>
-          </div>
-        `;
-      })
-      .join('');
-
-    statsDiv.innerHTML = statsHTML;
-  }
-
-  // Load availability data
-  async function loadAvailabilityStats() {
-    try {
-      const apiClient = new LunchDropApiClient.ApiClient(
-        LunchDropConfig.CONFIG.API_BASE_URL,
-        LunchDropConfig.CONFIG.ENDPOINTS
-      );
-      const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
-
-      const availability = await apiClient.getDailyAvailability(today);
-
-      if (availability?.restaurants) {
-        displayAvailabilityStats(availability.restaurants);
-      }
-    } catch (_error) {
-      document.getElementById('availability-stats').innerHTML =
-        '<p class="no-availability">Availability data unavailable</p>';
-    }
-  }
-
-  function displayAvailabilityStats(restaurants) {
-    const availabilityDiv = document.getElementById('availability-stats');
-
-    if (!restaurants || restaurants.length === 0) {
-      availabilityDiv.innerHTML = '<p class="no-availability">No availability data for today</p>';
-      return;
-    }
-
-    const availabilityHTML = restaurants
-      .map((restaurant) => {
-        const status = restaurant.status || 'unknown';
-        const timeSlot = restaurant.timeSlot || 'Unknown';
-        const lastSeen = restaurant.timestamp
-          ? new Date(restaurant.timestamp).toLocaleTimeString()
-          : 'Unknown';
-
-        return `
-          <div class="availability-item status-${status}">
-            <div class="availability-header">
-              <span class="restaurant-name">${restaurant.name}</span>
-              <span class="availability-status">${status}</span>
-            </div>
-            <div class="availability-details">
-              <span class="time-slot">${timeSlot}</span>
-              <span class="last-seen">Last seen: ${lastSeen}</span>
-            </div>
-          </div>
-        `;
-      })
-      .join('');
-
-    availabilityDiv.innerHTML = availabilityHTML;
-  }
-
-  // Load order history for current restaurant
-  async function loadOrderHistory() {
-    try {
-      // Get current restaurant info from the active tab
-      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-
-      // Check if we're on a LunchDrop page
-      if (!tab.url.includes('lunchdrop.com')) {
-        document.getElementById('order-history').innerHTML =
-          '<p class="no-orders">Not on a LunchDrop page</p>';
-        return;
-      }
-
-      // Get restaurant information from the page
-      const restaurantInfo = await getCurrentRestaurantInfo(tab.id);
-
-      if (!restaurantInfo) {
-        document.getElementById('order-history').innerHTML =
-          '<p class="no-orders">Could not detect current restaurant</p>';
-        return;
-      }
-
       // Get user ID
-      const userIdentification = await userIdManager.getUserIdentification();
+      const userIdentification = await lanchDrapUserIdManager.getUserIdentification();
 
-      // Get order history from API
-      const apiClient = new LunchDropApiClient.ApiClient(
-        LunchDropConfig.CONFIG.API_BASE_URL,
-        LunchDropConfig.CONFIG.ENDPOINTS
+      if (!userIdentification || !userIdentification.userId) {
+        // DON'T OVERWRITE - just add to debug
+        orderHistoryDiv.innerHTML +=
+          '<div style="background: #f8d7da; padding: 5px; margin: 5px 0;">ERROR: Unable to get user ID</div>';
+        return;
+      }
+
+      // Get order summary from API
+      const apiClient = new LanchDrapApiClient.ApiClient(
+        LanchDrapConfig.CONFIG.API_BASE_URL,
+        LanchDrapConfig.CONFIG.ENDPOINTS
       );
 
-      const orderHistory = await apiClient.getUserOrderHistory(
-        userIdentification.userId,
-        restaurantInfo.restaurantId
-      );
+      const restaurantSummary = await apiClient.getUserRestaurantSummary(userIdentification.userId);
 
-      displayOrderHistory(orderHistory, restaurantInfo.restaurantName);
+      // Check if the API call was successful
+      if (!restaurantSummary) {
+        orderHistoryDiv.innerHTML = `
+          <div class="error-message">
+            <h3>Connection Error</h3>
+            <p>Unable to connect to the server. Please check your internet connection and try again.</p>
+          </div>
+        `;
+        return;
+      }
+
+      // Check if the API returned an error
+      if (restaurantSummary.success === false) {
+        orderHistoryDiv.innerHTML = `
+          <div class="error-message">
+            <h3>Server Error</h3>
+            <p>${restaurantSummary.error?.message || restaurantSummary.message || 'An error occurred while loading your restaurant history.'}</p>
+          </div>
+        `;
+        return;
+      }
+
+      // Check if we have data
+      const restaurants = restaurantSummary.data?.restaurants;
+      if (!restaurants || restaurants.length === 0) {
+        orderHistoryDiv.innerHTML = `
+          <div class="no-data-message">
+            <h3>No restaurant history found</h3>
+            <p>You haven't ordered from any restaurants yet, or your order history is not available.</p>
+          </div>
+        `;
+        return;
+      }
+
+      // Sort by last order date and take the first 10
+      const sortedRestaurants = restaurants
+        .sort((a, b) => new Date(b.lastOrderDate) - new Date(a.lastOrderDate))
+        .slice(0, 10);
+
+      await displayLast10Restaurants(sortedRestaurants);
     } catch (_error) {
-      document.getElementById('order-history').innerHTML =
-        '<p class="no-orders">Error loading order history</p>';
+      orderHistoryDiv.innerHTML = `
+        <div class="error-message">
+          <h3>Error loading restaurant history</h3>
+          <p>Unable to load your restaurant order history. Please try again later.</p>
+        </div>
+      `;
     }
   }
 
-  async function getCurrentRestaurantInfo(tabId) {
-    try {
-      // Send message to content script to get restaurant info
-      const response = await chrome.tabs.sendMessage(tabId, {
-        action: 'getRestaurantInfo',
-      });
-      return response;
-    } catch (_error) {
-      return null;
-    }
-  }
-
-  function displayOrderHistory(orderHistory, restaurantName) {
-    const orderHistoryDiv = document.getElementById('order-history');
-
-    if (!orderHistory || orderHistory.length === 0) {
-      orderHistoryDiv.innerHTML = `<p class="no-orders">No order history found for ${restaurantName}</p>`;
+  async function displayLast10Restaurants(restaurants) {
+    if (!restaurants || restaurants.length === 0) {
+      orderHistoryDiv.innerHTML = `
+        <div class="no-data-message">
+          <h3>No restaurant history found</h3>
+          <p>You haven't ordered from any restaurants yet, or your order history is not available.</p>
+        </div>
+      `;
       return;
     }
 
-    const orderHistoryHTML = orderHistory
-      .map((order) => {
-        const orderDate = new Date(order.orderDate).toLocaleDateString();
-        const orderTime = new Date(order.orderDate).toLocaleTimeString();
-        const total = order.total || 'Unknown';
-        const items = order.items || [];
+    // Get all restaurant names from chrome.storage.local
+    const restaurantKeys = restaurants.map((r) => `restaurant_name:${r.restaurantId}`);
+    const storageResult = await chrome.storage.local.get(restaurantKeys);
 
-        // Format items list
-        const itemsList =
-          items.length > 0
-            ? items.map((item) => item.name || item.fullDescription || 'Unknown Item').join(', ')
+    const restaurantsHTML = restaurants
+      .map((restaurant) => {
+        const lastOrderDate =
+          window.LanchDrapDOMUtils?.formatDateString?.(restaurant.lastOrderDate) ||
+          new Date(restaurant.lastOrderDate).toLocaleDateString();
+        const totalOrders = restaurant.totalOrders || 0;
+        const recentOrders = restaurant.recentOrders || [];
+
+        // Get the most recent order items for display
+        const recentItems =
+          recentOrders.length > 0 && recentOrders[0].items
+            ? recentOrders[0].items
+                .slice(0, 3)
+                .map((item) => item.name || item.fullDescription || 'Unknown Item')
+                .join(', ')
             : 'No items recorded';
 
+        // Get restaurant name from chrome.storage.local
+        const restaurantKey = `restaurant_name:${restaurant.restaurantId}`;
+        const storedName = storageResult[restaurantKey];
+        const restaurantName = storedName || restaurant.restaurantId;
+
         return `
-          <div class="order-history-item">
-            <div class="order-header">
-              <span class="order-date">${orderDate}</span>
-              <span class="order-time">${orderTime}</span>
-              <span class="order-total">$${total}</span>
+          <div class="restaurant-item">
+            <div class="restaurant-header">
+              <span class="restaurant-name">${restaurantName}</span>
+              <span class="last-order-date">${lastOrderDate}</span>
             </div>
-            <div class="order-items">
-              <span class="items-label">Items:</span>
-              <span class="items-list">${itemsList}</span>
+            <div class="restaurant-stats">
+              <div class="stat-row">
+                <span class="stat-label">Total Orders:</span>
+                <span class="stat-value">${totalOrders}</span>
+              </div>
+              <div class="stat-row">
+                <span class="stat-label">Last Order Items:</span>
+                <span class="stat-value">${recentItems}</span>
+              </div>
             </div>
-            ${
-              order.rating
-                ? `
-              <div class="order-rating">
-                <span class="rating-label">Your Rating:</span>
-                <span class="rating-stars">${'⭐'.repeat(order.rating)}</span>
-              </div>
-            `
-                : ''
-            }
-            ${
-              order.comment
-                ? `
-              <div class="order-comment">
-                <span class="comment-label">Comment:</span>
-                <span class="comment-text">"${order.comment}"</span>
-              </div>
-            `
-                : ''
-            }
           </div>
         `;
       })
       .join('');
 
-    orderHistoryDiv.innerHTML = orderHistoryHTML;
+    orderHistoryDiv.innerHTML = `
+      <h3>Restaurant Order History</h3>
+      ${restaurantsHTML}
+    `;
   }
 
   // Load data when popup opens
-  loadRatingHistory();
-  loadRestaurantStats();
-  loadAvailabilityStats();
-  loadOrderHistory();
+  loadLast10Restaurants();
 });

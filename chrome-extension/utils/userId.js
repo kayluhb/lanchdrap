@@ -22,6 +22,20 @@ class LanchDrapUserIdManager {
     );
   }
 
+  // Extract user ID from Lunchdrop page's window.user object
+  getLunchdropUserId() {
+    try {
+      // Check if we're on a Lunchdrop page and window.user exists
+      if (typeof window !== 'undefined' && window.user && window.user.id) {
+        return window.user.id;
+      }
+      return null;
+    } catch (_error) {
+      // Silently fail if we can't extract the user ID
+      return null;
+    }
+  }
+
   // Get or create user ID
   async getUserId() {
     if (this.userId) {
@@ -29,7 +43,16 @@ class LanchDrapUserIdManager {
     }
 
     try {
-      // Try to get existing user ID from storage
+      // First, try to get the Lunchdrop user ID from the page
+      const lunchdropUserId = this.getLunchdropUserId();
+      if (lunchdropUserId) {
+        // Use the Lunchdrop user ID and store it for future use
+        this.userId = lunchdropUserId;
+        await chrome.storage.local.set({ [this.storageKey]: this.userId });
+        return this.userId;
+      }
+
+      // If no Lunchdrop user ID found, try to get existing user ID from storage
       const result = await chrome.storage.local.get([this.storageKey]);
       if (result[this.storageKey]) {
         const storedUserId = result[this.storageKey];

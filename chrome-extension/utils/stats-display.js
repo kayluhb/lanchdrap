@@ -1025,6 +1025,11 @@ window.LanchDrapStatsDisplay = (() => {
         const localKey = `restaurant_name:${restaurantId}`;
         localStorage.setItem(localKey, restaurantName);
 
+        // Also store in chrome.storage.local for popup access
+        if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+          chrome.storage.local.set({ [localKey]: restaurantName });
+        }
+
         try {
           // Get user ID for order history
           const userId = await lanchDrapUserIdManager.getUserId();

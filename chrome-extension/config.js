@@ -20,6 +20,7 @@ const CONFIG = {
     RESTAURANTS_GET_BY_ID: '/api/restaurant',
     RESTAURANTS_SEARCH: '/api/restaurants/search',
     RESTAURANTS_STATS: '/api/restaurants/stats',
+    RESTAURANTS_USERS: '/api/restaurants/users',
 
     // Sync endpoints
     SYNC: '/api/sync',

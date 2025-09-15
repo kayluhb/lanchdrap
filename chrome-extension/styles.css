@@ -20,63 +20,67 @@
 
 .lunchdrop-extension-popup .container {
   width: 100%;
-  min-height: 400px;
+  min-height: 300px;
   background: white;
-  border-radius: 12px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
   overflow: hidden;
 }
 
 .lunchdrop-extension-popup header {
   background: linear-gradient(135deg, #ff6b6b 0%, #ff8e53 100%);
   color: white;
-  padding: 16px;
+  padding: 12px;
   text-align: center;
 }
 
 .lunchdrop-extension-popup header h1 {
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 700;
   margin: 0;
 }
 
 /* Order History Section Styles */
 .lunchdrop-extension-popup .order-history-section {
-  padding: 16px;
-  border-bottom: 1px solid #f0f0f0;
+  padding: 12px;
 }
 
 .lunchdrop-extension-popup .order-history-section h3 {
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 600;
-  margin-bottom: 12px;
+  margin-bottom: 8px;
   color: #333;
 }
 
 .lunchdrop-extension-popup .order-history-list {
-  max-height: 300px;
+  max-height: 250px;
   overflow-y: auto;
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* Internet Explorer 10+ */
+}
+
+.lunchdrop-extension-popup .order-history-list::-webkit-scrollbar {
+  display: none; /* WebKit */
 }
 
 .lunchdrop-extension-popup .restaurant-item {
   background: #f8f9fa;
-  border-radius: 6px;
-  padding: 12px;
-  margin-bottom: 8px;
-  border-left: 3px solid #ff6b6b;
+  border-radius: 4px;
+  padding: 8px;
+  margin-bottom: 6px;
 }
 
 .lunchdrop-extension-popup .restaurant-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
 }
 
 .lunchdrop-extension-popup .restaurant-header .restaurant-name {
   font-weight: 600;
   color: #333;
-  font-size: 14px;
+  font-size: 13px;
 }
 
 .lunchdrop-extension-popup .last-order-date {
@@ -88,7 +92,7 @@
 .lunchdrop-extension-popup .restaurant-stats {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 4px;
 }
 
 .lunchdrop-extension-popup .stat-row {
@@ -135,26 +139,381 @@
   color: #95a5a6;
 }
 
-.lunchdrop-extension-popup .status {
-  padding: 16px 24px;
-  text-align: center;
+/* Rating View Styles */
+.lunchdrop-extension-popup .rating-view {
+  padding: 12px;
+}
+
+.lunchdrop-extension-popup .rating-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.lunchdrop-extension-popup .back-button {
+  background: #6c757d;
+  color: white;
+  border: none;
+  padding: 6px 10px;
+  border-radius: 4px;
+  font-size: 11px;
   font-weight: 500;
-  border-top: 1px solid #e0e0e0;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.lunchdrop-extension-popup .back-button:hover {
+  background: #5a6268;
+}
+
+.lunchdrop-extension-popup .rating-header h3 {
+  font-size: 14px;
+  font-weight: 600;
+  color: #333;
+  margin: 0;
+}
+
+.lunchdrop-extension-popup .rating-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.lunchdrop-extension-popup .menu-selection {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.lunchdrop-extension-popup .menu-selection label {
+  font-size: 13px;
+  font-weight: 500;
+  color: #333;
+}
+
+.lunchdrop-extension-popup .order-items-wrap {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.lunchdrop-extension-popup .order-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.lunchdrop-extension-popup .order-item {
   background: #f8f9fa;
-  color: #666;
-  overflow: hidden;
+  border: 1px solid #e9ecef;
+  border-radius: 3px;
+  padding: 4px 6px;
+  font-size: 12px;
+  color: #333;
+  display: inline-block;
 }
 
-.status.success {
-  background: #d4edda;
-  color: #155724;
-  border-top: 1px solid #c3e6cb;
-  transition: max-height 0.3s ease;
-  max-height: 100px;
+.lunchdrop-extension-popup .order-item-name {
+  font-weight: 500;
 }
 
-.status.error {
-  background: #f8d7da;
-  color: #721c24;
-  border-top: 1px solid #f5c6cb;
+.lunchdrop-extension-popup .no-order {
+  color: #6c757d;
+  font-style: italic;
+  text-align: center;
+  padding: 8px;
+  font-size: 12px;
+}
+
+.lunchdrop-extension-popup .loading-order {
+  color: #6c757d;
+  font-style: italic;
+  text-align: center;
+  padding: 8px;
+  font-size: 12px;
+}
+
+.lunchdrop-extension-popup .edit-order-button {
+  background: none;
+  color: #007bff;
+  border: none;
+  padding: 0;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  margin-top: 4px;
+  text-decoration: underline;
+  transition: color 0.2s ease;
+}
+
+.lunchdrop-extension-popup .edit-order-button:hover {
+  color: #0056b3;
+  text-decoration: none;
+}
+
+.lunchdrop-extension-popup .edit-order-section {
+  margin-top: 12px;
+}
+
+.lunchdrop-extension-popup .done-editing {
+  background: #28a745;
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  margin-top: 8px;
+  transition: background-color 0.2s ease;
+}
+
+.lunchdrop-extension-popup .done-editing:hover {
+  background: #218838;
+}
+
+.lunchdrop-extension-popup .menu-autocomplete {
+  position: relative;
+}
+
+.lunchdrop-extension-popup .menu-autocomplete input {
+  width: 100%;
+  padding: 6px 10px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.2s ease;
+}
+
+.lunchdrop-extension-popup .menu-autocomplete input:focus {
+  border-color: #ff6b6b;
+}
+
+.lunchdrop-extension-popup .menu-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: white;
+  border: 1px solid #ddd;
+  border-top: none;
+  border-radius: 0 0 4px 4px;
+  max-height: 120px;
+  overflow-y: auto;
+  z-index: 10;
+  display: none;
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* Internet Explorer 10+ */
+}
+
+.lunchdrop-extension-popup .menu-dropdown::-webkit-scrollbar {
+  display: none; /* WebKit */
+}
+
+.lunchdrop-extension-popup .menu-option {
+  padding: 6px 10px;
+  cursor: pointer;
+  font-size: 13px;
+  transition: background-color 0.2s ease;
+}
+
+.lunchdrop-extension-popup .menu-option:hover {
+  background: #f8f9fa;
+}
+
+.lunchdrop-extension-popup .selected-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.lunchdrop-extension-popup .selected-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: #e3f2fd;
+  color: #1976d2;
+  padding: 3px 6px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.lunchdrop-extension-popup .remove-item {
+  background: none;
+  border: none;
+  color: #1976d2;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: bold;
+  padding: 0;
+  width: 14px;
+  height: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: background-color 0.2s ease;
+}
+
+.lunchdrop-extension-popup .remove-item:hover {
+  background: rgba(25, 118, 210, 0.1);
+}
+
+.lunchdrop-extension-popup .rating-options {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 12px 0;
+}
+
+.lunchdrop-extension-popup .rating-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 2px solid #e0e0e0;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+  background: white;
+}
+
+.lunchdrop-extension-popup .rating-option:hover {
+  border-color: #ff6b6b;
+  box-shadow: 0 1px 3px rgba(255, 107, 107, 0.15);
+}
+
+.lunchdrop-extension-popup .rating-option.active {
+  border-color: #ff6b6b;
+  background: #fff5f5;
+  box-shadow: 0 1px 4px rgba(255, 107, 107, 0.2);
+}
+
+.lunchdrop-extension-popup .rating-emoji {
+  font-size: 20px;
+  min-width: 28px;
+  text-align: center;
+}
+
+.lunchdrop-extension-popup .rating-text {
+  font-size: 13px;
+  font-weight: 600;
+  color: #333;
+}
+
+.lunchdrop-extension-popup .rating-display {
+  text-align: center;
+  font-size: 14px;
+  font-weight: 600;
+  color: #333;
+}
+
+.lunchdrop-extension-popup .rating-comment {
+  width: 100%;
+  min-height: 60px;
+  padding: 8px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 13px;
+  font-family: inherit;
+  resize: vertical;
+  outline: none;
+  transition: border-color 0.2s ease;
+}
+
+.lunchdrop-extension-popup .rating-comment:focus {
+  border-color: #ff6b6b;
+}
+
+.lunchdrop-extension-popup .rating-actions {
+  position: sticky;
+  bottom: 0;
+  background: white;
+  padding: 12px 0 0 0;
+  border-top: 1px solid #e0e0e0;
+  margin-top: 16px;
+  display: flex;
+  flex-direction: row;
+  gap: 8px;
+}
+
+.lunchdrop-extension-popup .rating-submit {
+  background: linear-gradient(135deg, #ff6b6b 0%, #ff8e53 100%);
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  flex: 1;
+}
+
+.lunchdrop-extension-popup .rating-submit:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(255, 107, 107, 0.3);
+}
+
+.lunchdrop-extension-popup .rating-submit:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.lunchdrop-extension-popup .hide-forever {
+  background: linear-gradient(135deg, #6c757d 0%, #495057 100%);
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.lunchdrop-extension-popup .hide-forever:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(108, 117, 125, 0.3);
+  background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+}
+
+.lunchdrop-extension-popup .hide-forever:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+/* Restaurant Actions */
+.lunchdrop-extension-popup .restaurant-actions {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #e0e0e0;
+}
+
+.lunchdrop-extension-popup .rate-button {
+  background: linear-gradient(135deg, #ff6b6b 0%, #ff8e53 100%);
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  width: 100%;
+}
+
+.lunchdrop-extension-popup .rate-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(255, 107, 107, 0.3);
 }

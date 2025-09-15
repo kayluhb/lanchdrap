@@ -656,6 +656,10 @@ export async function getRestaurantById(request, env) {
     // Check if a name is provided in query params for potential update
     const providedName = url.searchParams.get('name');
 
+    // Check if userId and orderDate are provided for user order lookup
+    const userId = url.searchParams.get('userId');
+    const orderDate = url.searchParams.get('orderDate');
+
     // Check if the provided ID is actually a restaurant name
     // If we can't find a restaurant with this ID, try looking it up as a name
     let restaurantKey = `restaurant:${restaurantId}`;
@@ -703,31 +707,91 @@ export async function getRestaurantById(request, env) {
     const soldOutStats = calculateSoldOutRateExcludingToday(appearances, soldOutDates);
     const soldOutRate = soldOutStats.rate;
 
-    return new Response(
-      JSON.stringify({
-        name: data.name || restaurantId, // Use ID as fallback if no name
-        id: data.id || restaurantId,
-        color: data.color || null, // Include the color
-        totalAppearances: appearances.length,
-        totalSoldOuts: soldOutStats.totalSoldOuts,
-        soldOutRate: parseFloat(soldOutRate),
-        lastAppearance,
-        firstSeen,
-        lastUpdated: data.updatedAt || data.createdAt || new Date().toISOString(),
-        appearances: appearances, // Include the actual appearance dates
-        soldOutDates: soldOutDates, // Include the sold out dates for editing
-        // Add timezone info to help with date display
-        timezone: 'America/Chicago', // LunchDrop appears to be in Central Time
-        nameUpdated: nameUpdated, // Indicate if name was updated during this request
-      }),
-      {
-        status: 200,
-        headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
-        },
+    // Get user's order for the specific date if userId and orderDate are provided
+    let userOrder = null;
+    if (userId && orderDate) {
+      try {
+        const userRestaurantKey = `user_restaurant_history:${userId}:${restaurantId}`;
+        const historyDataRaw = await env.LANCHDRAP_RATINGS.get(userRestaurantKey);
+
+        if (historyDataRaw) {
+          const historyData = JSON.parse(historyDataRaw);
+
+          // Debug: Log the available dates and the requested date
+          const _availableDates = Object.keys(historyData);
+
+          // Handle different data structures - check if there's an 'orders' wrapper
+          let orderData = null;
+          if (historyData[orderDate]) {
+            // Direct date key structure: { "2025-09-09": { "items": [...] } }
+            orderData = historyData[orderDate];
+          } else if (historyData.orders?.[orderDate]) {
+            // Orders wrapper structure: { "orders": { "2025-09-09": { "items": [...] } } }
+            orderData = historyData.orders[orderDate];
+          }
+
+          if (orderData) {
+            // Extract items and normalize the format
+            const items = (orderData.items || []).map((item) => {
+              // Handle different item formats
+              if (typeof item === 'string') {
+                return { name: item, quantity: 1 };
+              }
+              return {
+                name: item.name || item.fullDescription || 'Unknown Item',
+                quantity: item.quantity || 1,
+                options: item.options || '',
+                fullDescription: item.fullDescription || item.name || 'Unknown Item',
+              };
+            });
+
+            userOrder = {
+              date: orderDate,
+              items: items,
+            };
+          } else {
+          }
+        } else {
+        }
+      } catch (_error) {
+        // If there's an error getting user order, continue without it
       }
-    );
+    }
+
+    const responseData = {
+      name: data.name || restaurantId, // Use ID as fallback if no name
+      id: data.id || restaurantId,
+      color: data.color || null, // Include the color
+      totalAppearances: appearances.length,
+      totalSoldOuts: soldOutStats.totalSoldOuts,
+      soldOutRate: parseFloat(soldOutRate),
+      lastAppearance,
+      firstSeen,
+      lastUpdated: data.updatedAt || data.createdAt || new Date().toISOString(),
+      appearances: appearances, // Include the actual appearance dates
+      soldOutDates: soldOutDates, // Include the sold out dates for editing
+      // Add timezone info to help with date display
+      timezone: 'America/Chicago', // LunchDrop appears to be in Central Time
+      nameUpdated: nameUpdated, // Indicate if name was updated during this request
+    };
+
+    // Include user order if available
+    if (userOrder) {
+      responseData.userOrder = userOrder;
+    }
+
+    // Include menu if available
+    if (data.menu && data.menu.length > 0) {
+      responseData.menu = data.menu;
+    }
+
+    return new Response(JSON.stringify(responseData), {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*',
+      },
+    });
   } catch (error) {
     return createErrorResponse('Failed to get restaurant', 500, { error: error.message });
   }
@@ -829,6 +893,22 @@ export async function submitAvailabilitySummary(request, _env) {
   }
 }
 
+// Helper function to update restaurant-level user tracking for recommendations
+async function updateRestaurantUserTracking(env, restaurantId, userId) {
+  try {
+    const restaurantUserKey = `restaurant_users:${restaurantId}:${userId}`;
+
+    // Check if this user-restaurant combination already exists
+    const existingData = await env.LANCHDRAP_RATINGS.get(restaurantUserKey);
+
+    if (!existingData) {
+      // Create new user-restaurant tracking record - just store the user ID
+      await env.LANCHDRAP_RATINGS.put(restaurantUserKey, userId);
+    }
+    // If it already exists, no need to update - it's just a relationship marker
+  } catch (_error) {}
+}
+
 // Store user order history
 export async function storeUserOrder(request, env) {
   try {
@@ -927,6 +1007,11 @@ export async function storeUserOrder(request, env) {
     // Only save to KV if data actually changed
     if (dataChanged) {
       await env.LANCHDRAP_RATINGS.put(userRestaurantKey, JSON.stringify(historyData));
+
+      // Also update restaurant-level tracking for recommendations
+      if (orderAdded) {
+        await updateRestaurantUserTracking(env, restaurantId, userId);
+      }
     }
 
     return createApiResponse({
@@ -1217,7 +1302,6 @@ export async function getUserRestaurantSummary(request, env) {
     const list = await env.LANCHDRAP_RATINGS.list({ prefix });
 
     if (list.keys.length === 0) {
-      console.log('getUserRestaurantSummary: No keys found, returning empty result');
       return createApiResponse({
         userId,
         totalRestaurants: 0,
@@ -1226,37 +1310,23 @@ export async function getUserRestaurantSummary(request, env) {
     }
 
     const restaurants = [];
-    console.log('getUserRestaurantSummary: Processing', list.keys.length, 'keys');
 
     for (const key of list.keys) {
-      console.log('getUserRestaurantSummary: Processing key:', key.name);
       // Extract restaurant ID from key: user_restaurant_history:userId:restaurantId
       const keyParts = key.name.split(':');
-      console.log('getUserRestaurantSummary: Key parts:', keyParts);
 
       if (keyParts.length >= 3) {
         const restaurantId = keyParts.slice(2).join(':'); // Handle restaurant IDs with colons
-        console.log('getUserRestaurantSummary: Extracted restaurantId:', restaurantId);
 
         const historyDataRaw = await env.LANCHDRAP_RATINGS.get(key.name);
-        console.log(
-          'getUserRestaurantSummary: Raw history data length:',
-          historyDataRaw ? historyDataRaw.length : 'null'
-        );
 
         if (historyDataRaw) {
           try {
-            console.log('getUserRestaurantSummary: Attempting to parse JSON for key:', key.name);
             const historyData = JSON.parse(historyDataRaw);
-            console.log(
-              'getUserRestaurantSummary: Successfully parsed JSON, structure:',
-              Object.keys(historyData)
-            );
 
             // Handle both old and new data structures
             let orders = [];
             if (historyData.orders && Array.isArray(historyData.orders)) {
-              console.log('getUserRestaurantSummary: Using old structure (array format)');
               // Old structure - already in array format
               orders = historyData.orders.sort((a, b) => new Date(b.date) - new Date(a.date));
             } else if (
@@ -1264,7 +1334,6 @@ export async function getUserRestaurantSummary(request, env) {
               typeof historyData.orders === 'object' &&
               !Array.isArray(historyData.orders)
             ) {
-              console.log('getUserRestaurantSummary: Using malformed structure (orders object)');
               // Handle malformed data where orders is an object but should be the root structure
               orders = Object.keys(historyData.orders)
                 .map((date) => ({
@@ -1273,7 +1342,6 @@ export async function getUserRestaurantSummary(request, env) {
                 }))
                 .sort((a, b) => new Date(b.date) - new Date(a.date)); // Sort by date, newest first
             } else {
-              console.log('getUserRestaurantSummary: Using new structure (date-keyed)');
               // New structure - convert date-keyed structure to array format
               orders = Object.keys(historyData)
                 .map((date) => ({
@@ -1282,13 +1350,6 @@ export async function getUserRestaurantSummary(request, env) {
                 }))
                 .sort((a, b) => new Date(b.date) - new Date(a.date)); // Sort by date, newest first
             }
-
-            console.log(
-              'getUserRestaurantSummary: Processed',
-              orders.length,
-              'orders for restaurant:',
-              restaurantId
-            );
             const lastOrderDate = orders.length > 0 ? orders[0].date : null; // First item is newest
 
             restaurants.push({
@@ -1297,27 +1358,12 @@ export async function getUserRestaurantSummary(request, env) {
               lastOrderDate,
               recentOrders: orders.slice(0, 5), // First 5 orders (newest)
             });
-          } catch (parseError) {
-            console.error(
-              'getUserRestaurantSummary: JSON parse error for key:',
-              key.name,
-              'Error:',
-              parseError.message
-            );
-            console.error(
-              'getUserRestaurantSummary: Raw data that failed to parse:',
-              historyDataRaw
-            );
-          }
+          } catch (_parseError) {}
         } else {
-          console.log('getUserRestaurantSummary: No raw data for key:', key.name);
         }
       } else {
-        console.log('getUserRestaurantSummary: Key parts insufficient for key:', key.name);
       }
     }
-
-    console.log('getUserRestaurantSummary: Processed', restaurants.length, 'restaurants');
 
     // Sort by last order date (most recent first)
     restaurants.sort((a, b) => {
@@ -1326,21 +1372,66 @@ export async function getUserRestaurantSummary(request, env) {
       if (!b.lastOrderDate) return -1;
       return new Date(b.lastOrderDate) - new Date(a.lastOrderDate);
     });
-
-    console.log(
-      'getUserRestaurantSummary: Returning success with',
-      restaurants.length,
-      'restaurants'
-    );
     return createApiResponse({
       userId,
       totalRestaurants: restaurants.length,
       restaurants,
     });
   } catch (error) {
-    console.error('getUserRestaurantSummary: Unexpected error:', error.message);
-    console.error('getUserRestaurantSummary: Error stack:', error.stack);
     return createErrorResponse('Failed to retrieve restaurant summary', 500, null, {
+      error: error.message,
+    });
+  }
+}
+
+// Get users who have ordered from a specific restaurant (for recommendations)
+export async function getRestaurantUsers(request, env) {
+  try {
+    const url = new URL(request.url);
+    const restaurantId = url.searchParams.get('restaurantId');
+
+    if (!restaurantId) {
+      return createErrorResponse('Missing required parameter: restaurantId', 400);
+    }
+
+    // Use prefix query to get all users for this restaurant
+    const prefix = `restaurant_users:${restaurantId}:`;
+    const list = await env.LANCHDRAP_RATINGS.list({ prefix });
+
+    if (list.keys.length === 0) {
+      return createApiResponse({
+        success: true,
+        message: 'No users found for this restaurant',
+        data: {
+          restaurantId,
+          users: [],
+          totalUsers: 0,
+        },
+      });
+    }
+
+    // Process each user-restaurant record
+    const users = [];
+    for (const key of list.keys) {
+      try {
+        const userId = await env.LANCHDRAP_RATINGS.get(key.name);
+        if (userId) {
+          users.push(userId);
+        }
+      } catch (_error) {}
+    }
+
+    return createApiResponse({
+      success: true,
+      message: 'Restaurant users retrieved successfully',
+      data: {
+        restaurantId,
+        users,
+        totalUsers: users.length,
+      },
+    });
+  } catch (error) {
+    return createErrorResponse('Failed to retrieve restaurant users', 500, null, {
       error: error.message,
     });
   }

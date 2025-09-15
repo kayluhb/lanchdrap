@@ -175,6 +175,14 @@ class ApiClient {
     return this.request(endpoint, { signal: signal });
   }
 
+  // Get users who have ordered from a specific restaurant (for recommendations)
+  async getRestaurantUsers(restaurantId) {
+    const params = new URLSearchParams();
+    params.append('restaurantId', restaurantId);
+    const endpoint = `${this.getEndpoint('RESTAURANTS_USERS')}?${params.toString()}`;
+    return this.request(endpoint);
+  }
+
   // Update restaurant appearances and sold out dates
   async updateRestaurantAppearances(restaurantId, appearanceDates, soldoutDates) {
     return this.request(this.getEndpoint('RESTAURANTS_UPDATE_APPEARANCES'), {

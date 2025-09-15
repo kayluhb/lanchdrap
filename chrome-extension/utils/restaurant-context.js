@@ -61,7 +61,7 @@ window.LanchDrapRestaurantContext = (() => {
       const allRestaurantLinks = document.querySelectorAll('a[href*="/app/"]');
       for (const link of allRestaurantLinks) {
         const cardDiv = link.querySelector('div');
-        if (cardDiv && cardDiv.classList.contains('border-2')) {
+        if (cardDiv?.classList.contains('border-2')) {
           return link;
         }
       }

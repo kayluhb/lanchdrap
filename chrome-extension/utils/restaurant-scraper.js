@@ -782,11 +782,8 @@ window.LanchDrapRestaurantScraper = (() => {
           }
         }
       }
-
-      console.log(`Cleaned up ${cleanedCount} expired availability records`);
       return cleanedCount;
     } catch (_error) {
-      console.error('Error cleaning up expired data:', _error);
       return 0;
     }
   }

@@ -715,7 +715,7 @@ window.LanchDrapStatsDisplay = (() => {
               border: 1px solid rgba(0, 0, 0, 0.05);
               border: 1px solid rgba(0, 0, 0, 0.05);
                 display: inline-block;
-              ">Last Order Items</span>
+              "><strong>Last Order Items</strong></span>
               <div class="ld-stat-value" style="
                 color: ${textColor};
                 font-weight: 500;
@@ -728,19 +728,10 @@ window.LanchDrapStatsDisplay = (() => {
                 border: 1px solid rgba(0, 0, 0, 0.05);
               ">
                 ${stats.userOrderHistory.lastOrderItems
-                  .filter((item) => {
-                    // Filter out payment/billing items
-                    const name = item.name || item.fullDescription || '';
-                    return (
-                      !name.toLowerCase().includes('charge to') &&
-                      !name.toLowerCase().includes('paying for') &&
-                      !name.toLowerCase().includes('organizer') &&
-                      !name.toLowerCase().includes('visa') &&
-                      !name.toLowerCase().includes('$15.00') &&
-                      !name.toLowerCase().includes('-$')
-                    );
-                  })
-                  .map((item) => item.fullDescription || item.name || 'Unknown Item')
+                  .map(
+                    (item) =>
+                      `<strong>${item.name}</strong> (${item.quantity})<br>${item.options ? `(${item.options})` : ''}`
+                  )
                   .join(', ')}
               </div>
             </div>
@@ -773,7 +764,6 @@ window.LanchDrapStatsDisplay = (() => {
           ? window.LanchDrapKeyManager.areKeysVisible()
           : false;
         if (!keysVisible) {
-          console.log('LanchDrap: Edit trigger clicked but keys are not visible, ignoring');
           return;
         }
 

@@ -174,21 +174,8 @@ window.LanchDrapOrderParser = (() => {
     try {
       // Parse order items first to create fingerprint
       const orderItems = parseOrderItemsFromPage();
-
-      // Debug: Log order items detection
-      // eslint-disable-next-line no-console
-      console.log('=== ORDER ITEMS DETECTION ===');
-      // eslint-disable-next-line no-console
-      console.log('Order items found:', orderItems?.length || 0);
       if (orderItems && orderItems.length > 0) {
-        // eslint-disable-next-line no-console
-        console.log(
-          'Order items:',
-          orderItems.map((item) => item.name)
-        );
       }
-      // eslint-disable-next-line no-console
-      console.log('============================');
 
       if (!orderItems || orderItems.length === 0) {
         return;
@@ -199,43 +186,12 @@ window.LanchDrapOrderParser = (() => {
       const restaurantId = restaurantContext.id;
       const restaurantName = restaurantContext.name;
 
-      // Debug: Log restaurant context information
-      // eslint-disable-next-line no-console
-      console.log('=== RESTAURANT CONTEXT DEBUG ===');
-      // eslint-disable-next-line no-console
-      console.log('Restaurant ID:', restaurantId);
-      // eslint-disable-next-line no-console
-      console.log('Restaurant Name:', restaurantName);
-      // eslint-disable-next-line no-console
-      console.log('Has Valid ID:', restaurantContext.hasValidId);
-      // eslint-disable-next-line no-console
-      console.log('Has Valid Name:', restaurantContext.hasValidName);
-      // eslint-disable-next-line no-console
-      console.log('===============================');
-
       if (!restaurantId) {
         return;
       }
 
       // Debug: Log restaurant information
-      const urlParts = window.location.pathname.split('/');
-      // eslint-disable-next-line no-console
-      console.log('=== ORDER DETECTION DEBUG ===');
-      // eslint-disable-next-line no-console
-      console.log('Current URL:', window.location.href);
-      // eslint-disable-next-line no-console
-      console.log('URL Path Parts:', urlParts);
-      // eslint-disable-next-line no-console
-      console.log('Restaurant ID:', restaurantId);
-      // eslint-disable-next-line no-console
-      console.log('Restaurant Name:', restaurantName);
-      // eslint-disable-next-line no-console
-      console.log(
-        'Order Items:',
-        orderItems.map((item) => item.name)
-      );
-      // eslint-disable-next-line no-console
-      console.log('=============================');
+      const _urlParts = window.location.pathname.split('/');
 
       // Create order fingerprint based on actual content
       const orderFingerprint = createOrderFingerprint(orderItems, restaurantId, restaurantName);
@@ -246,17 +202,11 @@ window.LanchDrapOrderParser = (() => {
       // Check if we've already processed this specific order content
       const orderProcessedKey = `order_processed_${orderFingerprint}`;
       if (sessionStorage.getItem(orderProcessedKey)) {
-        // eslint-disable-next-line no-console
-        console.log('Order with this content already processed:', orderFingerprint);
         return;
       }
 
       // Debug: Log current URL and extracted date
-      const extractedDate = window.LanchDrapDOMUtils.extractDateFromUrl();
-      // eslint-disable-next-line no-console
-      console.log('Order detection - Current URL:', window.location.href);
-      // eslint-disable-next-line no-console
-      console.log('Order detection - Extracted date:', extractedDate);
+      const _extractedDate = window.LanchDrapDOMUtils.extractDateFromUrl();
 
       // Try multiple confirmation text patterns
       const confirmationPatterns = [
@@ -269,16 +219,6 @@ window.LanchDrapOrderParser = (() => {
         'Order complete',
       ];
 
-      // Debug: Log confirmation text search
-      // eslint-disable-next-line no-console
-      console.log('=== CONFIRMATION TEXT SEARCH ===');
-      // eslint-disable-next-line no-console
-      console.log('Searching for confirmation patterns:', confirmationPatterns);
-      // eslint-disable-next-line no-console
-      console.log('Page text content preview:', document.body.textContent.substring(0, 500));
-      // eslint-disable-next-line no-console
-      console.log('================================');
-
       let orderConfirmationText = null;
 
       for (const pattern of confirmationPatterns) {
@@ -286,15 +226,11 @@ window.LanchDrapOrderParser = (() => {
           div.textContent.toLowerCase().includes(pattern.toLowerCase())
         );
         if (orderConfirmationText) {
-          // eslint-disable-next-line no-console
-          console.log('Found confirmation text with pattern:', pattern);
           break;
         }
       }
 
       if (!orderConfirmationText) {
-        // eslint-disable-next-line no-console
-        console.log('No order confirmation text found on page');
         return;
       }
 
@@ -329,20 +265,6 @@ window.LanchDrapOrderParser = (() => {
         items: orderItems,
       };
 
-      // Store the order
-      // eslint-disable-next-line no-console
-      console.log('Attempting to store order:', { userId, restaurantId, orderData });
-
-      // Debug: Check API client availability
-      // eslint-disable-next-line no-console
-      console.log('=== API CLIENT CHECK ===');
-      // eslint-disable-next-line no-console
-      console.log('LanchDrapApiClient available:', typeof LanchDrapApiClient !== 'undefined');
-      // eslint-disable-next-line no-console
-      console.log('LanchDrapConfig available:', typeof LanchDrapConfig !== 'undefined');
-      // eslint-disable-next-line no-console
-      console.log('========================');
-
       if (typeof LanchDrapApiClient !== 'undefined' && typeof LanchDrapConfig !== 'undefined') {
         try {
           const apiClient = new LanchDrapApiClient.ApiClient(
@@ -351,28 +273,13 @@ window.LanchDrapOrderParser = (() => {
           );
           const result = await apiClient.storeUserOrder(userId, restaurantId, orderData);
 
-          // eslint-disable-next-line no-console
-          console.log('Order storage result:', result);
-
           // Mark this specific order content as processed to prevent duplicate processing
           if (result?.success) {
             sessionStorage.setItem(orderProcessedKey, 'true');
-            // eslint-disable-next-line no-console
-            console.log(
-              'Order stored successfully and content marked as processed:',
-              orderFingerprint
-            );
           } else {
-            // eslint-disable-next-line no-console
-            console.log('Order storage failed:', result);
           }
-        } catch (error) {
-          // eslint-disable-next-line no-console
-          console.error('Error storing order:', error);
-        }
+        } catch (_error) {}
       } else {
-        // eslint-disable-next-line no-console
-        console.log('API client or config not available');
       }
     } catch (_error) {}
   }

@@ -6,6 +6,7 @@ import { submitRating } from './api/ratings.js';
 import {
   getRestaurantById,
   getRestaurantStatsWithUserHistory,
+  getRestaurantUsers,
   getUserOrderHistory,
   getUserRestaurantSummary,
   searchRestaurantByName,
@@ -30,6 +31,7 @@ const routes = {
   // Restaurant search endpoints
   'GET /api/restaurants/search': searchRestaurantByName,
   'GET /api/restaurants/stats': getRestaurantStatsWithUserHistory,
+  'GET /api/restaurants/users': getRestaurantUsers,
 
   // User order history endpoints
   'POST /api/orders': storeUserOrder,

@@ -8,14 +8,7 @@ window.LanchDrapRatingWidget = (() => {
 
   // Function to inject rating widget into the page
   async function injectRatingWidget() {
-    console.log('LanchDrap: injectRatingWidget called', {
-      ratingWidget: !!ratingWidget,
-      orderData: orderData,
-      restaurantName: orderData?.restaurant || 'Unknown Restaurant',
-    });
-
     if (ratingWidget) {
-      console.log('LanchDrap: Rating widget already exists, returning');
       return; // Already injected
     }
 
@@ -38,6 +31,43 @@ window.LanchDrapRatingWidget = (() => {
         ? window.LanchDrapOrderParser.parseMenuFromPage()
         : [];
     }
+
+    // Dedupe and sort menu items alphabetically
+    menuItems = [...new Set(menuItems)].sort((a, b) =>
+      a.toLowerCase().localeCompare(b.toLowerCase())
+    );
+
+    // Fetch user order history to prepopulate purchased items
+    let lastOrderItems = [];
+    try {
+      if (
+        typeof LanchDrapApiClient !== 'undefined' &&
+        typeof LanchDrapConfig !== 'undefined' &&
+        typeof LanchDrapUserId !== 'undefined'
+      ) {
+        const apiClient = new LanchDrapApiClient.ApiClient(
+          LanchDrapConfig.CONFIG.API_BASE_URL,
+          LanchDrapConfig.CONFIG.ENDPOINTS
+        );
+        const userId = LanchDrapUserId.getUserId();
+        if (userId) {
+          const userHistory = await apiClient.getUserOrderHistory(userId, restaurantName);
+          if (userHistory?.data?.orders?.[restaurantName]) {
+            const restaurantOrders = userHistory.data.orders[restaurantName].orders;
+            if (restaurantOrders && restaurantOrders.length > 0) {
+              // Get the most recent order (first item after sorting by date)
+              const lastOrder = restaurantOrders[0];
+              if (lastOrder?.items && lastOrder.items.length > 0) {
+                // Extract item names from the last order
+                lastOrderItems = lastOrder.items
+                  .map((item) => item.name || item.fullDescription || item)
+                  .filter(Boolean);
+              }
+            }
+          }
+        }
+      }
+    } catch (_error) {}
 
     // Create backdrop overlay (similar to editing dialog)
     const backdropOverlay = document.createElement('div');
@@ -116,17 +146,8 @@ window.LanchDrapRatingWidget = (() => {
     document.body.appendChild(widget);
     ratingWidget = widget;
 
-    console.log('LanchDrap: Rating widget injected successfully', {
-      widgetId: widget.id,
-      restaurantName: restaurantName,
-      menuItemsCount: menuItems.length,
-      widgetElement: widget,
-      widgetVisible: widget.offsetParent !== null,
-      widgetStyle: window.getComputedStyle(widget).display,
-    });
-
     // Add event listeners
-    setupRatingWidgetEvents(menuItems);
+    setupRatingWidgetEvents(menuItems, lastOrderItems);
 
     // Add backdrop click handler to close dialog
     backdropOverlay.addEventListener('click', (e) => {
@@ -136,7 +157,7 @@ window.LanchDrapRatingWidget = (() => {
     });
   }
 
-  function setupRatingWidgetEvents(menuItems = []) {
+  function setupRatingWidgetEvents(menuItems = [], lastOrderItems = []) {
     const stars = ratingWidget.querySelectorAll('.ld-star');
     const ratingDisplay = ratingWidget.querySelector('#ld-current-rating');
     const commentInput = ratingWidget.querySelector('.ld-rating-comment');
@@ -148,6 +169,19 @@ window.LanchDrapRatingWidget = (() => {
 
     let currentRating = 0;
     let selectedMenuItems = [];
+
+    // Prepopulate with last order items if available
+    if (lastOrderItems && lastOrderItems.length > 0) {
+      selectedMenuItems = [...lastOrderItems];
+      renderSelectedItems();
+
+      // Add a subtle indicator that items were prepopulated
+      const menuLabel = ratingWidget.querySelector('.ld-menu-label');
+      if (menuLabel) {
+        menuLabel.innerHTML =
+          'What did you order? <span style="font-size: 12px; color: #666; font-weight: normal;">(prefilled from your last order)</span>';
+      }
+    }
 
     // Menu search functionality
     function filterMenuItems(searchTerm) {
@@ -484,33 +518,21 @@ window.LanchDrapRatingWidget = (() => {
     });
 
     button.addEventListener('click', async () => {
-      console.log('LanchDrap: Rate button clicked!', {
-        ratingWidget: !!ratingWidget,
-        pageText: document.body.textContent.substring(0, 500),
-        url: window.location.href,
-      });
-
       if (!ratingWidget) {
         // First try to detect LunchDrop rating prompt
         const hasPrompt = detectLunchDropRatingPrompt();
-        console.log('LanchDrap: Prompt detection result:', hasPrompt);
 
         if (hasPrompt) {
-          console.log('LanchDrap: Injecting rating widget with prompt data');
           await injectRatingWidget();
         } else {
-          console.log('LanchDrap: No prompt found, attempting manual rating');
           // Try to extract restaurant information from the current page
           const restaurantInfo = extractRestaurantInfoFromPage();
-          console.log('LanchDrap: Extracted restaurant info:', restaurantInfo);
 
           if (restaurantInfo) {
             // Set the order data with extracted information
             orderData = restaurantInfo;
-            console.log('LanchDrap: Injecting rating widget with extracted data');
             await injectRatingWidget();
           } else {
-            console.log('LanchDrap: Could not extract restaurant info, showing error message');
             button.style.background = '#ffa500';
             button.innerHTML = '🍽️ No Restaurant';
             setTimeout(() => {
@@ -520,7 +542,6 @@ window.LanchDrapRatingWidget = (() => {
           }
         }
       } else {
-        console.log('LanchDrap: Hiding rating widget');
         hideRatingWidget();
       }
     });

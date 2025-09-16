@@ -14,6 +14,7 @@ import {
   trackAppearances,
   update,
   updateAppearances,
+  updateUserOrder,
 } from './api/restaurants.js';
 import { createCorsResponse } from './utils/response.js';
 
@@ -35,6 +36,7 @@ const routes = {
 
   // User order history endpoints
   'POST /api/orders': storeUserOrder,
+  'PUT /api/orders': updateUserOrder, // Dynamic route for /api/orders/YYYY-MM-DD
   'GET /api/orders': getUserOrderHistory,
   'GET /api/orders/summary': getUserRestaurantSummary,
 };

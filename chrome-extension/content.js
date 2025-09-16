@@ -9,6 +9,13 @@ let lastUrl = window.location.href;
 async function initializeExtension() {
   if (isInitialized) return;
 
+  // Extract and store Lunchdrop user ID
+  try {
+    await window.lanchDrapUserIdManager.getUserId();
+  } catch {
+    // Silently fail if we can't extract the user ID
+  }
+
   // Clear any existing DOM cache
   window.LanchDrapDOMUtils.clearDomCache();
 

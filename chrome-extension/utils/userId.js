@@ -5,46 +5,56 @@ class LanchDrapUserIdManager {
     this.userId = null;
   }
 
-  // Generate a unique user ID
-  generateUserId() {
-    return Math.random().toString(36).substring(2, 15);
-  }
-
-  // Check if user ID is in old format and needs migration
-  isOldFormatUserId(userId) {
-    // Old format: user:user_1757167705474_07ap9dr3ewzr_Mozilla/5.
-    // New format: simple random string like abc123def456
-    return (
-      userId &&
-      (userId.startsWith('user:user_') ||
-        userId.includes('Mozilla') ||
-        (userId.includes('_') && userId.length > 20))
-    );
-  }
-
-  // Extract user ID from Lunchdrop page's window.user object
+  // Extract user ID from Lunchdrop page
   getLunchdropUserId() {
     try {
-      // Check if we're on a Lunchdrop page and window.user exists
+      // First try window.user.id (if available)
       if (typeof window !== 'undefined' && window.user && window.user.id) {
         return window.user.id;
       }
+
+      // Try to extract from app data
+      if (typeof window !== 'undefined' && window.app) {
+        const appElement = window.app;
+        if (appElement?.dataset?.page) {
+          try {
+            const pageData = JSON.parse(appElement.dataset.page);
+
+            // Look for userId in orders
+            if (pageData.props?.delivery?.orders) {
+              const orders = pageData.props.delivery.orders;
+              if (orders.length > 0 && orders[0].userId) {
+                return orders[0].userId;
+              }
+            }
+          } catch {
+            // Silently fail if we can't parse the data
+          }
+        }
+      }
+
+      // Fallback: try window.user.id again (in case it loaded asynchronously)
+      if (typeof window !== 'undefined' && window.user && window.user.id) {
+        return window.user.id;
+      }
+
       return null;
-    } catch (_error) {
+    } catch {
       // Silently fail if we can't extract the user ID
       return null;
     }
   }
 
-  // Get or create user ID
+  // Get user ID from Lunchdrop page or storage
   async getUserId() {
     if (this.userId) {
       return this.userId;
     }
 
     try {
-      // First, try to get the Lunchdrop user ID from the page
+      // Get the Lunchdrop user ID from the page
       const lunchdropUserId = this.getLunchdropUserId();
+
       if (lunchdropUserId) {
         // Use the Lunchdrop user ID and store it for future use
         this.userId = lunchdropUserId;
@@ -54,31 +64,16 @@ class LanchDrapUserIdManager {
 
       // If no Lunchdrop user ID found, try to get existing user ID from storage
       const result = await chrome.storage.local.get([this.storageKey]);
+
       if (result[this.storageKey]) {
-        const storedUserId = result[this.storageKey];
-
-        // Check if it's an old format user ID that needs migration
-        if (this.isOldFormatUserId(storedUserId)) {
-          // Generate new user ID and replace the old one
-          this.userId = this.generateUserId();
-          await chrome.storage.local.set({ [this.storageKey]: this.userId });
-          return this.userId;
-        }
-
-        this.userId = storedUserId;
+        this.userId = result[this.storageKey];
         return this.userId;
       }
 
-      // Generate new user ID if none exists
-      this.userId = this.generateUserId();
-
-      // Store the new user ID
-      await chrome.storage.local.set({ [this.storageKey]: this.userId });
-      return this.userId;
-    } catch (_error) {
-      // Fallback to generated ID without storage
-      this.userId = this.generateUserId();
-      return this.userId;
+      // If no user ID found anywhere, this is an error
+      throw new Error('No user ID available from Lunchdrop page or storage');
+    } catch (error) {
+      throw error;
     }
   }
 

@@ -2,7 +2,7 @@
 // Following modern API patterns with proper error handling and validation
 
 import { createApiResponse, createErrorResponse } from '../utils/response.js';
-import { compareMenus } from '../utils/restaurants.js';
+import { compareMenus, mergeMenus } from '../utils/restaurants.js';
 
 // Helper function to get restaurant ID by name
 async function getRestaurantIdByName(env, restaurantName) {
@@ -166,9 +166,10 @@ async function trackRestaurantAppearances(env, restaurants, date) {
 
     // Update menu if provided and different
     if (restaurantInfo.menu && Array.isArray(restaurantInfo.menu)) {
-      const menuChanged = compareMenus(restaurantData.menu, restaurantInfo.menu);
+      const mergedMenu = mergeMenus(restaurantData.menu, restaurantInfo.menu);
+      const menuChanged = compareMenus(restaurantData.menu, mergedMenu);
       if (menuChanged) {
-        restaurantData.menu = restaurantInfo.menu;
+        restaurantData.menu = mergedMenu;
         updateRestaurantTimestamp(restaurantData);
         dataChanged = true;
       }
@@ -490,7 +491,7 @@ export async function updateAppearances(request, env) {
 // Update restaurant (name, menu, etc.)
 export async function update(request, env) {
   try {
-    const { restaurantId, restaurantName, menuItems } = await request.json();
+    const { restaurantId, restaurantName, menuItems, orderDate } = await request.json();
 
     if (!restaurantId) {
       return createErrorResponse('Restaurant ID is required', 400);
@@ -523,17 +524,37 @@ export async function update(request, env) {
 
     // Initialize menu if it doesn't exist
     if (!restaurantData.menu) {
-      restaurantData.menu = [];
+      restaurantData.menu = {};
     }
 
     const updates = [];
     let hasChanges = false;
 
     // Update menu if provided
-    if (menuItems && Array.isArray(menuItems)) {
-      const menuChanged = compareMenus(restaurantData.menu, menuItems);
+    if (menuItems && Array.isArray(menuItems) && orderDate) {
+      // Convert orderDate to YYYY-MM-DD format
+      const dateKey = new Date(orderDate).toISOString().split('T')[0];
+
+      // Get existing menu items for this date
+      const existingMenuForDate = restaurantData.menu[dateKey] || [];
+
+      // Merge menu items for this specific date
+      const mergedMenu = mergeMenus(existingMenuForDate, menuItems);
+      const menuChanged = compareMenus(existingMenuForDate, mergedMenu);
+
       if (menuChanged) {
-        restaurantData.menu = menuItems;
+        restaurantData.menu[dateKey] = mergedMenu;
+        updates.push('menu');
+        hasChanges = true;
+      }
+    } else if (menuItems && Array.isArray(menuItems) && !orderDate) {
+      // Fallback: if no orderDate provided, update the general menu (backward compatibility)
+      const existingMenu = Array.isArray(restaurantData.menu) ? restaurantData.menu : [];
+      const mergedMenu = mergeMenus(existingMenu, menuItems);
+      const menuChanged = compareMenus(existingMenu, mergedMenu);
+
+      if (menuChanged) {
+        restaurantData.menu = mergedMenu;
         updates.push('menu');
         hasChanges = true;
       }
@@ -581,7 +602,27 @@ export async function update(request, env) {
 
     // Update timestamp and save to KV
     updateRestaurantTimestamp(restaurantData);
-    await env.LANCHDRAP_RATINGS.put(restaurantKey, JSON.stringify(restaurantData));
+
+    // Convert MenuItem objects to plain objects for JSON serialization
+    const serializableData = {
+      ...restaurantData,
+      menu: {},
+    };
+
+    // Convert menu items to plain objects
+    if (restaurantData.menu && typeof restaurantData.menu === 'object') {
+      for (const [dateKey, menuItems] of Object.entries(restaurantData.menu)) {
+        if (Array.isArray(menuItems)) {
+          serializableData.menu[dateKey] = menuItems.map((item) =>
+            item instanceof MenuItem ? item.toJSON() : item
+          );
+        } else {
+          serializableData.menu[dateKey] = menuItems;
+        }
+      }
+    }
+
+    await env.LANCHDRAP_RATINGS.put(restaurantKey, JSON.stringify(serializableData));
 
     return createApiResponse(
       {
@@ -590,7 +631,7 @@ export async function update(request, env) {
         data: {
           restaurantId,
           name: restaurantData.name,
-          menu: restaurantData.menu,
+          menu: serializableData.menu,
           updatedFields: updates,
           updatedAt: restaurantData.updatedAt,
         },
@@ -907,6 +948,69 @@ async function updateRestaurantUserTracking(env, restaurantId, userId) {
     }
     // If it already exists, no need to update - it's just a relationship marker
   } catch (_error) {}
+}
+
+// Update user order for specific date
+export async function updateUserOrder(request, env) {
+  try {
+    const url = new URL(request.url);
+    const pathParts = url.pathname.split('/');
+    const orderDate = pathParts[pathParts.length - 1]; // Get the date from the URL
+
+    const { userId, restaurantId, items } = await request.json();
+
+    if (!userId || !restaurantId || !orderDate) {
+      return createErrorResponse('Missing required fields: userId, restaurantId, orderDate', 400);
+    }
+
+    // Validate date format (YYYY-MM-DD)
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+    if (!dateRegex.test(orderDate)) {
+      return createErrorResponse('Invalid date format. Use YYYY-MM-DD', 400);
+    }
+
+    // Create user-restaurant history record key
+    const userRestaurantKey = `user_restaurant_history:${userId}:${restaurantId}`;
+
+    // Get existing history data
+    const existingHistoryData = await env.LANCHDRAP_RATINGS.get(userRestaurantKey);
+    let historyData = {};
+
+    if (existingHistoryData) {
+      try {
+        historyData = JSON.parse(existingHistoryData);
+      } catch {
+        // If parsing fails, start with empty object
+        historyData = {};
+      }
+    }
+
+    // Update the order for the specific date
+    historyData[orderDate] = {
+      items: items || [],
+      updatedAt: new Date().toISOString(),
+    };
+
+    // Save updated history
+    await env.LANCHDRAP_RATINGS.put(userRestaurantKey, JSON.stringify(historyData));
+
+    return createApiResponse(
+      {
+        success: true,
+        message: `Updated order for ${orderDate}`,
+        data: {
+          userId,
+          restaurantId,
+          orderDate,
+          items: items || [],
+          updatedAt: historyData[orderDate].updatedAt,
+        },
+      },
+      200
+    );
+  } catch (error) {
+    return createErrorResponse('Failed to update order', 500, { error: error.message });
+  }
 }
 
 // Store user order history

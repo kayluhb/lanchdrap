@@ -367,38 +367,79 @@
 
 .lunchdrop-extension-popup .rating-options {
   display: flex;
-  flex-direction: column;
-  gap: 6px;
+  flex-direction: row;
+  justify-content: center;
+  gap: 12px;
   margin: 12px 0;
 }
 
 .lunchdrop-extension-popup .rating-option {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
+  justify-content: center;
+  padding: 12px;
   border: 2px solid #e0e0e0;
-  border-radius: 8px;
+  border-radius: 50%;
   cursor: pointer;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    background-color 0.2s ease,
+    transform 0.2s ease;
   background: white;
+  width: 48px;
+  height: 48px;
+  position: relative;
 }
 
 .lunchdrop-extension-popup .rating-option:hover {
   border-color: #ff6b6b;
-  box-shadow: 0 1px 3px rgba(255, 107, 107, 0.15);
+  box-shadow: 0 2px 8px rgba(255, 107, 107, 0.25);
+  transform: scale(1.1);
 }
 
 .lunchdrop-extension-popup .rating-option.active {
   border-color: #ff6b6b;
   background: #fff5f5;
-  box-shadow: 0 1px 4px rgba(255, 107, 107, 0.2);
+  box-shadow: 0 2px 8px rgba(255, 107, 107, 0.3);
+  transform: scale(1.05);
 }
 
 .lunchdrop-extension-popup .rating-emoji {
-  font-size: 20px;
-  min-width: 28px;
+  font-size: 24px;
   text-align: center;
+  line-height: 1;
+}
+
+/* Custom tooltip styling for rating options */
+.lunchdrop-extension-popup .rating-option[title]:hover::after {
+  content: attr(title);
+  position: absolute;
+  bottom: -35px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.8);
+  color: white;
+  padding: 6px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  z-index: 1000;
+  pointer-events: none;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.lunchdrop-extension-popup .rating-option[title]:hover::before {
+  content: "";
+  position: absolute;
+  bottom: -8px;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 4px solid transparent;
+  border-bottom-color: rgba(0, 0, 0, 0.8);
+  z-index: 1000;
+  pointer-events: none;
 }
 
 .lunchdrop-extension-popup .rating-text {

@@ -1,6 +1,8 @@
 // Restaurant utility functions
 // Shared logic for restaurant data management
 
+import { MenuItem, ModelUtils } from './models.js';
+
 // Parse menu items from HTML structure
 export function parseMenuItems(htmlContent) {
   try {
@@ -12,7 +14,7 @@ export function parseMenuItems(htmlContent) {
     const menuItems = [];
     const menuItemElements = doc.querySelectorAll('.my-4.text-lg.cursor-pointer');
 
-    menuItemElements.forEach((item) => {
+    for (const item of menuItemElements) {
       // Extract the menu item name from the span with font-bold class
       const nameElement = item.querySelector('.flex.items-center.font-bold span');
       if (nameElement) {
@@ -21,7 +23,7 @@ export function parseMenuItems(htmlContent) {
           menuItems.push(menuItemName);
         }
       }
-    });
+    }
 
     return menuItems;
   } catch (_error) {
@@ -53,6 +55,39 @@ export function compareMenus(oldMenu, newMenu) {
   return false; // No changes detected
 }
 
+// Update menu items: keep existing items that match new items, add new items, remove items not in new list
+export function mergeMenus(existingMenu, newMenuItems) {
+  if (!existingMenu || !Array.isArray(existingMenu)) {
+    existingMenu = [];
+  }
+
+  if (!newMenuItems || !Array.isArray(newMenuItems)) {
+    return existingMenu;
+  }
+
+  // Convert strings to MenuItem objects if needed
+  const existingItems = existingMenu.map((item) =>
+    typeof item === 'string'
+      ? { name: item, quantity: 1, options: '', fullDescription: item }
+      : item
+  );
+  const newItems = newMenuItems.map((item) =>
+    typeof item === 'string'
+      ? { name: item, quantity: 1, options: '', fullDescription: item }
+      : item
+  );
+
+  // Use ModelUtils to replace menu items, but handle plain objects
+  const existingMenuItems = existingItems.map((item) =>
+    typeof item.getNormalizedName === 'function' ? item : new MenuItem(item)
+  );
+  const newMenuItemObjects = newItems.map((item) =>
+    typeof item.getNormalizedName === 'function' ? item : new MenuItem(item)
+  );
+
+  return ModelUtils.replaceMenuItems(existingMenuItems, newMenuItemObjects);
+}
+
 // Update restaurant appearance counts
 export async function updateRestaurantAppearanceCounts(env, restaurants, _date) {
   const restaurantListKey = 'restaurants:list';
@@ -63,7 +98,7 @@ export async function updateRestaurantAppearanceCounts(env, restaurants, _date) 
     restaurantList = JSON.parse(existingList);
   }
 
-  restaurants.forEach((restaurantInfo) => {
+  for (const restaurantInfo of restaurants) {
     const restaurantId = restaurantInfo.id || restaurantInfo.name || restaurantInfo.restaurant;
     const restaurantName = restaurantInfo.name || restaurantInfo.restaurant || restaurantId;
     const existingIndex = restaurantList.findIndex(
@@ -106,7 +141,7 @@ export async function updateRestaurantAppearanceCounts(env, restaurants, _date) 
         restaurant.name = restaurantName;
       }
     }
-  });
+  }
 
   // Save the updated list
   await env.LANCHDRAP_RATINGS.put(restaurantListKey, JSON.stringify(restaurantList));

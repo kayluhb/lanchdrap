@@ -74,6 +74,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       // Check if the API returned an error
       if (restaurantSummary.success === false) {
+        // API returned error, but we'll continue with local data
         orderHistoryDiv.innerHTML = `
           <div class="error-message">
             <h3>Server Error</h3>
@@ -109,7 +110,7 @@ document.addEventListener('DOMContentLoaded', () => {
         .slice(0, 10);
 
       await displayLast10Restaurants(sortedRestaurants);
-    } catch (_error) {
+    } catch {
       orderHistoryDiv.innerHTML = `
         <div class="error-message">
           <h3>Error loading restaurant history</h3>
@@ -240,7 +241,7 @@ document.addEventListener('DOMContentLoaded', () => {
             <div class="order-items" id="order-items">
               <div class="loading-order">Loading your order...</div>
             </div>
-            <button class="edit-order-button" id="edit-order-button" style="display: none;">Edit order</button>
+            <button class="edit-order-button" id="edit-order-button" style="display: none;white-space:nowrap;">Edit order</button>
             <div class="edit-order-section" id="edit-order-section" style="display: none;">
               <div class="menu-autocomplete">
                 <input type="text" id="menu-search" placeholder="Search menu items..." autocomplete="off">
@@ -251,21 +252,17 @@ document.addEventListener('DOMContentLoaded', () => {
             </div>
           </div>
           <div class="rating-options">
-            <div class="rating-option" data-rating="1">
+            <div class="rating-option" data-rating="1" title="Never Again">
               <span class="rating-emoji">🤮</span>
-              <span class="rating-text">Never Again</span>
             </div>
-            <div class="rating-option" data-rating="2">
+            <div class="rating-option" data-rating="2" title="Meh">
               <span class="rating-emoji">😐</span>
-              <span class="rating-text">Meh</span>
             </div>
-            <div class="rating-option" data-rating="3">
+            <div class="rating-option" data-rating="3" title="Pretty Good">
               <span class="rating-emoji">🤤</span>
-              <span class="rating-text">Pretty Good</span>
             </div>
-            <div class="rating-option" data-rating="4">
+            <div class="rating-option" data-rating="4" title="Life Changing">
               <span class="rating-emoji">🤯</span>
-              <span class="rating-text">Life Changing</span>
             </div>
           </div>
           
@@ -289,7 +286,7 @@ document.addEventListener('DOMContentLoaded', () => {
   async function setupRatingView(restaurantId, restaurantName, orderDate, originalContent) {
     const backButton = document.getElementById('back-to-history');
     const ratingOptions = document.querySelectorAll('.rating-option');
-    const ratingDisplay = document.getElementById('current-rating-text');
+    // Remove reference to rating display since we're using tooltips now
     const commentInput = document.querySelector('.rating-comment');
     const submitButton = document.getElementById('rating-submit');
     const hideForeverButton = document.getElementById('hide-forever');
@@ -300,13 +297,6 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentRating = 0;
     let selectedMenuItems = [];
     let menuItems = [];
-
-    const ratingTexts = {
-      1: 'Never Again 🤮',
-      2: 'Meh 😐',
-      3: 'Pretty Good 🤤',
-      4: 'Life Changing 🤯',
-    };
 
     // Back button functionality
     backButton.addEventListener('click', () => {
@@ -332,13 +322,56 @@ document.addEventListener('DOMContentLoaded', () => {
       const endpoint = `${apiClient.getEndpoint('RESTAURANTS_GET_BY_ID')}/${restaurantId}?${params.toString()}`;
 
       const restaurantData = await apiClient.request(endpoint);
-      menuItems = restaurantData?.menu || [];
+
+      // Get the full restaurant menu for autocomplete
+      // Support both array menus and date-keyed object menus
+      const allMenuItems = new Set();
+      // Prefer top-level menu, then nested restaurant.menu
+      const rawMenu = Array.isArray(restaurantData?.menu)
+        ? restaurantData.menu
+        : restaurantData?.restaurant?.menu;
+      if (Array.isArray(rawMenu)) {
+        for (const entry of rawMenu) {
+          if (typeof entry === 'string') {
+            allMenuItems.add(entry);
+          } else if (entry && typeof entry === 'object' && entry.name) {
+            allMenuItems.add(entry.name);
+          }
+        }
+      } else if (rawMenu && typeof rawMenu === 'object') {
+        for (const dateKey of Object.keys(rawMenu)) {
+          const dateMenuItems = Array.isArray(rawMenu[dateKey]) ? rawMenu[dateKey] : [];
+          for (const item of dateMenuItems) {
+            if (typeof item === 'string') {
+              allMenuItems.add(item);
+            } else if (item && item.name) {
+              allMenuItems.add(item.name);
+            }
+          }
+        }
+      }
+      menuItems = Array.from(allMenuItems);
+
+      // Fallback: if no menu found, try searching by restaurant name
+      if ((!menuItems || menuItems.length === 0) && restaurantName) {
+        try {
+          const searchResult = await apiClient.searchRestaurantByName(restaurantName);
+          if (Array.isArray(searchResult?.menu)) {
+            menuItems = [...new Set(searchResult.menu)];
+          }
+        } catch (_e) {
+          // ignore fallback errors
+        }
+      }
 
       // Extract user's order for the specific date if available
       if (restaurantData?.userOrder?.items && restaurantData.userOrder.items.length > 0) {
-        selectedMenuItems = restaurantData.userOrder.items
-          .map((item) => item.name || item.fullDescription || item)
-          .filter(Boolean);
+        selectedMenuItems = restaurantData.userOrder.items.map((item) => {
+          if (typeof item === 'string') {
+            return LanchDrapModels.MenuItem.fromString(item);
+          }
+          return LanchDrapModels.MenuItem.fromJSON(item);
+        });
 
         // Display the user's order items
         renderOrderItems(selectedMenuItems);
@@ -377,7 +410,7 @@ document.addEventListener('DOMContentLoaded', () => {
         .map(
           (item) => `
         <div class="order-item">
-          <span class="order-item-name">${item}</span>
+          <span class="order-item-name">${item.name}</span>
         </div>
       `
         )
@@ -397,17 +430,64 @@ document.addEventListener('DOMContentLoaded', () => {
       renderSelectedItems();
     }
 
-    function hideEditMode() {
+    async function hideEditMode() {
       const orderItemsDiv = document.getElementById('order-items');
       const editSection = document.getElementById('edit-order-section');
       const editButton = document.getElementById('edit-order-button');
+      const doneEditingButton = document.getElementById('done-editing');
 
-      if (orderItemsDiv) orderItemsDiv.style.display = 'block';
-      if (editSection) editSection.style.display = 'none';
-      if (editButton) editButton.style.display = 'block';
+      // Show loading state
+      if (doneEditingButton) {
+        doneEditingButton.disabled = true;
+        doneEditingButton.textContent = 'Saving...';
+        doneEditingButton.style.opacity = '0.6';
+        doneEditingButton.style.cursor = 'not-allowed';
+      }
 
-      // Update the order display with current items
-      renderOrderItems(selectedMenuItems);
+      try {
+        // Save updated order information to the API
+        if (selectedMenuItems.length > 0) {
+          const apiClient = new LanchDrapApiClient.ApiClient(
+            LanchDrapConfig.CONFIG.API_BASE_URL,
+            LanchDrapConfig.CONFIG.ENDPOINTS
+          );
+
+          // Get user identification
+          const userIdentification = await lanchDrapUserIdManager.getUserIdentification();
+
+          // Update the user's order with the new items for the specific date
+          const items = selectedMenuItems.map((item) => item.toJSON());
+
+          await apiClient.updateUserOrder(
+            userIdentification.userId,
+            restaurantId,
+            orderDate,
+            items
+          );
+        }
+
+        // Update the UI
+        if (orderItemsDiv) orderItemsDiv.style.display = 'block';
+        if (editSection) editSection.style.display = 'none';
+        if (editButton) editButton.style.display = 'block';
+
+        // Update the order display with current items
+        renderOrderItems(selectedMenuItems);
+      } catch {
+        // Still update the UI even if API call fails
+        if (orderItemsDiv) orderItemsDiv.style.display = 'block';
+        if (editSection) editSection.style.display = 'none';
+        if (editButton) editButton.style.display = 'block';
+        renderOrderItems(selectedMenuItems);
+      } finally {
+        // Reset button state
+        if (doneEditingButton) {
+          doneEditingButton.disabled = false;
+          doneEditingButton.textContent = 'Done Editing';
+          doneEditingButton.style.opacity = '1';
+          doneEditingButton.style.cursor = 'pointer';
+        }
+      }
     }
 
     // Menu search functionality
@@ -426,7 +506,11 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       for (const item of items) {
-        if (selectedMenuItems.includes(item)) continue;
+        // Check if this item is already selected by comparing names
+        const isAlreadySelected = selectedMenuItems.some(
+          (selected) => selected.name.toLowerCase() === item.toLowerCase()
+        );
+        if (isAlreadySelected) continue;
 
         const option = document.createElement('div');
         option.className = 'menu-option';
@@ -442,15 +526,20 @@ document.addEventListener('DOMContentLoaded', () => {
       menuDropdown.style.display = 'block';
     }
 
-    function selectMenuItem(item) {
-      if (!selectedMenuItems.includes(item)) {
-        selectedMenuItems.push(item);
+    function selectMenuItem(itemName) {
+      // Create a MenuItem from the selected name
+      const menuItem = LanchDrapModels.MenuItem.fromString(itemName);
+      const alreadySelected = selectedMenuItems.some((selected) => selected.equals(menuItem));
+
+      if (!alreadySelected) {
+        selectedMenuItems.push(menuItem);
         renderSelectedItems();
       }
     }
 
-    function removeMenuItem(item) {
-      selectedMenuItems = selectedMenuItems.filter((i) => i !== item);
+    function removeMenuItem(itemName) {
+      const menuItem = LanchDrapModels.MenuItem.fromString(itemName);
+      selectedMenuItems = selectedMenuItems.filter((i) => !i.equals(menuItem));
       renderSelectedItems();
     }
 
@@ -460,8 +549,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const tag = document.createElement('div');
         tag.className = 'selected-item';
         tag.innerHTML = `
-          <span>${item}</span>
-          <button class="remove-item" data-item="${item}">×</button>
+          <span>${item.name}</span>
+          <button class="remove-item" data-item="${item.name}">×</button>
         `;
         selectedItems.appendChild(tag);
       }
@@ -483,9 +572,37 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     menuSearch.addEventListener('focus', () => {
-      if (menuSearch.value) {
-        const filteredItems = filterMenuItems(menuSearch.value);
+      const value = (menuSearch.value || '').trim();
+      if (value) {
+        const filteredItems = filterMenuItems(value);
         renderMenuDropdown(filteredItems);
+      } else {
+        // Show a short list of suggestions when focusing with empty input
+        renderMenuDropdown(menuItems.slice(0, 20));
+      }
+    });
+
+    // Hide dropdown when clicking outside of the autocomplete
+    document.addEventListener(
+      'click',
+      (e) => {
+        if (!menuSearch.contains(e.target) && !menuDropdown.contains(e.target)) {
+          menuDropdown.style.display = 'none';
+        }
+      },
+      { once: false }
+    );
+
+    // Keyboard handling: Enter selects first suggestion, Escape closes
+    menuSearch.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        const firstOption = menuDropdown.querySelector('.menu-option');
+        if (firstOption) {
+          e.preventDefault();
+          firstOption.click();
+        }
+      } else if (e.key === 'Escape') {
+        menuDropdown.style.display = 'none';
       }
     });
 
@@ -495,7 +612,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const rating = parseInt(this.dataset.rating, 10);
         currentRating = rating;
         updateRatingDisplay();
-        ratingDisplay.textContent = ratingTexts[rating];
       });
 
       option.addEventListener('mouseenter', function () {
@@ -545,7 +661,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     if (doneEditingButton) {
-      doneEditingButton.addEventListener('click', hideEditMode);
+      doneEditingButton.addEventListener('click', async () => {
+        await hideEditMode();
+      });
     }
 
     // Submit rating
@@ -567,7 +685,17 @@ document.addEventListener('DOMContentLoaded', () => {
         const ratingData = {
           orderId: `popup_${Date.now()}`,
           restaurant: restaurantName,
-          items: selectedMenuItems.length > 0 ? selectedMenuItems : ['Unknown Items'],
+          items:
+            selectedMenuItems.length > 0
+              ? selectedMenuItems.map((item) => item.toJSON())
+              : [
+                  {
+                    name: 'Unknown Items',
+                    quantity: 1,
+                    options: '',
+                    fullDescription: 'Unknown Items',
+                  },
+                ],
           rating: currentRating,
           comment: comment,
           timestamp: new Date().toISOString(),

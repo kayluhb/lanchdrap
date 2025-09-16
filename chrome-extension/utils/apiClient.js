@@ -131,10 +131,16 @@ class ApiClient {
   }
 
   // Update restaurant (name, menu, etc.)
-  async updateRestaurant(restaurantId, restaurantName = null, menuItems = null, signal = null) {
+  async updateRestaurant(
+    restaurantId,
+    restaurantName = null,
+    menuItems = null,
+    signal = null,
+    orderDate = null
+  ) {
     return this.request(this.getEndpoint('RESTAURANTS_UPDATE'), {
       method: 'POST',
-      body: JSON.stringify({ restaurantId, restaurantName, menuItems }),
+      body: JSON.stringify({ restaurantId, restaurantName, menuItems, orderDate }),
       signal: signal,
     });
   }
@@ -144,6 +150,15 @@ class ApiClient {
     return this.request(this.getEndpoint('ORDERS'), {
       method: 'POST',
       body: JSON.stringify({ userId, restaurantId, orderData }),
+    });
+  }
+
+  // Update user order for specific date
+  async updateUserOrder(userId, restaurantId, orderDate, items) {
+    const endpoint = `${this.getEndpoint('ORDERS')}/${orderDate}`;
+    return this.request(endpoint, {
+      method: 'PUT',
+      body: JSON.stringify({ userId, restaurantId, items }),
     });
   }
 

@@ -11,6 +11,7 @@ const CONFIG = {
     // Rating endpoints
     RATINGS: '/api/ratings',
     RATINGS_STATS: '/api/ratings/stats',
+    RATINGS_UPDATE_RESTAURANT: '/api/ratings/restaurant',
 
     // Restaurant endpoints
     RESTAURANTS: '/api/restaurants',

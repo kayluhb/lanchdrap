@@ -63,18 +63,160 @@
   display: none; /* WebKit */
 }
 
+/* Order history loading skeleton */
+.lunchdrop-extension-popup .order-history-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.lunchdrop-extension-popup .order-skeleton {
+  background: #f8f9fa;
+  border-radius: 4px;
+  padding: 8px;
+}
+
+.lunchdrop-extension-popup .order-skeleton-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.lunchdrop-extension-popup .skeleton-line {
+  background: linear-gradient(90deg, #e9ecef 25%, #f8f9fa 50%, #e9ecef 75%);
+  background-size: 200px 100%;
+  animation: shimmer 1.2s ease-in-out infinite;
+  border-radius: 4px;
+}
+
+.lunchdrop-extension-popup .skeleton-name {
+  width: 55%;
+  height: 14px;
+}
+.lunchdrop-extension-popup .skeleton-date {
+  width: 25%;
+  height: 12px;
+}
+.lunchdrop-extension-popup .skeleton-items {
+  width: 80%;
+  height: 12px;
+}
+.lunchdrop-extension-popup .skeleton-button {
+  width: 100%;
+  height: 28px;
+  border-radius: 6px;
+}
+
 .lunchdrop-extension-popup .restaurant-item {
   background: #f8f9fa;
   border-radius: 4px;
   padding: 8px;
   margin-bottom: 6px;
+  position: relative;
+  overflow: hidden;
+  transition: transform 0.3s ease;
+}
+
+.lunchdrop-extension-popup .restaurant-item-content {
+  position: relative;
+  z-index: 2;
+  background: #f8f9fa;
+  border-radius: 4px;
+  padding: 8px;
+  transition: transform 0.3s ease;
+}
+
+.lunchdrop-extension-popup .restaurant-item.swiped .restaurant-item-content {
+  transform: translateX(-100px);
+}
+
+.lunchdrop-extension-popup .restaurant-item.swiped .restaurant-item-actions {
+  z-index: 3; /* bring above when revealed */
+}
+
+.lunchdrop-extension-popup .restaurant-item-actions {
+  position: absolute;
+  top: 0;
+  right: -100px;
+  width: 100px;
+  height: 100%;
+  background: #dc3545;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0 4px 4px 0;
+  z-index: 1; /* behind content by default */
+  transition: right 0.3s ease;
+}
+
+.lunchdrop-extension-popup .restaurant-item.swiped .restaurant-item-actions {
+  right: 0;
+  z-index: 3; /* bring above when revealed */
+}
+
+.lunchdrop-extension-popup .delete-order-button {
+  background: none;
+  border: none;
+  color: white;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 8px 10px;
+  border-radius: 4px;
+  transition: background-color 0.2s ease;
+  text-align: center;
+  white-space: normal;
+  line-height: 1.2;
+}
+
+.lunchdrop-extension-popup .delete-order-button:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.lunchdrop-extension-popup .restaurant-item-trash {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: none;
+  border: none;
+  color: #6c757d;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 4px;
+  border-radius: 3px;
+  transition:
+    opacity 0.25s ease 0.2s,
+    background-color 0.2s ease,
+    color 0.2s ease;
+  opacity: 1;
+  z-index: 3;
+}
+
+.lunchdrop-extension-popup .restaurant-item-trash:hover {
+  color: #dc3545;
+  background: rgba(220, 53, 69, 0.1);
+}
+
+/* While swiped, hide the trash instantly; when closing swipe, base rule's delay
+   causes a subtle delayed fade-in */
+.lunchdrop-extension-popup .restaurant-item.swiped .restaurant-item-trash {
+  opacity: 0;
+  transition-delay: 0s;
+  pointer-events: none;
 }
 
 .lunchdrop-extension-popup .restaurant-header {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-start;
   align-items: center;
+  gap: 8px;
   margin-bottom: 6px;
+}
+
+.lunchdrop-extension-popup .order-rated-badge {
+  font-size: 18px;
+  line-height: 1;
+  margin-left: 4px;
 }
 
 .lunchdrop-extension-popup .restaurant-header .restaurant-name {
@@ -100,6 +242,12 @@
   justify-content: space-between;
   align-items: center;
   font-size: 13px;
+}
+
+.lunchdrop-extension-popup .stat-items {
+  font-size: 13px;
+  color: #333;
+  text-align: left;
 }
 
 .lunchdrop-extension-popup .stat-label {
@@ -557,4 +705,30 @@
 .lunchdrop-extension-popup .rate-button:hover {
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(255, 107, 107, 0.3);
+}
+
+/* Skeleton Loading Animations */
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200px 0;
+  }
+  100% {
+    background-position: calc(200px + 100%) 0;
+  }
+}
+
+.lunchdrop-extension-popup .rating-overview-skeleton div {
+  background: linear-gradient(90deg, #e9ecef 25%, #f8f9fa 50%, #e9ecef 75%);
+  background-size: 200px 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
 }

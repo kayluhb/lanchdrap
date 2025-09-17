@@ -276,6 +276,140 @@ class RestaurantHistoryItem {
 }
 
 /**
+ * Rating Model
+ * Represents a rating for a specific order
+ */
+class Rating {
+  constructor(data = {}) {
+    this.id = data.id || '';
+    this.userId = data.userId || '';
+    this.restaurant = data.restaurant || '';
+    this.orderDate = data.orderDate || '';
+    this.rating = data.rating || null; // 1-4 scale
+    this.comment = data.comment || '';
+    this.items = data.items || []; // Array of MenuItem objects
+    this.timestamp = data.timestamp || new Date().toISOString();
+    this.userAgent = data.userAgent || '';
+    this.ip = data.ip || '';
+  }
+
+  /**
+   * Validate rating data
+   */
+  validate() {
+    const errors = [];
+
+    if (!this.userId) errors.push('userId is required');
+    if (!this.restaurant) errors.push('restaurant is required');
+    if (!this.orderDate) errors.push('orderDate is required');
+    if (!this.rating || this.rating < 1 || this.rating > 4) {
+      errors.push('rating must be between 1 and 4');
+    }
+
+    // Validate date format
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+    if (this.orderDate && !dateRegex.test(this.orderDate)) {
+      errors.push('orderDate must be in YYYY-MM-DD format');
+    }
+
+    return errors;
+  }
+
+  /**
+   * Convert to plain object for JSON serialization
+   */
+  toJSON() {
+    return {
+      id: this.id,
+      userId: this.userId,
+      restaurant: this.restaurant,
+      orderDate: this.orderDate,
+      rating: this.rating,
+      comment: this.comment,
+      items: this.items.map((item) => (item instanceof MenuItem ? item.toJSON() : item)),
+      timestamp: this.timestamp,
+      userAgent: this.userAgent,
+      ip: this.ip,
+    };
+  }
+
+  /**
+   * Create Rating from plain object
+   */
+  static fromJSON(data) {
+    const rating = new Rating(data);
+    if (Array.isArray(rating.items)) {
+      rating.items = rating.items.map((item) => {
+        if (typeof item === 'string') {
+          return MenuItem.fromString(item);
+        }
+        return MenuItem.fromJSON(item);
+      });
+    }
+    return rating;
+  }
+}
+
+/**
+ * Rating Statistics Model
+ * Represents aggregated rating statistics for a restaurant
+ */
+class RatingStats {
+  constructor(data = {}) {
+    this.totalRatings = data.totalRatings || 0;
+    this.averageRating = data.averageRating || 0;
+    this.ratingDistribution = data.ratingDistribution || { 1: 0, 2: 0, 3: 0, 4: 0 };
+    this.lastUpdated = data.lastUpdated || new Date().toISOString();
+  }
+
+  /**
+   * Add a new rating and update statistics
+   */
+  addRating(rating) {
+    const oldTotal = this.totalRatings;
+    const oldAverage = this.averageRating;
+
+    this.totalRatings += 1;
+    this.averageRating = (oldAverage * oldTotal + rating) / this.totalRatings;
+    this.ratingDistribution[rating] += 1;
+    this.lastUpdated = new Date().toISOString();
+  }
+
+  /**
+   * Get rating distribution as array
+   */
+  getDistributionArray() {
+    return [1, 2, 3, 4].map((star) => ({
+      stars: star,
+      count: this.ratingDistribution[star] || 0,
+      percentage:
+        this.totalRatings > 0
+          ? (((this.ratingDistribution[star] || 0) / this.totalRatings) * 100).toFixed(1)
+          : 0,
+    }));
+  }
+
+  /**
+   * Convert to plain object for JSON serialization
+   */
+  toJSON() {
+    return {
+      totalRatings: this.totalRatings,
+      averageRating: this.averageRating,
+      ratingDistribution: this.ratingDistribution,
+      lastUpdated: this.lastUpdated,
+    };
+  }
+
+  /**
+   * Create RatingStats from plain object
+   */
+  static fromJSON(data) {
+    return new RatingStats(data);
+  }
+}
+
+/**
  * Utility functions for working with the models
  */
 const ModelUtils = {
@@ -351,4 +485,6 @@ window.LanchDrapModels.MenuItem = MenuItem;
 window.LanchDrapModels.Restaurant = Restaurant;
 window.LanchDrapModels.UserOrder = UserOrder;
 window.LanchDrapModels.RestaurantHistoryItem = RestaurantHistoryItem;
+window.LanchDrapModels.Rating = Rating;
+window.LanchDrapModels.RatingStats = RatingStats;
 window.LanchDrapModels.ModelUtils = ModelUtils;

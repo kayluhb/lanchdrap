@@ -2,8 +2,14 @@
 // Following modern patterns similar to React Router Cloudflare template
 // Import API route handlers
 import { health } from './api/health.js';
-import { submitRating } from './api/ratings.js';
 import {
+  getOrderRating,
+  getRatingStats,
+  submitRating,
+  updateRestaurantRatingData,
+} from './api/ratings.js';
+import {
+  deleteUserRestaurantHistory,
   getRestaurantById,
   getRestaurantStatsWithUserHistory,
   getRestaurantUsers,
@@ -25,6 +31,9 @@ const routes = {
 
   // Rating endpoints
   'POST /api/ratings': submitRating,
+  'GET /api/ratings/order': getOrderRating,
+  'GET /api/ratings/stats': getRatingStats,
+  'POST /api/ratings/restaurant': updateRestaurantRatingData,
   'POST /api/restaurants/appearances/track': trackAppearances,
   'POST /api/restaurants/update': update,
   'POST /api/restaurants/update-appearances': updateAppearances,
@@ -39,6 +48,7 @@ const routes = {
   'PUT /api/orders': updateUserOrder, // Dynamic route for /api/orders/YYYY-MM-DD
   'GET /api/orders': getUserOrderHistory,
   'GET /api/orders/summary': getUserRestaurantSummary,
+  'DELETE /api/orders': deleteUserRestaurantHistory, // Dynamic route for /api/orders/YYYY-MM-DD
 };
 
 // Main worker export
@@ -63,6 +73,10 @@ export default {
       // Handle dynamic routes
       if (!handler && method === 'GET' && path.startsWith('/api/restaurant/')) {
         handler = getRestaurantById;
+      }
+
+      if (!handler && method === 'DELETE' && path.startsWith('/api/orders/')) {
+        handler = deleteUserRestaurantHistory;
       }
 
       if (handler) {

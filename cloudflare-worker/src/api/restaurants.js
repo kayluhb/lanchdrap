@@ -4,6 +4,12 @@
 import { createApiResponse, createErrorResponse } from '../utils/response.js';
 import { compareMenus, mergeMenus } from '../utils/restaurants.js';
 
+// Helper function to get rating emoji
+function getRatingEmoji(rating) {
+  const emojis = { 1: '🤮', 2: '😐', 3: '🤤', 4: '🤯' };
+  return emojis[rating] || '⭐';
+}
+
 // Helper function to get restaurant ID by name
 async function getRestaurantIdByName(env, restaurantName) {
   try {
@@ -826,6 +832,21 @@ export async function getRestaurantById(request, env) {
       responseData.menu = data.menu;
     }
 
+    // Include rating synopsis if available
+    if (data.ratingStats) {
+      const ratingStats = data.ratingStats;
+      const averageEmoji = getRatingEmoji(Math.round(ratingStats.averageRating));
+      responseData.ratingSynopsis = {
+        averageEmoji,
+        averageRating: Math.round(ratingStats.averageRating * 100) / 100,
+        totalRatings: ratingStats.totalRatings,
+        summary: `${averageEmoji} ${ratingStats.averageRating.toFixed(1)} (${ratingStats.totalRatings} rating${ratingStats.totalRatings !== 1 ? 's' : ''})`,
+        distribution: Object.entries(ratingStats.ratingDistribution)
+          .map(([stars, count]) => `${getRatingEmoji(parseInt(stars, 10))} ${count}`)
+          .join(' • '),
+      };
+    }
+
     return new Response(JSON.stringify(responseData), {
       status: 200,
       headers: {
@@ -1271,6 +1292,72 @@ export async function getUserOrderHistory(request, env) {
   }
 }
 
+// Delete a user's restaurant order history (optionally for a specific date)
+export async function deleteUserRestaurantHistory(request, env) {
+  try {
+    const url = new URL(request.url);
+    const pathParts = url.pathname.split('/');
+    const orderDate = pathParts[pathParts.length - 1]; // Get the date from the URL path
+    const userId = url.searchParams.get('userId');
+    const restaurantId = url.searchParams.get('restaurantId');
+
+    if (!userId || !restaurantId) {
+      return createErrorResponse('Missing required parameters: userId, restaurantId', 400);
+    }
+
+    // Validate date format (YYYY-MM-DD)
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+    if (!dateRegex.test(orderDate)) {
+      return createErrorResponse('Invalid date format. Use YYYY-MM-DD', 400);
+    }
+
+    const userRestaurantKey = `user_restaurant_history:${userId}:${restaurantId}`;
+    const historyDataRaw = await env.LANCHDRAP_RATINGS.get(userRestaurantKey);
+
+    if (!historyDataRaw) {
+      return createApiResponse({
+        success: true,
+        message: 'No history found to delete',
+        data: { userId, restaurantId, deleted: false },
+      });
+    }
+
+    // Delete the specific order for the given date
+    let historyData = {};
+    try {
+      historyData = JSON.parse(historyDataRaw) || {};
+    } catch (_e) {
+      historyData = {};
+    }
+
+    if (historyData[orderDate]) {
+      delete historyData[orderDate];
+
+      // If no orders remain, delete the whole key; otherwise update it
+      if (Object.keys(historyData).length === 0) {
+        await env.LANCHDRAP_RATINGS.delete(userRestaurantKey);
+      } else {
+        await env.LANCHDRAP_RATINGS.put(userRestaurantKey, JSON.stringify(historyData));
+      }
+
+      return createApiResponse({
+        success: true,
+        message: `Deleted order on ${orderDate}`,
+        data: { userId, restaurantId, date: orderDate, deleted: true },
+      });
+    }
+
+    // Nothing to delete for that date
+    return createApiResponse({
+      success: true,
+      message: 'No order found for the specified date',
+      data: { userId, restaurantId, date: orderDate, deleted: false },
+    });
+  } catch (_error) {
+    return createErrorResponse('Failed to delete user restaurant history', 500);
+  }
+}
+
 // Clean up duplicate orders for a user-restaurant combination
 export async function cleanupDuplicateOrders(request, env) {
   try {
@@ -1644,6 +1731,22 @@ export async function getRestaurantStatsWithUserHistory(request, env) {
       }
     }
 
+    // Include rating synopsis if available
+    let ratingSynopsis = null;
+    if (data.ratingStats) {
+      const ratingStats = data.ratingStats;
+      const averageEmoji = getRatingEmoji(Math.round(ratingStats.averageRating));
+      ratingSynopsis = {
+        averageEmoji,
+        averageRating: Math.round(ratingStats.averageRating * 100) / 100,
+        totalRatings: ratingStats.totalRatings,
+        summary: `${averageEmoji} ${ratingStats.averageRating.toFixed(1)} (${ratingStats.totalRatings} rating${ratingStats.totalRatings !== 1 ? 's' : ''})`,
+        distribution: Object.entries(ratingStats.ratingDistribution)
+          .map(([stars, count]) => `${getRatingEmoji(parseInt(stars, 10))} ${count}`)
+          .join(' • '),
+      };
+    }
+
     return new Response(
       JSON.stringify({
         // Combined data from both endpoints
@@ -1659,6 +1762,7 @@ export async function getRestaurantStatsWithUserHistory(request, env) {
         appearances: appearances,
         timezone: 'America/Chicago',
         userOrderHistory,
+        ratingSynopsis,
       }),
       {
         status: 200,

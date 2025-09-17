@@ -479,6 +479,69 @@ window.LanchDrapStatsDisplay = (() => {
           ${apiErrorIndicator}
         </div>
         <div class="ld-tracking-stats" style="padding: 20px;">
+          ${
+            stats.ratingSynopsis
+              ? `
+          <!-- Rating Synopsis Row -->
+          <div class="ld-stat-item" style="
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 16px;
+            margin: 8px 0;
+            background: ${cardBackgroundColor};
+            border-radius: 12px;
+            border: 1px solid ${borderColor};
+            backdrop-filter: blur(5px);
+            transition: all 0.2s ease;
+          ">
+            <div style="display: flex; align-items: center; gap: 12px;">
+              <span class="ld-stat-label" style="
+                color: ${secondaryTextColor};
+                font-weight: 500;
+                font-size: 14px;
+                background: ${textBackgroundColor};
+                padding: 4px 8px;
+                border-radius: 6px;
+                border: 1px solid rgba(0, 0, 0, 0.05);
+              ">Rating</span>
+              <span class="ld-stat-value" style="
+                color: ${textColor};
+                font-weight: 700;
+                font-size: 16px;
+                background: ${textBackgroundColor};
+                padding: 4px 12px;
+                border-radius: 20px;
+                min-width: 40px;
+                text-align: center;
+                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+                border: 1px solid rgba(0, 0, 0, 0.05);
+              ">${stats.ratingSynopsis.summary}</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 12px;">
+              <span class="ld-stat-label" style="
+                color: ${secondaryTextColor};
+                font-weight: 500;
+                font-size: 14px;
+                background: ${textBackgroundColor};
+                padding: 4px 8px;
+                border-radius: 6px;
+                border: 1px solid rgba(0, 0, 0, 0.05);
+              ">Distribution</span>
+              <span class="ld-stat-value" style="
+                color: ${textColor};
+                font-weight: 600;
+                font-size: 14px;
+                background: ${textBackgroundColor};
+                padding: 4px 8px;
+                border-radius: 6px;
+                border: 1px solid rgba(0, 0, 0, 0.05);
+              ">${stats.ratingSynopsis.distribution}</span>
+            </div>
+          </div>
+          `
+              : ''
+          }
           <!-- Appearances and Last Seen Row -->
           <div class="ld-stat-item" style="
             display: flex;
@@ -1240,6 +1303,123 @@ window.LanchDrapStatsDisplay = (() => {
           </div>
         </div>
 
+        <div style="margin-bottom: 24px;">
+          <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #333;">
+            Rating Statistics
+          </label>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+            <div>
+              <label style="display: block; margin-bottom: 4px; font-size: 12px; color: #666;">
+                Total Ratings
+              </label>
+              <input 
+                type="number" 
+                id="total-ratings" 
+                min="0"
+                style="
+                  width: 100%;
+                  padding: 8px;
+                  border: 2px solid #e1e5e9;
+                  border-radius: 6px;
+                  font-size: 14px;
+                  box-sizing: border-box;
+                "
+              />
+            </div>
+            <div>
+              <label style="display: block; margin-bottom: 4px; font-size: 12px; color: #666;">
+                Average Rating
+              </label>
+              <input 
+                type="number" 
+                id="average-rating" 
+                min="1" 
+                max="4" 
+                step="0.1"
+                style="
+                  width: 100%;
+                  padding: 8px;
+                  border: 2px solid #e1e5e9;
+                  border-radius: 6px;
+                  font-size: 14px;
+                  box-sizing: border-box;
+                "
+              />
+            </div>
+          </div>
+          <div>
+            <label style="display: block; margin-bottom: 4px; font-size: 12px; color: #666;">
+              Rating Distribution (🤮 😐 🤤 🤯)
+            </label>
+            <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;">
+              <div>
+                <label style="display: block; margin-bottom: 2px; font-size: 11px; color: #666;">🤮 (1)</label>
+                <input 
+                  type="number" 
+                  id="rating-1" 
+                  min="0"
+                  style="
+                    width: 100%;
+                    padding: 6px;
+                    border: 2px solid #e1e5e9;
+                    border-radius: 4px;
+                    font-size: 12px;
+                    box-sizing: border-box;
+                  "
+                />
+              </div>
+              <div>
+                <label style="display: block; margin-bottom: 2px; font-size: 11px; color: #666;">😐 (2)</label>
+                <input 
+                  type="number" 
+                  id="rating-2" 
+                  min="0"
+                  style="
+                    width: 100%;
+                    padding: 6px;
+                    border: 2px solid #e1e5e9;
+                    border-radius: 4px;
+                    font-size: 12px;
+                    box-sizing: border-box;
+                  "
+                />
+              </div>
+              <div>
+                <label style="display: block; margin-bottom: 2px; font-size: 11px; color: #666;">🤤 (3)</label>
+                <input 
+                  type="number" 
+                  id="rating-3" 
+                  min="0"
+                  style="
+                    width: 100%;
+                    padding: 6px;
+                    border: 2px solid #e1e5e9;
+                    border-radius: 4px;
+                    font-size: 12px;
+                    box-sizing: border-box;
+                  "
+                />
+              </div>
+              <div>
+                <label style="display: block; margin-bottom: 2px; font-size: 11px; color: #666;">🤯 (4)</label>
+                <input 
+                  type="number" 
+                  id="rating-4" 
+                  min="0"
+                  style="
+                    width: 100%;
+                    padding: 6px;
+                    border: 2px solid #e1e5e9;
+                    border-radius: 4px;
+                    font-size: 12px;
+                    box-sizing: border-box;
+                  "
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div style="display: flex; gap: 12px; justify-content: flex-end;">
           <button 
             type="button" 
@@ -1315,6 +1495,35 @@ window.LanchDrapStatsDisplay = (() => {
           const soldOutDates = restaurantData.soldOutDates || [];
           soldoutDatesTextarea.value = soldOutDates.join('\n');
         }
+
+        // Load rating data
+        if (restaurantData.ratingStats) {
+          const totalRatingsInput = document.getElementById('total-ratings');
+          const averageRatingInput = document.getElementById('average-rating');
+          const rating1Input = document.getElementById('rating-1');
+          const rating2Input = document.getElementById('rating-2');
+          const rating3Input = document.getElementById('rating-3');
+          const rating4Input = document.getElementById('rating-4');
+
+          if (totalRatingsInput) {
+            totalRatingsInput.value = restaurantData.ratingStats.totalRatings || 0;
+          }
+          if (averageRatingInput) {
+            averageRatingInput.value = restaurantData.ratingStats.averageRating || 0;
+          }
+          if (rating1Input) {
+            rating1Input.value = restaurantData.ratingStats.ratingDistribution?.[1] || 0;
+          }
+          if (rating2Input) {
+            rating2Input.value = restaurantData.ratingStats.ratingDistribution?.[2] || 0;
+          }
+          if (rating3Input) {
+            rating3Input.value = restaurantData.ratingStats.ratingDistribution?.[3] || 0;
+          }
+          if (rating4Input) {
+            rating4Input.value = restaurantData.ratingStats.ratingDistribution?.[4] || 0;
+          }
+        }
       }
     } catch (_error) {}
   }
@@ -1343,6 +1552,12 @@ window.LanchDrapStatsDisplay = (() => {
 
       const appearanceDatesTextarea = document.getElementById('appearance-dates');
       const soldoutDatesTextarea = document.getElementById('soldout-dates');
+      const totalRatingsInput = document.getElementById('total-ratings');
+      const averageRatingInput = document.getElementById('average-rating');
+      const rating1Input = document.getElementById('rating-1');
+      const rating2Input = document.getElementById('rating-2');
+      const rating3Input = document.getElementById('rating-3');
+      const rating4Input = document.getElementById('rating-4');
 
       const appearanceDates = appearanceDatesTextarea.value
         .split('\n')
@@ -1353,6 +1568,18 @@ window.LanchDrapStatsDisplay = (() => {
         .split('\n')
         .map((date) => date.trim())
         .filter((date) => date.length > 0);
+
+      // Collect rating data
+      const ratingData = {
+        totalRatings: parseInt(totalRatingsInput.value, 10) || 0,
+        averageRating: parseFloat(averageRatingInput.value) || 0,
+        ratingDistribution: {
+          1: parseInt(rating1Input.value, 10) || 0,
+          2: parseInt(rating2Input.value, 10) || 0,
+          3: parseInt(rating3Input.value, 10) || 0,
+          4: parseInt(rating4Input.value, 10) || 0,
+        },
+      };
 
       // Validate dates
       const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
@@ -1369,7 +1596,7 @@ window.LanchDrapStatsDisplay = (() => {
       saveButton.textContent = 'Saving...';
 
       try {
-        await saveRestaurantData(restaurantId, appearanceDates, soldoutDates);
+        await saveRestaurantData(restaurantId, appearanceDates, soldoutDates, ratingData);
         dialogOverlay.remove();
 
         // Refresh the stats display
@@ -1401,7 +1628,7 @@ window.LanchDrapStatsDisplay = (() => {
   }
 
   // Save restaurant data via API
-  async function saveRestaurantData(restaurantId, appearanceDates, soldoutDates) {
+  async function saveRestaurantData(restaurantId, appearanceDates, soldoutDates, ratingData) {
     if (typeof LanchDrapApiClient === 'undefined' || typeof LanchDrapConfig === 'undefined') {
       throw new Error('API client not available');
     }
@@ -1413,6 +1640,11 @@ window.LanchDrapStatsDisplay = (() => {
 
     // Update restaurant with new appearance and sold out dates
     await apiClient.updateRestaurantAppearances(restaurantId, appearanceDates, soldoutDates);
+
+    // Update restaurant rating data if provided
+    if (ratingData) {
+      await apiClient.updateRestaurantRatingData(restaurantId, ratingData);
+    }
   }
 
   // Return public API

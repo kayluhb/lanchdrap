@@ -209,6 +209,28 @@ class ApiClient {
       }),
     });
   }
+
+  // Update restaurant rating data
+  async updateRestaurantRatingData(restaurantId, ratingData) {
+    return this.request(this.getEndpoint('RATINGS_UPDATE_RESTAURANT'), {
+      method: 'POST',
+      body: JSON.stringify({
+        restaurantId,
+        ...ratingData,
+      }),
+    });
+  }
+
+  // Delete user restaurant order history for a specific date
+  async deleteUserRestaurantHistory(userId, restaurantId, orderDate) {
+    const params = new URLSearchParams();
+    params.append('userId', userId);
+    params.append('restaurantId', restaurantId);
+    const endpoint = `${this.getEndpoint('ORDERS')}/${orderDate}?${params.toString()}`;
+    return this.request(endpoint, {
+      method: 'DELETE',
+    });
+  }
 }
 
 // Export for use in other files

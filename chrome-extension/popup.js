@@ -1,8 +1,25 @@
 document.addEventListener('DOMContentLoaded', () => {
   const orderHistoryDiv = document.getElementById('order-history');
 
-  // Show loading message
-  orderHistoryDiv.innerHTML = '<p class="no-orders">Loading your restaurant history...</p>';
+  // Show loading skeleton
+  function getOrderHistorySkeletonHTML(count = 3) {
+    const items = Array.from({ length: count })
+      .map(
+        () => `
+      <div class="order-skeleton">
+        <div class="order-skeleton-header">
+          <div class="skeleton-line skeleton-name"></div>
+          <div class="skeleton-line skeleton-date"></div>
+        </div>
+        <div class="skeleton-line skeleton-items" style="margin-top:6px;"></div>
+        <div class="skeleton-line skeleton-button" style="margin-top:10px;"></div>
+      </div>`
+      )
+      .join('');
+    return `<div class="order-history-skeleton">${items}</div>`;
+  }
+
+  orderHistoryDiv.innerHTML = getOrderHistorySkeletonHTML(4);
 
   // Silent version of copy function (no popup messages)
   async function copyLocalStorageToChromeStorageSilent() {
@@ -140,14 +157,13 @@ document.addEventListener('DOMContentLoaded', () => {
         const lastOrderDate =
           window.LanchDrapDOMUtils?.formatDateString?.(restaurant.lastOrderDate) ||
           new Date(restaurant.lastOrderDate).toLocaleDateString();
-        const totalOrders = restaurant.totalOrders || 0;
+        const _totalOrders = restaurant.totalOrders || 0;
         const recentOrders = restaurant.recentOrders || [];
 
         // Get the most recent order items for display
         const recentItems =
           recentOrders.length > 0 && recentOrders[0].items
             ? recentOrders[0].items
-                .slice(0, 3)
                 .map((item) => item.name || item.fullDescription || 'Unknown Item')
                 .join(', ')
             : 'No items recorded';
@@ -164,32 +180,34 @@ document.addEventListener('DOMContentLoaded', () => {
         const canRate = daysSinceOrder >= 1;
 
         return `
-          <div class="restaurant-item" data-restaurant-id="${restaurant.restaurantId}" data-restaurant-name="${restaurantName}">
-            <div class="restaurant-header">
-              <span class="restaurant-name">${restaurantName}</span>
-              <span class="last-order-date">${lastOrderDate}</span>
+          <div class="restaurant-item" data-restaurant-id="${restaurant.restaurantId}" data-restaurant-name="${restaurantName}" data-order-date="${restaurant.lastOrderDate}">
+            <button class="restaurant-item-trash" title="Delete this order">🗑️</button>
+            <div class="restaurant-item-content">
+              <div class="restaurant-header">
+                <span class="restaurant-name">${restaurantName}</span>
+                <span class="last-order-date">${lastOrderDate}</span>
+                <span class="order-rated-badge" data-restaurant-id="${restaurant.restaurantId}" data-order-date="${restaurant.lastOrderDate}" style="display:none;">Rated ⭐</span>
+              </div>
+              <div class="restaurant-stats">
+                <div class="stat-items">${recentItems}</div>
+              </div>
+              ${
+                canRate
+                  ? `
+                <div class="restaurant-actions">
+                  <button class="rate-button" data-restaurant-id="${restaurant.restaurantId}" data-restaurant-name="${restaurantName}" data-order-date="${restaurant.lastOrderDate}">
+                    ⭐ Rate
+                  </button>
+                </div>
+              `
+                  : ''
+              }
             </div>
-            <div class="restaurant-stats">
-              <div class="stat-row">
-                <span class="stat-label">Total Orders:</span>
-                <span class="stat-value">${totalOrders}</span>
-              </div>
-              <div class="stat-row">
-                <span class="stat-label">Last Order Items:</span>
-                <span class="stat-value">${recentItems}</span>
-              </div>
+            <div class="restaurant-item-actions">
+              <button class="delete-order-button" data-restaurant-id="${restaurant.restaurantId}" data-restaurant-name="${restaurantName}" data-order-date="${restaurant.lastOrderDate}">
+                Remove
+              </button>
             </div>
-            ${
-              canRate
-                ? `
-              <div class="restaurant-actions">
-                <button class="rate-button" data-restaurant-id="${restaurant.restaurantId}" data-restaurant-name="${restaurantName}" data-order-date="${restaurant.lastOrderDate}">
-                  ⭐ Rate
-                </button>
-              </div>
-            `
-                : ''
-            }
           </div>
         `;
       })
@@ -202,6 +220,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Add event listeners for rate buttons
     addRateButtonListeners();
+
+    // Add event listeners for delete functionality
+    addDeleteButtonListeners();
+
+    // Populate rating badges next to orders if they are already rated
+    populateOrderRatingBadges();
   }
 
   // Add event listeners for rate buttons
@@ -214,8 +238,158 @@ document.addEventListener('DOMContentLoaded', () => {
         const restaurantName = button.dataset.restaurantName;
         const orderDate = button.dataset.orderDate;
         showRatingView(restaurantId, restaurantName, orderDate);
+
+        // Scroll to top of popup after DOM update
+        setTimeout(() => {
+          // Try multiple scroll targets
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+
+          // Also try scrolling the order history container
+          const orderHistoryDiv = document.getElementById('order-history');
+          if (orderHistoryDiv) {
+            orderHistoryDiv.scrollTop = 0;
+          }
+
+          // Also try scrolling the main container
+          const container = document.querySelector('.container');
+          if (container) {
+            container.scrollTop = 0;
+          }
+        }, 10);
       });
     }
+  }
+
+  // Populate rating badges next to orders if they have been rated already
+  async function populateOrderRatingBadges() {
+    try {
+      const userIdentification = await lanchDrapUserIdManager.getUserIdentification();
+      if (!userIdentification || !userIdentification.userId) return;
+
+      const items = document.querySelectorAll('.restaurant-item');
+      for (const item of items) {
+        const restaurantId = item.getAttribute('data-restaurant-id');
+        const orderDate = item.getAttribute('data-order-date');
+        const badge = item.querySelector('.order-rated-badge');
+        if (!restaurantId || !orderDate || !badge) continue;
+
+        const params = new URLSearchParams();
+        params.append('userId', userIdentification.userId);
+        params.append('restaurantId', restaurantId);
+        params.append('orderDate', orderDate);
+
+        try {
+          const response = await fetch(
+            `${LanchDrapConfig.getApiUrl(LanchDrapConfig.CONFIG.ENDPOINTS.RATINGS)}/order?${params.toString()}`
+          );
+          if (!response.ok) continue;
+          const result = await response.json();
+          if (result.success && result.data && result.data.hasRating && result.data.rating) {
+            const ratingVal = result.data.rating.rating;
+            const emojiMap = { 1: '🤮', 2: '😐', 3: '🤤', 4: '🤯' };
+            const emoji = emojiMap[ratingVal] || '⭐';
+            badge.textContent = emoji;
+            badge.style.display = 'inline';
+            badge.title = 'You rated this order';
+            badge.style.marginLeft = '4px';
+          }
+        } catch (_e) {
+          // ignore network/parse errors for badges
+        }
+      }
+    } catch (_e) {}
+  }
+
+  // Add event listeners for delete functionality
+  function addDeleteButtonListeners() {
+    const trashButtons = document.querySelectorAll('.restaurant-item-trash');
+    const deleteButtons = document.querySelectorAll('.delete-order-button');
+    const restaurantItems = document.querySelectorAll('.restaurant-item');
+
+    // Add click handlers for trash icons (reveal delete button)
+    for (const trashButton of trashButtons) {
+      trashButton.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+
+        const restaurantItem = trashButton.closest('.restaurant-item');
+        restaurantItem.classList.toggle('swiped');
+      });
+    }
+
+    // Add click handlers for delete buttons
+    for (const deleteButton of deleteButtons) {
+      deleteButton.addEventListener('click', async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+
+        const restaurantItem = deleteButton.closest('.restaurant-item');
+        const restaurantId = deleteButton.dataset.restaurantId;
+        const restaurantName = deleteButton.dataset.restaurantName;
+        const orderDate = deleteButton.dataset.orderDate;
+
+        if (
+          !confirm(
+            `Are you sure you want to remove "${restaurantName}" from your order history? This action cannot be undone.`
+          )
+        ) {
+          return;
+        }
+
+        // Show loading state
+        deleteButton.disabled = true;
+        deleteButton.textContent = 'Removing...';
+        deleteButton.style.opacity = '0.6';
+
+        try {
+          // Get user identification
+          const userIdentification = await lanchDrapUserIdManager.getUserIdentification();
+
+          if (!userIdentification?.userId) {
+            alert('Unable to get user ID. Please try again.');
+            return;
+          }
+
+          // Call API to delete the order
+          const apiClient = new LanchDrapApiClient.ApiClient(
+            LanchDrapConfig.CONFIG.API_BASE_URL,
+            LanchDrapConfig.CONFIG.ENDPOINTS
+          );
+
+          await apiClient.deleteUserRestaurantHistory(
+            userIdentification.userId,
+            restaurantId,
+            orderDate
+          );
+
+          // Remove the item from the UI
+          restaurantItem.remove();
+
+          // Check if there are any remaining items
+          const remainingItems = document.querySelectorAll('.restaurant-item');
+          if (remainingItems.length === 0) {
+            // Reload the restaurant list to show updated data
+            loadLast10Restaurants();
+          }
+        } catch (_error) {
+          alert('Failed to remove order. Please try again.');
+        } finally {
+          // Reset button state
+          deleteButton.disabled = false;
+          deleteButton.textContent = 'Remove';
+          deleteButton.style.opacity = '1';
+        }
+      });
+    }
+
+    // Add click handlers to close swipe when clicking outside
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest('.restaurant-item')) {
+        for (const item of restaurantItems) {
+          item.classList.remove('swiped');
+        }
+      }
+    });
   }
 
   // Show rating view in popup
@@ -233,7 +407,6 @@ document.addEventListener('DOMContentLoaded', () => {
           <button class="back-button" id="back-to-history">← Back</button>
           <h3>Rate ${restaurantName}</h3>
         </div>
-        
         
         <div class="rating-form">
           <div class="menu-selection">
@@ -268,9 +441,43 @@ document.addEventListener('DOMContentLoaded', () => {
           
           <textarea class="rating-comment" placeholder="Add a comment about your order..."></textarea>
           
+          <!-- Rating Overview Loading Skeleton -->
+          <div class="rating-overview-skeleton" id="rating-overview-skeleton" style="
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 8px;
+            padding: 12px;
+            margin: 10px 0;
+            animation: pulse 1.5s ease-in-out infinite;
+          ">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+              <div style="
+                background: #e9ecef;
+                height: 16px;
+                width: 120px;
+                border-radius: 4px;
+                animation: shimmer 1.5s ease-in-out infinite;
+              "></div>
+              <div style="
+                background: #e9ecef;
+                height: 14px;
+                width: 60px;
+                border-radius: 4px;
+                animation: shimmer 1.5s ease-in-out infinite;
+              "></div>
+            </div>
+            <div style="
+              background: #e9ecef;
+              height: 12px;
+              width: 200px;
+              border-radius: 4px;
+              animation: shimmer 1.5s ease-in-out infinite;
+            "></div>
+          </div>
+          
           <div class="rating-actions">
-            <button class="rating-submit" id="rating-submit">Submit Rating</button>
-            <button class="hide-forever" id="hide-forever">🚫 Hide Forever</button>
+            <button class="hide-forever" id="hide-forever" disabled>Submit & Hide Forever</button>
+            <button class="rating-submit" id="rating-submit" disabled>Submit</button>
           </div>
         </div>
       </div>
@@ -303,6 +510,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const orderHistoryDiv = document.getElementById('order-history');
       orderHistoryDiv.innerHTML = originalContent;
       addRateButtonListeners(); // Re-add listeners after restoring content
+      addDeleteButtonListeners(); // Re-add delete listeners after restoring content
     });
 
     // Load restaurant details and user's last order
@@ -344,7 +552,7 @@ document.addEventListener('DOMContentLoaded', () => {
           for (const item of dateMenuItems) {
             if (typeof item === 'string') {
               allMenuItems.add(item);
-            } else if (item && item.name) {
+            } else if (item?.name) {
               allMenuItems.add(item.name);
             }
           }
@@ -386,6 +594,12 @@ document.addEventListener('DOMContentLoaded', () => {
         renderOrderItems([]);
       }
 
+      // Check for existing rating for this order
+      await checkExistingRating(restaurantId, orderDate, userIdentification.userId);
+
+      // Load restaurant rating statistics
+      await loadRestaurantRatingStats(restaurantId);
+
       // Update restaurant info section
     } catch (_error) {
       // Could not load restaurant data, continue with empty arrays
@@ -395,6 +609,142 @@ document.addEventListener('DOMContentLoaded', () => {
     menuItems = [...new Set(menuItems)].sort((a, b) =>
       a.toLowerCase().localeCompare(b.toLowerCase())
     );
+
+    // Function to check for existing rating
+    async function checkExistingRating(restaurantId, orderDate, userId) {
+      try {
+        const params = new URLSearchParams();
+        params.append('userId', userId);
+        params.append('restaurantId', restaurantId);
+        params.append('orderDate', orderDate);
+
+        const response = await fetch(
+          `${LanchDrapConfig.getApiUrl(LanchDrapConfig.CONFIG.ENDPOINTS.RATINGS)}/order?${params.toString()}`
+        );
+
+        if (response.ok) {
+          const result = await response.json();
+          if (result.success && result.data.hasRating) {
+            // Show existing rating
+            displayExistingRating(result.data.rating);
+            return true;
+          }
+        }
+      } catch (_error) {}
+      return false;
+    }
+
+    // Function to display existing rating
+    function displayExistingRating(rating) {
+      // Update the rating display
+      currentRating = rating.rating;
+      updateRatingDisplay();
+
+      // Update comment
+      if (commentInput) {
+        commentInput.value = rating.comment || '';
+      }
+
+      // Update submit button text
+      if (submitButton) {
+        submitButton.textContent = 'Update';
+      }
+
+      // Show a message that rating exists
+      const ratingHeader = document.querySelector('.rating-header h3');
+      if (ratingHeader) {
+        ratingHeader.innerHTML = `Rate ${restaurantName} <span style="font-size: 0.8em; color: #666;">(Previously rated: ${getRatingEmoji(rating.rating)})</span>`;
+      }
+    }
+
+    // Helper function to get rating emoji
+    function getRatingEmoji(rating) {
+      const emojis = { 1: '🤮', 2: '😐', 3: '🤤', 4: '🤯' };
+      return emojis[rating] || '⭐';
+    }
+
+    // Function to load restaurant rating statistics
+    async function loadRestaurantRatingStats(restaurantId) {
+      try {
+        const response = await fetch(
+          `${LanchDrapConfig.getApiUrl(LanchDrapConfig.CONFIG.ENDPOINTS.RATINGS)}/stats?restaurant=${encodeURIComponent(restaurantId)}`
+        );
+
+        if (response.ok) {
+          const result = await response.json();
+          if (result.success) {
+            displayRestaurantRatingStats(result.data);
+          } else {
+            // Hide skeleton even if API returns unsuccessful response
+            hideRatingOverviewSkeleton();
+          }
+        } else {
+          // Hide skeleton on HTTP error
+          hideRatingOverviewSkeleton();
+        }
+      } catch (_error) {
+        // Hide skeleton on network error
+        hideRatingOverviewSkeleton();
+      }
+    }
+
+    // Helper function to hide the rating overview skeleton
+    function hideRatingOverviewSkeleton() {
+      const skeleton = document.getElementById('rating-overview-skeleton');
+      if (skeleton) {
+        skeleton.style.display = 'none';
+      }
+    }
+
+    // Function to display restaurant rating statistics
+    function displayRestaurantRatingStats(stats) {
+      // Hide the loading skeleton
+      hideRatingOverviewSkeleton();
+
+      // Find or create rating stats section
+      let statsSection = document.querySelector('.restaurant-rating-stats');
+      if (!statsSection) {
+        statsSection = document.createElement('div');
+        statsSection.className = 'restaurant-rating-stats';
+        statsSection.style.cssText = `
+          background: #f8f9fa;
+          border: 1px solid #e9ecef;
+          border-radius: 8px;
+          padding: 12px;
+          margin: 10px 0;
+          font-size: 0.9em;
+        `;
+
+        // Insert after the rating comment
+        const ratingComment = document.querySelector('.rating-comment');
+        if (ratingComment) {
+          ratingComment.insertAdjacentElement('afterend', statsSection);
+        }
+      }
+
+      if (stats.totalRatings > 0) {
+        const averageEmoji = getRatingEmoji(Math.round(stats.averageRating));
+        const distribution = stats.ratingDistribution
+          .map((dist) => `${getRatingEmoji(dist.stars)} ${dist.count}`)
+          .join(' • ');
+
+        statsSection.innerHTML = `
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <strong>Restaurant Rating: ${averageEmoji} ${stats.averageRating.toFixed(1)}</strong>
+            <span style="color: #666;">${stats.totalRatings} rating${stats.totalRatings !== 1 ? 's' : ''}</span>
+          </div>
+          <div style="color: #666; font-size: 0.85em;">
+            ${distribution}
+          </div>
+        `;
+      } else {
+        statsSection.innerHTML = `
+          <div style="color: #666; text-align: center;">
+            No ratings yet - be the first to rate this restaurant!
+          </div>
+        `;
+      }
+    }
 
     // Order display functionality
     function renderOrderItems(items) {
@@ -612,6 +962,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const rating = parseInt(this.dataset.rating, 10);
         currentRating = rating;
         updateRatingDisplay();
+        enableButtons();
+
+        // Scroll to top of popup
+        window.scrollTo({ top: 0, behavior: 'smooth' });
       });
 
       option.addEventListener('mouseenter', function () {
@@ -652,6 +1006,18 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }
 
+    // Function to enable buttons when rating is selected
+    function enableButtons() {
+      if (currentRating > 0) {
+        submitButton.disabled = false;
+        hideForeverButton.disabled = false;
+        submitButton.style.opacity = '1';
+        hideForeverButton.style.opacity = '1';
+        submitButton.style.cursor = 'pointer';
+        hideForeverButton.style.cursor = 'pointer';
+      }
+    }
+
     // Edit order functionality
     const editOrderButton = document.getElementById('edit-order-button');
     const doneEditingButton = document.getElementById('done-editing');
@@ -673,6 +1039,14 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
       }
 
+      // Get user identification
+      const userIdentification = await lanchDrapUserIdManager.getUserIdentification();
+
+      if (!userIdentification || !userIdentification.userId) {
+        alert('Unable to get user ID. Please try again.');
+        return;
+      }
+
       // Disable the button and show loading state
       submitButton.disabled = true;
       submitButton.textContent = 'Submitting...';
@@ -683,8 +1057,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
       try {
         const ratingData = {
-          orderId: `popup_${Date.now()}`,
-          restaurant: restaurantName,
+          userId: userIdentification.userId,
+          restaurant: restaurantId,
+          orderDate: orderDate,
           items:
             selectedMenuItems.length > 0
               ? selectedMenuItems.map((item) => item.toJSON())
@@ -699,7 +1074,6 @@ document.addEventListener('DOMContentLoaded', () => {
           rating: currentRating,
           comment: comment,
           timestamp: new Date().toISOString(),
-          orderTotal: 'Unknown',
         };
 
         // Send to Cloudflare Worker
@@ -714,23 +1088,25 @@ document.addEventListener('DOMContentLoaded', () => {
           }
         );
 
+        const responseData = await response.json();
+
         if (response.ok) {
           // Go back to history
           const orderHistoryDiv = document.getElementById('order-history');
           orderHistoryDiv.innerHTML = originalContent;
           addRateButtonListeners();
+          addDeleteButtonListeners();
         } else if (response.status === 409) {
-          const _errorData = await response.json();
           // Rating already exists - silently continue
         } else {
-          throw new Error('Failed to submit rating');
+          throw new Error(
+            `Failed to submit rating: ${responseData.error?.message || 'Unknown error'}`
+          );
         }
       } catch (_error) {
-        // Error submitting rating - silently continue
-
         // Re-enable the button on error
         submitButton.disabled = false;
-        submitButton.textContent = 'Submit Rating';
+        submitButton.textContent = 'Submit';
         submitButton.style.opacity = '1';
         submitButton.style.cursor = 'pointer';
       }
@@ -740,7 +1116,7 @@ document.addEventListener('DOMContentLoaded', () => {
     hideForeverButton.addEventListener('click', async () => {
       if (
         !confirm(
-          `Are you sure you want to hide "${restaurantName}" forever? This action cannot be undone.`
+          `Are you sure you want to submit your rating and hide "${restaurantName}" forever? This action cannot be undone.`
         )
       ) {
         return;
@@ -748,12 +1124,56 @@ document.addEventListener('DOMContentLoaded', () => {
 
       // Disable the button and show loading state
       hideForeverButton.disabled = true;
-      hideForeverButton.textContent = 'Hiding...';
+      hideForeverButton.textContent = 'Submitting & Hiding...';
       hideForeverButton.style.opacity = '0.6';
       hideForeverButton.style.cursor = 'not-allowed';
 
       try {
-        // Store hidden restaurant in chrome storage
+        // Get user identification
+        const userIdentification = await lanchDrapUserIdManager.getUserIdentification();
+
+        if (!userIdentification || !userIdentification.userId) {
+          alert('Unable to get user ID. Please try again.');
+          return;
+        }
+
+        // First submit the rating
+        const comment = commentInput.value.trim();
+        const ratingData = {
+          userId: userIdentification.userId,
+          restaurant: restaurantId,
+          orderDate: orderDate,
+          items:
+            selectedMenuItems.length > 0
+              ? selectedMenuItems.map((item) => item.toJSON())
+              : [
+                  {
+                    name: 'Unknown Items',
+                    quantity: 1,
+                    options: '',
+                    fullDescription: 'Unknown Items',
+                  },
+                ],
+          rating: currentRating,
+          comment: comment,
+          timestamp: new Date().toISOString(),
+        };
+
+        const response = await fetch(
+          LanchDrapConfig.getApiUrl(LanchDrapConfig.CONFIG.ENDPOINTS.RATINGS),
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(ratingData),
+          }
+        );
+
+        if (!response.ok && response.status !== 409) {
+        }
+
+        // Then store hidden restaurant in chrome storage
         const hiddenRestaurants = await chrome.storage.local.get(['hiddenRestaurants']);
         const hiddenList = hiddenRestaurants.hiddenRestaurants || [];
 
@@ -766,6 +1186,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const orderHistoryDiv = document.getElementById('order-history');
         orderHistoryDiv.innerHTML = originalContent;
         addRateButtonListeners();
+        addDeleteButtonListeners();
 
         // Reload the restaurant list to reflect the hidden restaurant
         loadLast10Restaurants();
@@ -774,7 +1195,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Re-enable the button on error
         hideForeverButton.disabled = false;
-        hideForeverButton.textContent = '🚫 Hide Forever';
+        hideForeverButton.textContent = 'Submit & Hide Forever';
         hideForeverButton.style.opacity = '1';
         hideForeverButton.style.cursor = 'pointer';
       }

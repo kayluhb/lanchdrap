@@ -138,7 +138,7 @@ export class Restaurant {
     const restaurant = new Restaurant(data);
     // Convert menu items to MenuItem objects
     if (restaurant.menu && typeof restaurant.menu === 'object') {
-      Object.keys(restaurant.menu).forEach((dateKey) => {
+      for (const dateKey of Object.keys(restaurant.menu)) {
         if (Array.isArray(restaurant.menu[dateKey])) {
           restaurant.menu[dateKey] = restaurant.menu[dateKey].map((item) => {
             if (typeof item === 'string') {
@@ -147,7 +147,7 @@ export class Restaurant {
             return MenuItem.fromJSON(item);
           });
         }
-      });
+      }
     }
     return restaurant;
   }
@@ -163,7 +163,7 @@ export class UserOrder {
     this.restaurantId = data.restaurantId || '';
     this.orderDate = data.orderDate || '';
     this.items = data.items || []; // Array of MenuItem objects
-    this.rating = data.rating || null;
+    this.rating = data.rating || null; // Rating object or null
     this.createdAt = data.createdAt || new Date().toISOString();
     this.updatedAt = data.updatedAt || new Date().toISOString();
   }
@@ -194,6 +194,39 @@ export class UserOrder {
   }
 
   /**
+   * Add a rating to this order
+   */
+  addRating(rating) {
+    if (rating instanceof Rating) {
+      this.rating = rating;
+    } else {
+      this.rating = Rating.fromJSON(rating);
+    }
+    this.updatedAt = new Date().toISOString();
+  }
+
+  /**
+   * Check if this order has a rating
+   */
+  hasRating() {
+    return this.rating !== null && this.rating !== undefined;
+  }
+
+  /**
+   * Get the rating value (1-4) or null
+   */
+  getRatingValue() {
+    return this.hasRating() ? this.rating.rating : null;
+  }
+
+  /**
+   * Get the rating comment or empty string
+   */
+  getRatingComment() {
+    return this.hasRating() ? this.rating.comment : '';
+  }
+
+  /**
    * Convert to plain object for JSON serialization
    */
   toJSON() {
@@ -202,7 +235,11 @@ export class UserOrder {
       restaurantId: this.restaurantId,
       orderDate: this.orderDate,
       items: this.items.map((item) => item.toJSON()),
-      rating: this.rating,
+      rating: this.rating
+        ? this.rating instanceof Rating
+          ? this.rating.toJSON()
+          : this.rating
+        : null,
       createdAt: this.createdAt,
       updatedAt: this.updatedAt,
     };
@@ -221,7 +258,144 @@ export class UserOrder {
         return MenuItem.fromJSON(item);
       });
     }
+    if (order.rating && typeof order.rating === 'object') {
+      order.rating = Rating.fromJSON(order.rating);
+    }
     return order;
+  }
+}
+
+/**
+ * Rating Model
+ * Represents a rating for a specific order
+ */
+export class Rating {
+  constructor(data = {}) {
+    this.id = data.id || '';
+    this.userId = data.userId || '';
+    this.restaurant = data.restaurant || '';
+    this.orderDate = data.orderDate || '';
+    this.rating = data.rating || null; // 1-4 scale
+    this.comment = data.comment || '';
+    this.items = data.items || []; // Array of MenuItem objects
+    this.timestamp = data.timestamp || new Date().toISOString();
+    this.userAgent = data.userAgent || '';
+    this.ip = data.ip || '';
+  }
+
+  /**
+   * Validate rating data
+   */
+  validate() {
+    const errors = [];
+
+    if (!this.userId) errors.push('userId is required');
+    if (!this.restaurant) errors.push('restaurant is required');
+    if (!this.orderDate) errors.push('orderDate is required');
+    if (!this.rating || this.rating < 1 || this.rating > 4) {
+      errors.push('rating must be between 1 and 4');
+    }
+
+    // Validate date format
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+    if (this.orderDate && !dateRegex.test(this.orderDate)) {
+      errors.push('orderDate must be in YYYY-MM-DD format');
+    }
+
+    return errors;
+  }
+
+  /**
+   * Convert to plain object for JSON serialization
+   */
+  toJSON() {
+    return {
+      id: this.id,
+      userId: this.userId,
+      restaurant: this.restaurant,
+      orderDate: this.orderDate,
+      rating: this.rating,
+      comment: this.comment,
+      items: this.items.map((item) => (item instanceof MenuItem ? item.toJSON() : item)),
+      timestamp: this.timestamp,
+      userAgent: this.userAgent,
+      ip: this.ip,
+    };
+  }
+
+  /**
+   * Create Rating from plain object
+   */
+  static fromJSON(data) {
+    const rating = new Rating(data);
+    if (Array.isArray(rating.items)) {
+      rating.items = rating.items.map((item) => {
+        if (typeof item === 'string') {
+          return MenuItem.fromString(item);
+        }
+        return MenuItem.fromJSON(item);
+      });
+    }
+    return rating;
+  }
+}
+
+/**
+ * Rating Statistics Model
+ * Represents aggregated rating statistics for a restaurant
+ */
+export class RatingStats {
+  constructor(data = {}) {
+    this.totalRatings = data.totalRatings || 0;
+    this.averageRating = data.averageRating || 0;
+    this.ratingDistribution = data.ratingDistribution || { 1: 0, 2: 0, 3: 0, 4: 0 };
+    this.lastUpdated = data.lastUpdated || new Date().toISOString();
+  }
+
+  /**
+   * Add a new rating and update statistics
+   */
+  addRating(rating) {
+    const oldTotal = this.totalRatings;
+    const oldAverage = this.averageRating;
+
+    this.totalRatings += 1;
+    this.averageRating = (oldAverage * oldTotal + rating) / this.totalRatings;
+    this.ratingDistribution[rating] += 1;
+    this.lastUpdated = new Date().toISOString();
+  }
+
+  /**
+   * Get rating distribution as array
+   */
+  getDistributionArray() {
+    return [1, 2, 3, 4].map((star) => ({
+      stars: star,
+      count: this.ratingDistribution[star] || 0,
+      percentage:
+        this.totalRatings > 0
+          ? (((this.ratingDistribution[star] || 0) / this.totalRatings) * 100).toFixed(1)
+          : 0,
+    }));
+  }
+
+  /**
+   * Convert to plain object for JSON serialization
+   */
+  toJSON() {
+    return {
+      totalRatings: this.totalRatings,
+      averageRating: this.averageRating,
+      ratingDistribution: this.ratingDistribution,
+      lastUpdated: this.lastUpdated,
+    };
+  }
+
+  /**
+   * Create RatingStats from plain object
+   */
+  static fromJSON(data) {
+    return new RatingStats(data);
   }
 }
 
@@ -258,12 +432,12 @@ export const ModelUtils = {
     const result = [...existingItems];
     const existingNames = new Set(existingItems.map((item) => item.getNormalizedName()));
 
-    newItems.forEach((newItem) => {
+    for (const newItem of newItems) {
       if (!existingNames.has(newItem.getNormalizedName())) {
         result.push(newItem);
         existingNames.add(newItem.getNormalizedName());
       }
-    });
+    }
 
     return result;
   },
@@ -285,12 +459,12 @@ export const ModelUtils = {
 
     // Add new items that don't already exist (avoid duplicates)
     const existingNames = new Set(updatedItems.map((item) => item.getNormalizedName()));
-    newItems.forEach((newItem) => {
+    for (const newItem of newItems) {
       if (!existingNames.has(newItem.getNormalizedName())) {
         updatedItems.push(newItem);
         existingNames.add(newItem.getNormalizedName());
       }
-    });
+    }
 
     return updatedItems;
   },

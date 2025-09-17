@@ -50,31 +50,26 @@ class LanchDrapUserIdManager {
     if (this.userId) {
       return this.userId;
     }
+    // Get the Lunchdrop user ID from the page
+    const lunchdropUserId = this.getLunchdropUserId();
 
-    try {
-      // Get the Lunchdrop user ID from the page
-      const lunchdropUserId = this.getLunchdropUserId();
-
-      if (lunchdropUserId) {
-        // Use the Lunchdrop user ID and store it for future use
-        this.userId = lunchdropUserId;
-        await chrome.storage.local.set({ [this.storageKey]: this.userId });
-        return this.userId;
-      }
-
-      // If no Lunchdrop user ID found, try to get existing user ID from storage
-      const result = await chrome.storage.local.get([this.storageKey]);
-
-      if (result[this.storageKey]) {
-        this.userId = result[this.storageKey];
-        return this.userId;
-      }
-
-      // If no user ID found anywhere, this is an error
-      throw new Error('No user ID available from Lunchdrop page or storage');
-    } catch (error) {
-      throw error;
+    if (lunchdropUserId) {
+      // Use the Lunchdrop user ID and store it for future use
+      this.userId = lunchdropUserId;
+      await chrome.storage.local.set({ [this.storageKey]: this.userId });
+      return this.userId;
     }
+
+    // If no Lunchdrop user ID found, try to get existing user ID from storage
+    const result = await chrome.storage.local.get([this.storageKey]);
+
+    if (result[this.storageKey]) {
+      this.userId = result[this.storageKey];
+      return this.userId;
+    }
+
+    // If no user ID found anywhere, this is an error
+    throw new Error('No user ID available from Lunchdrop page or storage');
   }
 
   // Get user fingerprint for additional identification

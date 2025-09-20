@@ -154,9 +154,23 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const restaurantsHTML = restaurants
       .map((restaurant) => {
-        const lastOrderDate =
-          window.LanchDrapDOMUtils?.formatDateString?.(restaurant.lastOrderDate) ||
-          new Date(restaurant.lastOrderDate).toLocaleDateString();
+        // Format the last order date, handling timezone issues
+        let lastOrderDate;
+        if (window.LanchDrapDOMUtils?.formatDateString) {
+          lastOrderDate = window.LanchDrapDOMUtils.formatDateString(restaurant.lastOrderDate);
+        } else {
+          // Fallback: handle YYYY-MM-DD format properly to avoid timezone issues
+          if (
+            typeof restaurant.lastOrderDate === 'string' &&
+            /^\d{4}-\d{2}-\d{2}$/.test(restaurant.lastOrderDate)
+          ) {
+            const [year, month, day] = restaurant.lastOrderDate.split('-');
+            const date = new Date(parseInt(year, 10), parseInt(month, 10) - 1, parseInt(day, 10));
+            lastOrderDate = date.toLocaleDateString();
+          } else {
+            lastOrderDate = new Date(restaurant.lastOrderDate).toLocaleDateString();
+          }
+        }
         const _totalOrders = restaurant.totalOrders || 0;
         const recentOrders = restaurant.recentOrders || [];
 
@@ -173,11 +187,24 @@ document.addEventListener('DOMContentLoaded', () => {
         const storedName = storageResult[restaurantKey];
         const restaurantName = storedName || restaurant.restaurantId;
 
-        // Check if the order date has passed (more than 1 day ago)
-        const orderDate = new Date(restaurant.lastOrderDate);
+        // Check if the order date is in the past OR it's today but after 12:30 PM
+        // Handle timezone issues by comparing date strings directly
+        const orderDateString = restaurant.lastOrderDate; // Should be in YYYY-MM-DD format
         const today = new Date();
-        const daysSinceOrder = Math.floor((today - orderDate) / (1000 * 60 * 60 * 24));
-        const canRate = daysSinceOrder >= 1;
+        const todayString = today.toISOString().split('T')[0]; // Get YYYY-MM-DD format for today
+
+        // Check if it's the same day
+        const isSameDay = orderDateString === todayString;
+
+        // Check if it's in the past (before today)
+        const isPastDate = orderDateString < todayString;
+
+        // Check if it's after 12:30 PM today
+        const currentTime = today.getHours() * 60 + today.getMinutes();
+        const cutoffTime = 12 * 60 + 30; // 12:30 PM in minutes
+
+        // Can rate if: order is in the past OR (it's today AND after 12:30 PM)
+        const canRate = isPastDate || (isSameDay && currentTime >= cutoffTime);
 
         return `
           <div class="restaurant-item" data-restaurant-id="${restaurant.restaurantId}" data-restaurant-name="${restaurantName}" data-order-date="${restaurant.lastOrderDate}">

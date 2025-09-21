@@ -644,6 +644,174 @@ window.LanchDrapRestaurantScraper = (() => {
     }
   }
 
+  // Helper: build availability objects from deliveries (shared by API and page-data)
+  function mapDeliveriesToAvailability(deliveries, orderHistory, urlDate) {
+    try {
+      if (!deliveries || !Array.isArray(deliveries) || deliveries.length === 0) {
+        return null;
+      }
+
+      const availabilityData = deliveries.map((delivery, index) => {
+        const restaurant = delivery.restaurant;
+        const now = new Date();
+
+        let status = 'available';
+        let reason = null;
+        let hasSoldOutInCard = false;
+
+        if (delivery.numSlotsAvailable === 0) {
+          status = 'soldout';
+          reason = 'No delivery slots available';
+          hasSoldOutInCard = true;
+        } else if (delivery.isCancelled) {
+          status = 'soldout';
+          reason = delivery.cancelledReason ?? 'Delivery cancelled';
+          hasSoldOutInCard = true;
+        } else if (delivery.isSuspended) {
+          status = 'soldout';
+          reason = 'Restaurant suspended';
+          hasSoldOutInCard = true;
+        } else if (!delivery.isTakingOrders) {
+          status = 'soldout';
+          reason = 'Not taking orders';
+          hasSoldOutInCard = true;
+        }
+
+        const menuData = extractMenuFromDelivery(delivery);
+        const orderHistoryMenuData = extractMenuFromOrderHistory(orderHistory);
+        const combinedMenuData = [...menuData, ...orderHistoryMenuData];
+
+        return {
+          index,
+          id: restaurant.id,
+          name: restaurant.name,
+          restaurant: restaurant.name,
+          status: status,
+          reason: reason,
+          timeSlot: {
+            start: '12:15pm',
+            end: '1:15pm',
+            full: '12:15pm-1:15pm',
+          },
+          href: `/app/${urlDate}/${delivery.id}`,
+          urlDate: urlDate,
+          timestamp: now.toISOString(),
+          isSelected: false,
+          color: restaurant.brandColor,
+          logo: restaurant.logo,
+          visualIndicators: {
+            opacity: '1',
+            borderColor: 'transparent',
+            hasOrderPlaced: false,
+            hasOrderingClosed: false,
+            hasSoldOutInCard: hasSoldOutInCard,
+          },
+          menu: combinedMenuData,
+          orderHistory: orderHistory,
+          numSlotsAvailable: delivery.numSlotsAvailable,
+        };
+      });
+
+      return availabilityData;
+    } catch (_error) {
+      return null;
+    }
+  }
+
+  // Helper: read Inertia version and base headers from current page
+  function getInertiaHeaders() {
+    try {
+      let version = null;
+      if (typeof window !== 'undefined' && window.app?.dataset?.page) {
+        try {
+          const pageData = JSON.parse(window.app.dataset.page);
+          version = pageData?.version || null;
+        } catch (_e) {}
+      }
+
+      const headers = {
+        Accept: 'text/html, application/xhtml+xml',
+        'X-Requested-With': 'XMLHttpRequest',
+        'X-Inertia': 'true',
+      };
+      if (version) headers['X-Inertia-Version'] = version;
+      return headers;
+    } catch (_error) {
+      return {
+        Accept: 'text/html, application/xhtml+xml',
+        'X-Requested-With': 'XMLHttpRequest',
+        'X-Inertia': 'true',
+      };
+    }
+  }
+
+  // Try to fetch lunch day data via Inertia JSON endpoint (SPA uses same call)
+  async function fetchAvailabilityFromInertia(urlDate) {
+    try {
+      if (!urlDate) return null;
+
+      const currentUrl = window.location.href;
+      const origin = window.location.origin;
+      const headers = getInertiaHeaders();
+
+      let response = await fetch(`${origin}/app/${urlDate}`, {
+        method: 'GET',
+        headers,
+        credentials: 'include',
+      });
+
+      // Handle Inertia 409 responses (version mismatch) with location redirect
+      if (response.status === 409) {
+        const location = response.headers.get('X-Inertia-Location');
+        if (location) {
+          response = await fetch(location, {
+            method: 'GET',
+            headers,
+            credentials: 'include',
+          });
+        }
+      }
+
+      if (!response.ok) {
+        return null;
+      }
+
+      const data = await response.json();
+      const props = data?.props;
+      if (!props) return null;
+
+      // Validate we're still on same page and date
+      if (window.location.href !== currentUrl) return null;
+      const stillUrlDate = window.LanchDrapDOMUtils.extractDateFromUrl();
+      if (stillUrlDate !== urlDate) return null;
+
+      const deliveries = props?.lunchDay?.deliveries;
+      const orderHistory = props?.delivery?.orders;
+      if (deliveries && Array.isArray(deliveries) && deliveries.length > 0) {
+        const availabilityData = mapDeliveriesToAvailability(deliveries, orderHistory, urlDate);
+        return availabilityData;
+      }
+
+      // Fallback: single delivery case if it ever happens on this route
+      const singleDelivery = props?.delivery;
+      if (singleDelivery?.restaurant) {
+        const availabilityData = mapDeliveriesToAvailability(
+          [singleDelivery],
+          orderHistory,
+          urlDate
+        );
+        if (availabilityData && availabilityData.length > 0) {
+          availabilityData[0].isSelected = true;
+          return availabilityData;
+        }
+      }
+
+      return null;
+    } catch (_error) {
+      return null;
+    }
+  }
+
   // Function to scrape restaurant availability from the main grid
   async function scrapeRestaurantAvailability() {
     try {
@@ -671,7 +839,30 @@ window.LanchDrapRestaurantScraper = (() => {
 
       console.log('LanchDrap: TEMPORARILY SKIPPING PAGE DETECTION - proceeding with scraping');
 
-      // First, try to extract from page data
+      // First, try to use the app's own JSON endpoint (Inertia) for the current day
+      const apiUrlDate = window.LanchDrapDOMUtils.extractDateFromUrl();
+      if (apiUrlDate) {
+        const apiAvailability = await fetchAvailabilityFromInertia(apiUrlDate);
+        if (apiAvailability && apiAvailability.length > 0) {
+          // Track restaurant appearances similarly to page-data path
+          setTimeout(() => {
+            trackRestaurantAppearances(apiAvailability)
+              .then((result) => {
+                if (result?.data?.data?.restaurants || result?.data?.restaurants) {
+                  const restaurants = result.data.data?.restaurants || result.data.restaurants;
+                  if (restaurants && Array.isArray(restaurants)) {
+                    addSellOutIndicators(restaurants);
+                  }
+                }
+              })
+              .catch((_error) => {});
+          }, 200);
+
+          return apiAvailability;
+        }
+      }
+
+      // Next, try to extract from page data
       const pageDataAvailability = await extractAvailabilityFromPageData();
       if (pageDataAvailability && pageDataAvailability.length > 0) {
         console.log('LanchDrap: Using availability data from page data');

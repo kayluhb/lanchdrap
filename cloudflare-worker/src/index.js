@@ -1,54 +1,55 @@
 // Main Cloudflare Worker with API Routes Pattern
 // Following modern patterns similar to React Router Cloudflare template
 // Import API route handlers
-import { health } from './api/health.js';
-import {
-  getOrderRating,
-  getRatingStats,
-  submitRating,
-  updateRestaurantRatingData,
-} from './api/ratings.js';
+
+import { getOrderRating, getRatingStats, submitRating } from './api/ratings.js';
+// Import tracking, admin, order, and stats functions
 import {
   deleteUserRestaurantHistory,
   getRestaurantById,
   getRestaurantStatsWithUserHistory,
-  getRestaurantUsers,
-  getUserOrderHistory,
   getUserRestaurantSummary,
-  searchRestaurantByName,
   storeUserOrder,
   trackAppearances,
-  update,
   updateAppearances,
   updateUserOrder,
 } from './api/restaurants.js';
 import { createCorsResponse } from './utils/response.js';
 
-// Route configuration
+// Route configuration - Tracking, admin, and order endpoints enabled
 const routes = {
-  // Health endpoints
-  'GET /api/health': health,
+  // Tracking endpoint enabled
+  'POST /api/restaurants/appearances/track': trackAppearances,
 
-  // Rating endpoints
+  // Order endpoints enabled
+  'GET /api/orders/summary': getUserRestaurantSummary,
+  'POST /api/orders': storeUserOrder,
+
+  // Restaurant stats endpoints enabled
+  'GET /api/restaurants/stats': getRestaurantStatsWithUserHistory,
+
+  // Ratings endpoints temporarily enabled
   'POST /api/ratings': submitRating,
   'GET /api/ratings/order': getOrderRating,
   'GET /api/ratings/stats': getRatingStats,
-  'POST /api/ratings/restaurant': updateRestaurantRatingData,
-  'POST /api/restaurants/appearances/track': trackAppearances,
-  'POST /api/restaurants/update': update,
+
+  // Enable appearance editing only
   'POST /api/restaurants/update-appearances': updateAppearances,
 
-  // Restaurant search endpoints
-  'GET /api/restaurants/search': searchRestaurantByName,
-  'GET /api/restaurants/stats': getRestaurantStatsWithUserHistory,
-  'GET /api/restaurants/users': getRestaurantUsers,
-
-  // User order history endpoints
-  'POST /api/orders': storeUserOrder,
-  'PUT /api/orders': updateUserOrder, // Dynamic route for /api/orders/YYYY-MM-DD
-  'GET /api/orders': getUserOrderHistory,
-  'GET /api/orders/summary': getUserRestaurantSummary,
-  'DELETE /api/orders': deleteUserRestaurantHistory, // Dynamic route for /api/orders/YYYY-MM-DD
+  // All other endpoints disabled
+  // 'GET /api/health': health,
+  // 'POST /api/ratings': submitRating,
+  // 'GET /api/ratings/order': getOrderRating,
+  // 'GET /api/ratings/stats': getRatingStats,
+  // 'POST /api/ratings/restaurant': updateRestaurantRatingData,
+  // 'POST /api/restaurants/update': update,
+  // 'POST /api/restaurants/update-appearances': updateAppearances,
+  // 'GET /api/restaurants/search': searchRestaurantByName,
+  // 'GET /api/restaurants/stats': getRestaurantStatsWithUserHistory,
+  // 'GET /api/restaurants/users': getRestaurantUsers,
+  // 'PUT /api/orders': updateUserOrder,
+  // 'GET /api/orders': getUserOrderHistory,
+  // 'DELETE /api/orders': deleteUserRestaurantHistory,
 };
 
 // Main worker export
@@ -68,20 +69,23 @@ export default {
       const routeKey = `${method} ${path}`;
 
       // Find matching route
-      let handler = routes[routeKey];
+      const handler = routes[routeKey];
 
-      // Handle dynamic routes
-      if (!handler && method === 'GET' && path.startsWith('/api/restaurant/')) {
-        handler = getRestaurantById;
+      // Enable dynamic route for restaurant by ID and orders by date
+      let dynamicHandler = handler;
+      if (!dynamicHandler && method === 'GET' && path.startsWith('/api/restaurant/')) {
+        dynamicHandler = getRestaurantById;
+      }
+      if (!dynamicHandler && method === 'PUT' && path.startsWith('/api/orders/')) {
+        dynamicHandler = updateUserOrder;
+      }
+      if (!dynamicHandler && method === 'DELETE' && path.startsWith('/api/orders/')) {
+        dynamicHandler = deleteUserRestaurantHistory;
       }
 
-      if (!handler && method === 'DELETE' && path.startsWith('/api/orders/')) {
-        handler = deleteUserRestaurantHistory;
-      }
-
-      if (handler) {
+      if (dynamicHandler) {
         // Execute the handler
-        return await handler(request, env);
+        return await dynamicHandler(request, env);
       }
 
       // No route found - return 404

@@ -21,44 +21,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   orderHistoryDiv.innerHTML = getOrderHistorySkeletonHTML(4);
 
-  // Silent version of copy function (no popup messages)
-  async function copyLocalStorageToChromeStorageSilent() {
-    try {
-      // Get all localStorage keys that start with 'restaurant_name:'
-      const allKeys = Object.keys(localStorage);
-      const restaurantNameKeys = allKeys.filter((key) => key.startsWith('restaurant_name:'));
-
-      if (restaurantNameKeys.length === 0) {
-        return { copied: 0, message: 'No restaurant names found in localStorage' };
-      }
-
-      // Get all restaurant names from localStorage
-      const restaurantNames = {};
-      for (const key of restaurantNameKeys) {
-        const value = localStorage.getItem(key);
-        if (value) {
-          restaurantNames[key] = value;
-        }
-      }
-
-      // Store them in chrome.storage.local
-      await chrome.storage.local.set(restaurantNames);
-
-      return {
-        copied: Object.keys(restaurantNames).length,
-        message: `Copied ${Object.keys(restaurantNames).length} restaurant names to chrome.storage.local`,
-        names: restaurantNames,
-      };
-    } catch (error) {
-      return { copied: 0, message: `Error copying: ${error.message}` };
-    }
-  }
-
   // Load last 10 restaurants from user order history
   async function loadLast10Restaurants() {
-    // Auto-copy localStorage restaurant names to chrome.storage.local (silent version)
-    await copyLocalStorageToChromeStorageSilent();
-
     try {
       // Get user ID
       const userIdentification = await lanchDrapUserIdManager.getUserIdentification();
@@ -148,9 +112,7 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    // Get all restaurant names from chrome.storage.local
-    const restaurantKeys = restaurants.map((r) => `restaurant_name:${r.restaurantId}`);
-    const storageResult = await chrome.storage.local.get(restaurantKeys);
+    // Restaurant names are now available directly from the data
 
     const restaurantsHTML = restaurants
       .map((restaurant) => {
@@ -182,10 +144,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 .join(', ')
             : 'No items recorded';
 
-        // Get restaurant name from chrome.storage.local
-        const restaurantKey = `restaurant_name:${restaurant.restaurantId}`;
-        const storedName = storageResult[restaurantKey];
-        const restaurantName = storedName || restaurant.restaurantId;
+        // Use restaurant name directly from the data
+        const restaurantName = restaurant.restaurantName || restaurant.restaurantId;
 
         // Check if the order date is in the past OR it's today but after 12:30 PM
         // Handle timezone issues by comparing date strings directly
@@ -204,7 +164,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const cutoffTime = 12 * 60 + 30; // 12:30 PM in minutes
 
         // Can rate if: order is in the past OR (it's today AND after 12:30 PM)
-        const canRate = isPastDate || (isSameDay && currentTime >= cutoffTime);
+        // Temporary override via config flag
+        const forceRatings = !!window.LanchDrapConfig?.CONFIG?.SETTINGS?.TEMP_ENABLE_POPUP_RATINGS;
+        const canRate = forceRatings || isPastDate || (isSameDay && currentTime >= cutoffTime);
 
         return `
           <div class="restaurant-item" data-restaurant-id="${restaurant.restaurantId}" data-restaurant-name="${restaurantName}" data-order-date="${restaurant.lastOrderDate}">

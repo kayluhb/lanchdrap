@@ -3,33 +3,11 @@
 
 // Create global namespace for order parser utilities
 window.LanchDrapOrderParser = (() => {
-  // Function to parse menu items from restaurant page
+  // Function to parse menu items from restaurant page - REMOVED
+  // Menu data is now extracted directly from delivery data in restaurant-scraper.js
   function parseMenuFromPage() {
-    try {
-      // Look for menu sections with the structure provided by the user
-      const menuSections = document.querySelectorAll('.my-16');
-      const allMenuItems = [];
-
-      for (const section of menuSections) {
-        // Find all menu item containers within this section
-        const menuItems = section.querySelectorAll('.my-4.text-lg.cursor-pointer');
-
-        for (const item of menuItems) {
-          // Extract the menu item name from the span with font-bold class
-          const nameElement = item.querySelector('.flex.items-center.font-bold span');
-          if (nameElement) {
-            const menuItemName = nameElement.textContent.trim();
-            if (menuItemName) {
-              allMenuItems.push(menuItemName);
-            }
-          }
-        }
-      }
-
-      return allMenuItems;
-    } catch (_error) {
-      return [];
-    }
+    // This function is no longer used - menu data comes from delivery data
+    return [];
   }
 
   // Function to parse order items from the order confirmation page
@@ -182,7 +160,8 @@ window.LanchDrapOrderParser = (() => {
       }
 
       // Get restaurant information using centralized context utility
-      const restaurantContext = window.LanchDrapRestaurantContext.getCurrentRestaurantContext();
+      const restaurantContext =
+        await window.LanchDrapRestaurantContext.getCurrentRestaurantContext();
       const restaurantId = restaurantContext.id;
       const restaurantName = restaurantContext.name;
 
@@ -191,7 +170,6 @@ window.LanchDrapOrderParser = (() => {
       }
 
       // Debug: Log restaurant information
-      const _urlParts = window.location.pathname.split('/');
 
       // Create order fingerprint based on actual content
       const orderFingerprint = createOrderFingerprint(orderItems, restaurantId, restaurantName);

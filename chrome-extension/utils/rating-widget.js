@@ -26,10 +26,8 @@ window.LanchDrapRatingWidget = (() => {
         menuItems = restaurantData.menu || [];
       }
     } catch (_error) {
-      // Fallback to parsing menu from current page
-      menuItems = window.LanchDrapOrderParser
-        ? window.LanchDrapOrderParser.parseMenuFromPage()
-        : [];
+      // Menu data is now extracted from delivery data, not DOM parsing
+      menuItems = [];
     }
 
     // Dedupe and sort menu items alphabetically
@@ -383,7 +381,7 @@ window.LanchDrapRatingWidget = (() => {
   }
 
   // Function to extract restaurant information from the current page
-  function extractRestaurantInfoFromPage() {
+  async function extractRestaurantInfoFromPage() {
     try {
       // Try to get restaurant name from the page title or restaurant name element
       let restaurantName = null;
@@ -402,22 +400,13 @@ window.LanchDrapRatingWidget = (() => {
         }
       }
 
-      // Method 3: Try to extract from URL if on a restaurant detail page
+      // Method 3: Try to get restaurant name from page data
       if (!restaurantName) {
-        const urlParts = window.location.pathname.split('/');
-        if (urlParts.length >= 4 && urlParts[1] === 'app') {
-          const restaurantId = urlParts[urlParts.length - 1];
-          // Check if it's not a date
-          const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
-          if (!dateRegex.test(restaurantId)) {
-            // Try to get name from localStorage
-            const localKey = `restaurant_name:${restaurantId}`;
-            const storedName = localStorage.getItem(localKey);
-            if (storedName) {
-              restaurantName = storedName;
-            } else {
-              restaurantName = restaurantId; // Use ID as fallback
-            }
+        if (window.LanchDrapRestaurantContext) {
+          const restaurantContext =
+            await window.LanchDrapRestaurantContext.getCurrentRestaurantContext();
+          if (restaurantContext.name) {
+            restaurantName = restaurantContext.name;
           }
         }
       }
@@ -526,7 +515,7 @@ window.LanchDrapRatingWidget = (() => {
           await injectRatingWidget();
         } else {
           // Try to extract restaurant information from the current page
-          const restaurantInfo = extractRestaurantInfoFromPage();
+          const restaurantInfo = await extractRestaurantInfoFromPage();
 
           if (restaurantInfo) {
             // Set the order data with extracted information

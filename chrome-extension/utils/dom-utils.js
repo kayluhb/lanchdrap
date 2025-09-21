@@ -137,15 +137,54 @@ window.LanchDrapDOMUtils = (() => {
 
   // Function to check if we're on a restaurant detail page
   function isRestaurantDetailPage() {
-    return window.location.pathname.match(/\/app\/\d{4}-\d{2}-\d{2}\/[a-zA-Z0-9]+$/);
+    try {
+      // Check if we have delivery data (indicates restaurant detail page)
+      if (typeof window !== 'undefined' && window.app) {
+        const appElement = window.app;
+        if (appElement?.dataset?.page) {
+          try {
+            const pageData = JSON.parse(appElement.dataset.page);
+            console.log('LanchDrap: isRestaurantDetailPage checking pageData:', pageData);
+            const hasDeliveryRestaurant = !!pageData.props?.delivery?.restaurant?.id;
+            console.log('LanchDrap: isRestaurantDetailPage result:', hasDeliveryRestaurant);
+            return hasDeliveryRestaurant;
+          } catch (error) {
+            console.log('LanchDrap: Error parsing page data for detail page check:', error);
+          }
+        }
+      }
+      return false;
+    } catch (_error) {
+      return false;
+    }
   }
 
   // Function to check if we're on the main restaurant grid page
   function isRestaurantGridPage() {
-    return (
-      window.location.pathname.includes('/app/') ||
-      document.querySelector('div.mx-4.my-8.sm\\:my-2')
-    );
+    try {
+      // Check if we have deliveries data (indicates grid page)
+      if (typeof window !== 'undefined' && window.app) {
+        const appElement = window.app;
+        if (appElement?.dataset?.page) {
+          try {
+            const pageData = JSON.parse(appElement.dataset.page);
+            console.log('LanchDrap: isRestaurantGridPage checking pageData:', pageData);
+            const hasLunchDayDeliveries = !!pageData.props?.lunchDay?.deliveries;
+            console.log(
+              'LanchDrap: isRestaurantGridPage looking for lunchDay.deliveries, found:',
+              hasLunchDayDeliveries
+            );
+            console.log('LanchDrap: pageData.props structure:', pageData.props);
+            return hasLunchDayDeliveries;
+          } catch (error) {
+            console.log('LanchDrap: Error parsing page data for grid page check:', error);
+          }
+        }
+      }
+      return false;
+    } catch (_error) {
+      return false;
+    }
   }
 
   // Function to check if we're on a login page

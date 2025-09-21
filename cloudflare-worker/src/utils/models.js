@@ -11,44 +11,47 @@
  */
 export class MenuItem {
   constructor(data = {}) {
-    this.name = data.name || '';
-    this.quantity = data.quantity || 1;
-    this.options = data.options || '';
-    this.fullDescription = data.fullDescription || '';
-  }
-
-  /**
-   * Create a MenuItem from a simple string (for backward compatibility)
-   */
-  static fromString(itemName) {
-    return new MenuItem({
-      name: itemName,
-      quantity: 1,
-      options: '',
-      fullDescription: itemName,
-    });
+    this.id = data.id || '';
+    this.label = data.label || '';
+    this.description = data.description || '';
+    this.price = data.price || 0;
+    this.basePrice = data.basePrice || 0;
+    this.maxPrice = data.maxPrice || 0;
+    this.section = data.section || '';
+    this.sectionSortOrder = data.sectionSortOrder || 0;
+    this.isEntree = data.isEntree || false;
+    this.isFavorite = data.isFavorite || false;
+    this.isSpicy1 = data.isSpicy1 || false;
+    this.isSpicy2 = data.isSpicy2 || false;
+    this.isSpicy3 = data.isSpicy3 || false;
+    this.isGlutenFree = data.isGlutenFree || false;
+    this.isVegetarian = data.isVegetarian || false;
+    this.isNutAllergy = data.isNutAllergy || false;
+    this.picture = data.picture || '';
+    this.rating = data.rating || 0;
+    this.reviews = data.reviews || 0;
   }
 
   /**
    * Convert MenuItem to a simple string representation
    */
   toString() {
-    return this.fullDescription || this.name;
+    return this.description || this.label;
   }
 
   /**
-   * Check if two MenuItems are the same (by name)
+   * Check if two MenuItems are the same (by ID)
    */
   equals(other) {
     if (!other || !(other instanceof MenuItem)) return false;
-    return this.name.toLowerCase().trim() === other.name.toLowerCase().trim();
+    return this.id === other.id;
   }
 
   /**
    * Get a normalized name for comparison
    */
   getNormalizedName() {
-    return this.name.toLowerCase().trim();
+    return this.label.toLowerCase().trim();
   }
 
   /**
@@ -56,10 +59,25 @@ export class MenuItem {
    */
   toJSON() {
     return {
-      name: this.name,
-      quantity: this.quantity,
-      options: this.options,
-      fullDescription: this.fullDescription,
+      id: this.id,
+      label: this.label,
+      description: this.description,
+      price: this.price,
+      basePrice: this.basePrice,
+      maxPrice: this.maxPrice,
+      section: this.section,
+      sectionSortOrder: this.sectionSortOrder,
+      isEntree: this.isEntree,
+      isFavorite: this.isFavorite,
+      isSpicy1: this.isSpicy1,
+      isSpicy2: this.isSpicy2,
+      isSpicy3: this.isSpicy3,
+      isGlutenFree: this.isGlutenFree,
+      isVegetarian: this.isVegetarian,
+      isNutAllergy: this.isNutAllergy,
+      picture: this.picture,
+      rating: this.rating,
+      reviews: this.reviews,
     };
   }
 
@@ -68,6 +86,86 @@ export class MenuItem {
    */
   static fromJSON(data) {
     return new MenuItem(data);
+  }
+}
+
+/**
+ * Menu Model
+ * Represents a restaurant's menu with items organized by date
+ */
+export class Menu {
+  constructor(data = {}) {
+    this.restaurantId = data.restaurantId || '';
+    this.items = data.items || []; // Array of MenuItem objects
+    this.lastUpdated = data.lastUpdated || new Date().toISOString();
+    this.createdAt = data.createdAt || new Date().toISOString();
+  }
+
+  /**
+   * Add or update menu items
+   */
+  addMenuItems(newItems) {
+    if (!Array.isArray(newItems)) return;
+
+    // Convert to MenuItem objects if needed
+    const menuItems = newItems.map((item) =>
+      typeof item.getNormalizedName === 'function' ? item : new MenuItem(item)
+    );
+
+    // Merge with existing items, keeping the latest version of each item
+    const existingItems = this.items.map((item) =>
+      typeof item.getNormalizedName === 'function' ? item : new MenuItem(item)
+    );
+
+    // Create a map of existing items by ID
+    const existingMap = new Map();
+    for (const item of existingItems) {
+      existingMap.set(item.id, item);
+    }
+
+    // Update or add new items
+    for (const newItem of menuItems) {
+      existingMap.set(newItem.id, newItem);
+    }
+
+    this.items = Array.from(existingMap.values());
+    this.lastUpdated = new Date().toISOString();
+  }
+
+  /**
+   * Get menu items by section
+   */
+  getItemsBySection(sectionName) {
+    return this.items.filter((item) => item.section === sectionName);
+  }
+
+  /**
+   * Get all unique sections
+   */
+  getSections() {
+    const sections = new Set(this.items.map((item) => item.section));
+    return Array.from(sections).sort();
+  }
+
+  /**
+   * Convert to plain object for JSON serialization
+   */
+  toJSON() {
+    return {
+      restaurantId: this.restaurantId,
+      items: this.items.map((item) => (item instanceof MenuItem ? item.toJSON() : item)),
+      lastUpdated: this.lastUpdated,
+      createdAt: this.createdAt,
+    };
+  }
+
+  /**
+   * Create Menu from plain object
+   */
+  static fromJSON(data) {
+    const menu = new Menu(data);
+    menu.items = data.items?.map((item) => new MenuItem(item)) || [];
+    return menu;
   }
 }
 
@@ -81,38 +179,14 @@ export class Restaurant {
     this.name = data.name || '';
     this.appearances = data.appearances || [];
     this.soldOutDates = data.soldOutDates || [];
-    this.menu = data.menu || {}; // Object with date keys: {"YYYY-MM-DD": [MenuItem]}
     this.firstSeen = data.firstSeen || null;
     this.lastSeen = data.lastSeen || null;
     this.createdAt = data.createdAt || new Date().toISOString();
     this.color = data.color || null;
+    this.logo = data.logo || null;
   }
 
-  /**
-   * Get menu items for a specific date
-   */
-  getMenuForDate(date) {
-    const dateKey = this.formatDateKey(date);
-    return this.menu[dateKey] || [];
-  }
-
-  /**
-   * Set menu items for a specific date
-   */
-  setMenuForDate(date, menuItems) {
-    const dateKey = this.formatDateKey(date);
-    this.menu[dateKey] = menuItems;
-  }
-
-  /**
-   * Format date to YYYY-MM-DD key
-   */
-  formatDateKey(date) {
-    if (typeof date === 'string') {
-      return new Date(date).toISOString().split('T')[0];
-    }
-    return date.toISOString().split('T')[0];
-  }
+  // Menu data is now stored separately in restaurant_menu:<id> KV records
 
   /**
    * Convert to plain object for JSON serialization
@@ -123,11 +197,11 @@ export class Restaurant {
       name: this.name,
       appearances: this.appearances,
       soldOutDates: this.soldOutDates,
-      menu: this.menu,
       firstSeen: this.firstSeen,
       lastSeen: this.lastSeen,
       createdAt: this.createdAt,
       color: this.color,
+      logo: this.logo,
     };
   }
 
@@ -135,21 +209,7 @@ export class Restaurant {
    * Create Restaurant from plain object
    */
   static fromJSON(data) {
-    const restaurant = new Restaurant(data);
-    // Convert menu items to MenuItem objects
-    if (restaurant.menu && typeof restaurant.menu === 'object') {
-      for (const dateKey of Object.keys(restaurant.menu)) {
-        if (Array.isArray(restaurant.menu[dateKey])) {
-          restaurant.menu[dateKey] = restaurant.menu[dateKey].map((item) => {
-            if (typeof item === 'string') {
-              return MenuItem.fromString(item);
-            }
-            return MenuItem.fromJSON(item);
-          });
-        }
-      }
-    }
-    return restaurant;
+    return new Restaurant(data);
   }
 }
 

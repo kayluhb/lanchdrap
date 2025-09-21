@@ -41,13 +41,21 @@ export function compareMenus(oldMenu, newMenu) {
     return true; // Different lengths means change
   }
 
-  // Sort both arrays for comparison
-  const sortedOld = [...oldMenu].sort();
-  const sortedNew = [...newMenu].sort();
+  // Convert to MenuItem objects for proper comparison
+  const oldItems = oldMenu.map((item) =>
+    typeof item.getNormalizedName === 'function' ? item : new MenuItem(item)
+  );
+  const newItems = newMenu.map((item) =>
+    typeof item.getNormalizedName === 'function' ? item : new MenuItem(item)
+  );
 
-  // Compare each item
+  // Sort both arrays by ID for comparison
+  const sortedOld = [...oldItems].sort((a, b) => a.id.localeCompare(b.id));
+  const sortedNew = [...newItems].sort((a, b) => a.id.localeCompare(b.id));
+
+  // Compare each item using the equals method
   for (let i = 0; i < sortedOld.length; i++) {
-    if (sortedOld[i] !== sortedNew[i]) {
+    if (!sortedOld[i].equals(sortedNew[i])) {
       return true; // Found a difference
     }
   }
@@ -65,23 +73,11 @@ export function mergeMenus(existingMenu, newMenuItems) {
     return existingMenu;
   }
 
-  // Convert strings to MenuItem objects if needed
-  const existingItems = existingMenu.map((item) =>
-    typeof item === 'string'
-      ? { name: item, quantity: 1, options: '', fullDescription: item }
-      : item
-  );
-  const newItems = newMenuItems.map((item) =>
-    typeof item === 'string'
-      ? { name: item, quantity: 1, options: '', fullDescription: item }
-      : item
-  );
-
-  // Use ModelUtils to replace menu items, but handle plain objects
-  const existingMenuItems = existingItems.map((item) =>
+  // Convert plain objects to MenuItem objects
+  const existingMenuItems = existingMenu.map((item) =>
     typeof item.getNormalizedName === 'function' ? item : new MenuItem(item)
   );
-  const newMenuItemObjects = newItems.map((item) =>
+  const newMenuItemObjects = newMenuItems.map((item) =>
     typeof item.getNormalizedName === 'function' ? item : new MenuItem(item)
   );
 

@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clear Restaurant Name Records</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+        }
+        .warning {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            color: #856404;
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+        }
+        button {
+            background: #dc3545;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 4px;
+            font-size: 16px;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+        button:hover {
+            background: #c82333;
+        }
+        button:disabled {
+            background: #6c757d;
+            cursor: not-allowed;
+        }
+        .result {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 4px;
+            display: none;
+        }
+        .success {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+        .error {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+        .loading {
+            color: #6c757d;
+        }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>🗑️ Clear Restaurant Name Records</h1>
+
+      <div class="warning">
+        <strong>⚠️ Warning:</strong>This will delete all restaurant name lookup records from the KV
+        store. These records are used to map restaurant names to IDs. Only run this if you no longer
+        need name-based lookups and are using restaurant IDs directly.
+      </div>
+
+      <button id="clearBtn" onclick="clearRestaurantNames()">Clear Restaurant Name Records</button>
+      <button onclick="checkRecords()">Check Record Count</button>
+
+      <div id="result" class="result"></div>
+    </div>
+
+    <script>
+        const API_BASE_URL = 'https://lunchdrop-ratings.caleb-brown.workers.dev';
+
+        async function clearRestaurantNames() {
+            const btn = document.getElementById('clearBtn');
+            const result = document.getElementById('result');
+            
+            btn.disabled = true;
+            btn.textContent = 'Clearing...';
+            result.className = 'result loading';
+            result.style.display = 'block';
+            result.textContent = 'Clearing restaurant name records...';
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/admin/clear-restaurant-names`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({}),
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    result.className = 'result success';
+                    result.innerHTML = `
+                        <strong>✅ Success!</strong><br>
+                        Deleted ${data.deletedKeys} restaurant name records<br>
+                        Completed at: ${new Date(data.timestamp).toLocaleString()}
+                    `;
+                } else {
+                    result.className = 'result error';
+                    result.innerHTML = `
+                        <strong>❌ Failed!</strong><br>
+                        Error: ${data.error?.message || 'Unknown error'}
+                    `;
+                }
+            } catch (error) {
+                result.className = 'result error';
+                result.innerHTML = `
+                    <strong>❌ Network Error!</strong><br>
+                    ${error.message}
+                `;
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Clear Restaurant Name Records';
+            }
+        }
+
+        async function checkRecords() {
+            const result = document.getElementById('result');
+            result.className = 'result loading';
+            result.style.display = 'block';
+            result.textContent = 'Checking record count...';
+
+            try {
+                // This would require a separate endpoint to count records
+                // For now, just show a message
+                result.className = 'result';
+                result.innerHTML = `
+                    <strong>ℹ️ Info:</strong><br>
+                    To check the exact count of restaurant name records, you would need 
+                    to deploy the worker and check the KV store directly, or add a 
+                    count endpoint to the API.
+                `;
+            } catch (error) {
+                result.className = 'result error';
+                result.textContent = `Error: ${error.message}`;
+            }
+        }
+    </script>
+  </body>
+</html>

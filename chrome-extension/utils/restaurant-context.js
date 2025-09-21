@@ -3,42 +3,23 @@
 
 // Create global namespace for restaurant context utilities
 window.LanchDrapRestaurantContext = (() => {
-  // Function to extract restaurant ID from current page URL or selected card
-  function getRestaurantIdFromUrl() {
+  // Function to extract restaurant ID from current page data
+  async function getRestaurantIdFromPage() {
     try {
-      const urlParts = window.location.pathname.split('/');
-
-      // Case 1: Individual restaurant detail page
-      // Expected URL structure: /app/2025-09-08/eajz7qx8
-      // We want the last part (restaurant ID), not the date
-      if (urlParts.length >= 4 && urlParts[1] === 'app') {
-        const potentialId = urlParts[urlParts.length - 1];
-
-        // Validate that it's not a date (YYYY-MM-DD format)
-        const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
-        if (!dateRegex.test(potentialId)) {
-          return potentialId;
+      // Get the actual restaurant ID from page data
+      if (window.LanchDrapUserIdManager?.LanchDrapUserIdManager) {
+        const userIdManager = new window.LanchDrapUserIdManager.LanchDrapUserIdManager();
+        const restaurantId = userIdManager.getLunchdropRestaurantId();
+        if (restaurantId) {
+          console.log('LanchDrap: Found restaurant ID from page data:', restaurantId);
+          return restaurantId;
         }
       }
 
-      // Case 2: Daily/grid page - look for selected restaurant card
-      // Expected URL structure: /app/2025-09-08
-      if (urlParts.length === 3 && urlParts[1] === 'app') {
-        const selectedCard = getSelectedRestaurantCard();
-        if (selectedCard) {
-          const href = selectedCard.getAttribute('href');
-          if (href) {
-            const hrefParts = href.split('/');
-            if (hrefParts.length > 2) {
-              const restaurantId = hrefParts[hrefParts.length - 1];
-              return restaurantId;
-            }
-          }
-        }
-      }
-
+      console.log('LanchDrap: No restaurant ID found in page data');
       return null;
     } catch (_error) {
+      console.log('LanchDrap: Error in getRestaurantIdFromPage:', _error);
       return null;
     }
   }
@@ -75,6 +56,29 @@ window.LanchDrapRestaurantContext = (() => {
   // Function to extract restaurant name from current page elements
   function getRestaurantNameFromPage() {
     try {
+      // First, try to get restaurant name from page data
+      if (window.LanchDrapUserIdManager?.LanchDrapUserIdManager) {
+        const userIdManager = new window.LanchDrapUserIdManager.LanchDrapUserIdManager();
+        const restaurantId = userIdManager.getLunchdropRestaurantId();
+        if (restaurantId && typeof window !== 'undefined' && window.app) {
+          const appElement = window.app;
+          if (appElement?.dataset?.page) {
+            try {
+              const pageData = JSON.parse(appElement.dataset.page);
+              if (pageData.props?.delivery?.restaurant?.name) {
+                console.log(
+                  'LanchDrap: Found restaurant name in page data:',
+                  pageData.props.delivery.restaurant.name
+                );
+                return pageData.props.delivery.restaurant.name;
+              }
+            } catch (error) {
+              console.log('LanchDrap: Error parsing page data for restaurant name:', error);
+            }
+          }
+        }
+      }
+
       // Case 1: Individual restaurant detail page - look for page headings
       const titleSelectors = [
         '.text-3xl.font-bold',
@@ -137,69 +141,59 @@ window.LanchDrapRestaurantContext = (() => {
     }
   }
 
-  // Function to get restaurant name from localStorage using restaurant ID
-  function getRestaurantNameFromStorage(restaurantId) {
+  // Function to extract restaurant logo from current page data
+  function getRestaurantLogoFromPage() {
     try {
-      if (!restaurantId) return null;
-
-      const localKey = `restaurant_name:${restaurantId}`;
-      const storedName = localStorage.getItem(localKey);
-
-      if (storedName && storedName !== restaurantId) {
-        return storedName;
+      // Try to get restaurant logo from page data
+      if (window.LanchDrapUserIdManager?.LanchDrapUserIdManager) {
+        const userIdManager = new window.LanchDrapUserIdManager.LanchDrapUserIdManager();
+        const restaurantId = userIdManager.getLunchdropRestaurantId();
+        if (restaurantId && typeof window !== 'undefined' && window.app) {
+          const appElement = window.app;
+          if (appElement?.dataset?.page) {
+            try {
+              const pageData = JSON.parse(appElement.dataset.page);
+              if (pageData.props?.delivery?.restaurant?.logo) {
+                console.log(
+                  'LanchDrap: Found restaurant logo in page data:',
+                  pageData.props.delivery.restaurant.logo
+                );
+                return pageData.props.delivery.restaurant.logo;
+              }
+            } catch (error) {
+              console.log('LanchDrap: Error parsing page data for restaurant logo:', error);
+            }
+          }
+        }
       }
 
       return null;
     } catch (_error) {
+      console.log('LanchDrap: Error in getRestaurantLogoFromPage:', _error);
       return null;
-    }
-  }
-
-  // Function to store restaurant name in localStorage
-  function storeRestaurantName(restaurantId, restaurantName) {
-    try {
-      if (!restaurantId || !restaurantName || restaurantName === restaurantId) {
-        return;
-      }
-
-      const localKey = `restaurant_name:${restaurantId}`;
-      localStorage.setItem(localKey, restaurantName);
-
-      // Also store in chrome.storage.local for popup access
-      if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
-        chrome.storage.local.set({ [localKey]: restaurantName });
-      }
-    } catch (_error) {
-      // Silently fail if storage is not available
     }
   }
 
   // Main function to get complete restaurant context from current page
-  function getCurrentRestaurantContext() {
+  async function getCurrentRestaurantContext() {
     try {
-      const restaurantId = getRestaurantIdFromUrl();
-      let restaurantName = getRestaurantNameFromPage();
-
-      // If we found a restaurant name from the page, store it for future use
-      if (restaurantName && restaurantId) {
-        storeRestaurantName(restaurantId, restaurantName);
-      }
-
-      // If we didn't find a name from the page, try to get it from storage
-      if (!restaurantName && restaurantId) {
-        restaurantName = getRestaurantNameFromStorage(restaurantId);
-      }
+      const restaurantId = await getRestaurantIdFromPage();
+      const restaurantName = getRestaurantNameFromPage();
+      const restaurantLogo = getRestaurantLogoFromPage();
 
       return {
         id: restaurantId,
         name: restaurantName,
+        logo: restaurantLogo,
         hasValidId: !!restaurantId,
         hasValidName: !!(restaurantName && restaurantName !== restaurantId),
       };
     } catch (_error) {
+      console.log('LanchDrap: Error in getCurrentRestaurantContext:', _error);
       return {
         id: null,
         name: null,
+        logo: null,
         hasValidId: false,
         hasValidName: false,
       };
@@ -207,19 +201,27 @@ window.LanchDrapRestaurantContext = (() => {
   }
 
   // Function to check if we're on a restaurant detail page
-  function isRestaurantDetailPage() {
-    const restaurantId = getRestaurantIdFromUrl();
+  async function isRestaurantDetailPage() {
+    const restaurantId = await getRestaurantIdFromPage();
     return !!restaurantId;
   }
 
   // Function to check if we're on a restaurant grid page
   function isRestaurantGridPage() {
     try {
-      const urlParts = window.location.pathname.split('/');
-      // Grid pages have structure like /app/2025-09-08
-      return (
-        urlParts.length === 3 && urlParts[1] === 'app' && /^\d{4}-\d{2}-\d{2}$/.test(urlParts[2])
-      );
+      // Check if we have deliveries data (indicates we're on a grid page)
+      if (typeof window !== 'undefined' && window.app) {
+        const appElement = window.app;
+        if (appElement?.dataset?.page) {
+          try {
+            const pageData = JSON.parse(appElement.dataset.page);
+            return !!pageData.props?.lunchDay?.deliveries;
+          } catch (error) {
+            console.log('LanchDrap: Error parsing page data for grid page check:', error);
+          }
+        }
+      }
+      return false;
     } catch (_error) {
       return false;
     }
@@ -227,10 +229,9 @@ window.LanchDrapRestaurantContext = (() => {
 
   // Return public API
   return {
-    getRestaurantIdFromUrl,
+    getRestaurantIdFromPage,
     getRestaurantNameFromPage,
-    getRestaurantNameFromStorage,
-    storeRestaurantName,
+    getRestaurantLogoFromPage,
     getCurrentRestaurantContext,
     getSelectedRestaurantCard,
     isRestaurantDetailPage,

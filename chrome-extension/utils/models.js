@@ -89,6 +89,7 @@ class Restaurant {
     this.lastSeen = data.lastSeen || null;
     this.createdAt = data.createdAt || new Date().toISOString();
     this.color = data.color || null;
+    this.logo = data.logo || null;
   }
 
   /**
@@ -131,6 +132,7 @@ class Restaurant {
       lastSeen: this.lastSeen,
       createdAt: this.createdAt,
       color: this.color,
+      logo: this.logo,
     };
   }
 
@@ -169,6 +171,27 @@ class UserOrder {
     this.rating = data.rating || null;
     this.createdAt = data.createdAt || new Date().toISOString();
     this.updatedAt = data.updatedAt || new Date().toISOString();
+
+    // Order history specific fields
+    this.orderId = data.orderId || '';
+    this.deliveryId = data.deliveryId || '';
+    this.isPaid = data.isPaid || false;
+    this.financial = data.financial || {};
+    this.paymentMethod = data.paymentMethod || null;
+    this.orderAdjustments = data.orderAdjustments || [];
+    this.needsPaymentInfo = data.needsPaymentInfo || false;
+    this.useSubsidy = data.useSubsidy || false;
+    this.doNotUseGiftCard = data.doNotUseGiftCard || false;
+    this.autoCancelIfDeliveryFee = data.autoCancelIfDeliveryFee || false;
+    this.isTaxExempt = data.isTaxExempt || false;
+    this.userToggledTaxExempt = data.userToggledTaxExempt || false;
+    this.isTipEditable = data.isTipEditable || false;
+    this.isTipVisible = data.isTipVisible || false;
+    this.isSupportFeeEditable = data.isSupportFeeEditable || false;
+    this.isSupportFeeVisible = data.isSupportFeeVisible || false;
+    this.guestToken = data.guestToken || null;
+    this.guestLunchContribution = data.guestLunchContribution || '0.00';
+    this.isTaxEstimated = data.isTaxEstimated || false;
   }
 
   /**
@@ -351,6 +374,135 @@ class Rating {
 }
 
 /**
+ * Order History Item Model
+ * Represents an item from order history with detailed information
+ */
+class OrderHistoryItem {
+  constructor(data = {}) {
+    this.id = data.id || '';
+    this.orderId = data.orderId || '';
+    this.itemId = data.itemId || '';
+    this.quantity = data.quantity || 1;
+    this.label = data.label || '';
+    this.description = data.description || '';
+    this.price = data.price || 0;
+    this.specialRequest = data.specialRequest || null;
+    this.specialRequestRequired = data.specialRequestRequired || '';
+    this.labelFor = data.labelFor || null;
+    this.guestToken = data.guestToken || null;
+    this.modifications = data.modifications || {};
+    this.paymentMethod = data.paymentMethod || null;
+    this.fullDescription = data.fullDescription || '';
+  }
+
+  /**
+   * Convert to plain object for JSON serialization
+   */
+  toJSON() {
+    return {
+      id: this.id,
+      orderId: this.orderId,
+      itemId: this.itemId,
+      quantity: this.quantity,
+      label: this.label,
+      description: this.description,
+      price: this.price,
+      specialRequest: this.specialRequest,
+      specialRequestRequired: this.specialRequestRequired,
+      labelFor: this.labelFor,
+      guestToken: this.guestToken,
+      modifications: this.modifications,
+      paymentMethod: this.paymentMethod,
+      fullDescription: this.fullDescription,
+    };
+  }
+
+  /**
+   * Create OrderHistoryItem from plain object
+   */
+  static fromJSON(data) {
+    return new OrderHistoryItem(data);
+  }
+}
+
+/**
+ * Order History Model
+ * Represents a complete order from the order history
+ */
+class OrderHistory {
+  constructor(data = {}) {
+    this.id = data.id || '';
+    this.userId = data.userId || '';
+    this.deliveryId = data.deliveryId || '';
+    this.isPaid = data.isPaid || false;
+    this.items = data.items || []; // Array of OrderHistoryItem objects
+    this.financial = data.financial || {};
+    this.paymentMethod = data.paymentMethod || null;
+    this.orderAdjustments = data.orderAdjustments || [];
+    this.needsPaymentInfo = data.needsPaymentInfo || false;
+    this.useSubsidy = data.useSubsidy || false;
+    this.doNotUseGiftCard = data.doNotUseGiftCard || false;
+    this.autoCancelIfDeliveryFee = data.autoCancelIfDeliveryFee || false;
+    this.isTaxExempt = data.isTaxExempt || false;
+    this.userToggledTaxExempt = data.userToggledTaxExempt || false;
+    this.isTipEditable = data.isTipEditable || false;
+    this.isTipVisible = data.isTipVisible || false;
+    this.isSupportFeeEditable = data.isSupportFeeEditable || false;
+    this.isSupportFeeVisible = data.isSupportFeeVisible || false;
+    this.guestToken = data.guestToken || null;
+    this.guestLunchContribution = data.guestLunchContribution || '0.00';
+    this.isTaxEstimated = data.isTaxEstimated || false;
+    this.parsedAt = data.parsedAt || new Date().toISOString();
+  }
+
+  /**
+   * Convert to plain object for JSON serialization
+   */
+  toJSON() {
+    return {
+      id: this.id,
+      userId: this.userId,
+      deliveryId: this.deliveryId,
+      isPaid: this.isPaid,
+      items: this.items.map((item) => (item instanceof OrderHistoryItem ? item.toJSON() : item)),
+      financial: this.financial,
+      paymentMethod: this.paymentMethod,
+      orderAdjustments: this.orderAdjustments,
+      needsPaymentInfo: this.needsPaymentInfo,
+      useSubsidy: this.useSubsidy,
+      doNotUseGiftCard: this.doNotUseGiftCard,
+      autoCancelIfDeliveryFee: this.autoCancelIfDeliveryFee,
+      isTaxExempt: this.isTaxExempt,
+      userToggledTaxExempt: this.userToggledTaxExempt,
+      isTipEditable: this.isTipEditable,
+      isTipVisible: this.isTipVisible,
+      isSupportFeeEditable: this.isSupportFeeEditable,
+      isSupportFeeVisible: this.isSupportFeeVisible,
+      guestToken: this.guestToken,
+      guestLunchContribution: this.guestLunchContribution,
+      isTaxEstimated: this.isTaxEstimated,
+      parsedAt: this.parsedAt,
+    };
+  }
+
+  /**
+   * Create OrderHistory from plain object
+   */
+  static fromJSON(data) {
+    const orderHistory = new OrderHistory(data);
+    if (Array.isArray(orderHistory.items)) {
+      orderHistory.items = orderHistory.items.map((item) => {
+        if (typeof item === 'string') {
+          return OrderHistoryItem.fromJSON({ label: item });
+        }
+        return OrderHistoryItem.fromJSON(item);
+      });
+    }
+    return orderHistory;
+  }
+}
+
+/**
  * Rating Statistics Model
  * Represents aggregated rating statistics for a restaurant
  */
@@ -487,4 +639,6 @@ window.LanchDrapModels.UserOrder = UserOrder;
 window.LanchDrapModels.RestaurantHistoryItem = RestaurantHistoryItem;
 window.LanchDrapModels.Rating = Rating;
 window.LanchDrapModels.RatingStats = RatingStats;
+window.LanchDrapModels.OrderHistoryItem = OrderHistoryItem;
+window.LanchDrapModels.OrderHistory = OrderHistory;
 window.LanchDrapModels.ModelUtils = ModelUtils;

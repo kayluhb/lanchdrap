@@ -100,19 +100,20 @@ window.LanchDrapRestaurantScraper = (() => {
               }
             }
 
-            // Extract restaurant ID from href (primary method)
+            // Extract restaurant ID from page data (primary method)
             let restaurantId = 'unknown';
             let restaurantName = null;
 
-            // Extract restaurant ID from href
-            if (href) {
-              const hrefParts = href.split('/');
-              if (hrefParts.length > 2) {
-                restaurantId = hrefParts[hrefParts.length - 1];
+            // Try to get restaurant ID from page data first
+            if (window.LanchDrapUserIdManager?.LanchDrapUserIdManager) {
+              const userIdManager = new window.LanchDrapUserIdManager.LanchDrapUserIdManager();
+              const pageRestaurantId = userIdManager.getLunchdropRestaurantId();
+              if (pageRestaurantId) {
+                restaurantId = pageRestaurantId;
               }
             }
 
-            // Fallback: try to extract from image URL hash if no href ID
+            // Fallback: try to extract from image URL hash if no page data ID
             if (restaurantId === 'unknown') {
               const img = card.querySelector('img');
               if (img?.src) {
@@ -150,6 +151,13 @@ window.LanchDrapRestaurantScraper = (() => {
               }
             }
 
+            // Extract logo URL from image
+            let logoUrl = null;
+            const img = card.querySelector('img');
+            if (img?.src) {
+              logoUrl = img.src;
+            }
+
             const restaurantInfo = {
               index,
               id: restaurantId,
@@ -163,6 +171,7 @@ window.LanchDrapRestaurantScraper = (() => {
               timestamp: now.toISOString(),
               isSelected,
               color, // Add the color to the main object
+              logo: logoUrl, // Add the logo URL
               visualIndicators: {
                 opacity: window.getComputedStyle(card).opacity,
                 borderColor: window.getComputedStyle(
@@ -195,9 +204,12 @@ window.LanchDrapRestaurantScraper = (() => {
 
       // Track restaurant appearances in background (don't block UI)
       // Add a small delay to ensure navigation has settled
+      console.log('LanchDrap: Scheduling tracking call with data:', availabilityData);
       setTimeout(() => {
+        console.log('LanchDrap: Executing tracking call');
         trackRestaurantAppearances(availabilityData)
           .then((result) => {
+            console.log('LanchDrap: Tracking completed with result:', result);
             // Add sellout indicators when tracking completes
             if (result?.data?.data?.restaurants || result?.data?.restaurants) {
               const restaurants = result.data.data?.restaurants || result.data.restaurants;
@@ -207,7 +219,10 @@ window.LanchDrapRestaurantScraper = (() => {
               }
             }
           })
-          .catch((_error) => {});
+          .catch((error) => {
+            console.log('LanchDrap: Tracking error:', error);
+            console.log('LanchDrap: Tracking error details:', error.message, error.stack);
+          });
       }, 200); // Small delay to ensure navigation has settled
 
       // Display stats for selected restaurant on daily pages
@@ -223,9 +238,417 @@ window.LanchDrapRestaurantScraper = (() => {
     }
   }
 
+  // Function to extract menu data from delivery
+  function extractMenuFromDelivery(delivery) {
+    try {
+      if (!delivery.menu || !delivery.menu.sections || !delivery.menu.items) {
+        console.log('LanchDrap: No menu data available in delivery');
+        return [];
+      }
+
+      const sections = delivery.menu.sections;
+      const items = delivery.menu.items;
+
+      // Create a map of item IDs to items for quick lookup
+      const itemMap = new Map();
+      for (const item of items) {
+        itemMap.set(item.id, item);
+      }
+
+      console.log(
+        `LanchDrap: Processing menu with ${sections.length} sections and ${items.length} items`
+      );
+
+      // Build menu items with section labels
+      const menuItems = [];
+
+      for (const section of sections) {
+        if (section.items && Array.isArray(section.items)) {
+          for (const itemId of section.items) {
+            const item = itemMap.get(itemId);
+            if (item) {
+              menuItems.push({
+                id: item.id,
+                label: item.label,
+                description: item.description || '',
+                price: item.price || 0,
+                basePrice: item.basePrice || 0,
+                maxPrice: item.maxPrice || 0,
+                section: section.label || 'Unknown',
+                sectionSortOrder: section.sort_order || 0,
+                isEntree: item.isEntree || false,
+                isFavorite: item.isFavorite || false,
+                isSpicy1: item.isSpicy1 || false,
+                isSpicy2: item.isSpicy2 || false,
+                isSpicy3: item.isSpicy3 || false,
+                isGlutenFree: item.isGlutenFree || false,
+                isVegetarian: item.isVegetarian || false,
+                isNutAllergy: item.isNutAllergy || false,
+                picture: item.picture || '',
+                rating: item.rating || 0,
+                reviews: item.reviews || 0,
+              });
+            }
+          }
+        }
+      }
+
+      console.log(`LanchDrap: Extracted ${menuItems.length} menu items`);
+      return menuItems;
+    } catch (error) {
+      console.log('LanchDrap: Error extracting menu data:', error);
+      return [];
+    }
+  }
+
+  // Function to extract menu data from order history
+  function extractMenuFromOrderHistory(orderHistory) {
+    try {
+      if (!orderHistory || !Array.isArray(orderHistory) || orderHistory.length === 0) {
+        console.log('LanchDrap: No order history data available');
+        return [];
+      }
+
+      console.log(`LanchDrap: Processing order history with ${orderHistory.length} orders`);
+
+      // Use the order history parser to convert orders to menu items
+      if (window.LanchDrapOrderHistoryParser) {
+        const menuItems = window.LanchDrapOrderHistoryParser.convertOrdersToMenuItems(orderHistory);
+        console.log(`LanchDrap: Extracted ${menuItems.length} menu items from order history`);
+        return menuItems;
+      } else {
+        console.log(
+          'LanchDrap: Order history parser not available, falling back to manual parsing'
+        );
+        return extractMenuFromOrderHistoryManual(orderHistory);
+      }
+    } catch (error) {
+      console.log('LanchDrap: Error extracting menu data from order history:', error);
+      return [];
+    }
+  }
+
+  // Manual fallback for extracting menu data from order history
+  function extractMenuFromOrderHistoryManual(orderHistory) {
+    try {
+      const menuItems = [];
+      const seenItems = new Set(); // To avoid duplicates
+
+      orderHistory.forEach((order, orderIndex) => {
+        if (order.items && Array.isArray(order.items)) {
+          order.items.forEach((item, itemIndex) => {
+            // Create a unique key for this item to avoid duplicates
+            const itemKey = `${item.label}_${item.price}`;
+
+            if (!seenItems.has(itemKey)) {
+              seenItems.add(itemKey);
+
+              menuItems.push({
+                id: item.id || `order_item_${orderIndex}_${itemIndex}`,
+                label: item.label || 'Unknown Item',
+                description: item.description || '',
+                price: item.price || 0,
+                basePrice: item.price || 0,
+                maxPrice: item.price || 0,
+                section: 'Order History',
+                sectionSortOrder: 999,
+                isEntree: true,
+                isFavorite: false,
+                isSpicy1: false,
+                isSpicy2: false,
+                isSpicy3: false,
+                isGlutenFree: false,
+                isVegetarian: false,
+                isNutAllergy: false,
+                picture: '',
+                rating: 0,
+                reviews: 0,
+                orderHistory: {
+                  orderId: order.id,
+                  quantity: item.quantity,
+                  modifications: item.modifications,
+                  specialRequest: item.specialRequest,
+                  fullDescription: item.fullDescription || item.label,
+                },
+              });
+            }
+          });
+        }
+      });
+
+      console.log(
+        `LanchDrap: Manually extracted ${menuItems.length} unique menu items from order history`
+      );
+      return menuItems;
+    } catch (error) {
+      console.log('LanchDrap: Error in manual order history extraction:', error);
+      return [];
+    }
+  }
+
+  // Function to extract restaurant availability from page data
+  async function extractAvailabilityFromPageData() {
+    try {
+      console.log('LanchDrap: extractAvailabilityFromPageData called');
+      // Check if we have deliveries data (indicates we're on a grid page)
+      if (typeof window !== 'undefined' && window.app) {
+        const appElement = window.app;
+        if (appElement?.dataset?.page) {
+          try {
+            const pageData = JSON.parse(appElement.dataset.page);
+            console.log('LanchDrap: Full page data structure:', pageData);
+            console.log(
+              'LanchDrap: Looking for deliveries in pageData.props?.lunchDay?.deliveries'
+            );
+            const deliveries = pageData.props?.lunchDay?.deliveries;
+
+            // Also check for single delivery data (which seems to be the actual structure)
+            const singleDelivery = pageData.props?.delivery;
+            console.log('LanchDrap: Also checking for single delivery:', singleDelivery);
+
+            // Extract order history from props.delivery.orders
+            const orderHistory = pageData.props?.delivery?.orders;
+            console.log('LanchDrap: Found order history in page data:', orderHistory);
+
+            if (deliveries && Array.isArray(deliveries)) {
+              console.log('LanchDrap: Found deliveries in page data:', deliveries);
+
+              // Extract date from URL for daily tracking
+              const urlDate = window.LanchDrapDOMUtils.extractDateFromUrl();
+              if (!urlDate) {
+                return null;
+              }
+
+              // Convert deliveries to our availability format
+              const availabilityData = deliveries.map((delivery, index) => {
+                const restaurant = delivery.restaurant;
+                const now = new Date();
+
+                console.log(`LanchDrap: Processing delivery ${index} for ${restaurant.name}:`, {
+                  numSlotsAvailable: delivery.numSlotsAvailable,
+                  isTakingOrders: delivery.isTakingOrders,
+                  isCancelled: delivery.isCancelled,
+                  isSuspended: delivery.isSuspended,
+                  cancelledReason: delivery.cancelledReason,
+                  hasMenu: !!delivery.menu,
+                  menuSections: delivery.menu?.sections?.length || 0,
+                  menuItems: delivery.menu?.items?.length || 0,
+                });
+
+                // Determine status based on delivery data
+                let status = 'available';
+                let reason = null;
+                let hasSoldOutInCard = false;
+
+                // Check for sold-out conditions using delivery data
+                if (delivery.numSlotsAvailable === 0) {
+                  status = 'soldout';
+                  reason = 'No delivery slots available';
+                  hasSoldOutInCard = true;
+                  console.log(
+                    `LanchDrap: ${restaurant.name} marked as soldout - no slots available`
+                  );
+                } else if (delivery.isCancelled) {
+                  status = 'soldout';
+                  reason = delivery.cancelledReason ?? 'Delivery cancelled';
+                  hasSoldOutInCard = true;
+                  console.log(
+                    `LanchDrap: ${restaurant.name} marked as soldout - cancelled: ${reason}`
+                  );
+                } else if (delivery.isSuspended) {
+                  status = 'soldout';
+                  reason = 'Restaurant suspended';
+                  hasSoldOutInCard = true;
+                  console.log(`LanchDrap: ${restaurant.name} marked as soldout - suspended`);
+                } else if (!delivery.isTakingOrders) {
+                  status = 'soldout';
+                  reason = 'Not taking orders';
+                  hasSoldOutInCard = true;
+                  console.log(
+                    `LanchDrap: ${restaurant.name} marked as soldout - not taking orders`
+                  );
+                } else {
+                  console.log(`LanchDrap: ${restaurant.name} marked as available`);
+                }
+
+                // Extract menu data from delivery and order history
+                const menuData = extractMenuFromDelivery(delivery);
+                const orderHistoryMenuData = extractMenuFromOrderHistory(orderHistory);
+
+                // Combine menu data from delivery and order history
+                const combinedMenuData = [...menuData, ...orderHistoryMenuData];
+
+                return {
+                  index,
+                  id: restaurant.id, // Use the actual restaurant ID, not delivery ID
+                  name: restaurant.name,
+                  restaurant: restaurant.name, // Keep for backward compatibility
+                  status: status,
+                  reason: reason,
+                  timeSlot: {
+                    start: '12:15pm', // Default lunch time
+                    end: '1:15pm',
+                    full: '12:15pm-1:15pm',
+                  },
+                  href: `/app/${urlDate}/${delivery.id}`,
+                  urlDate: urlDate,
+                  timestamp: now.toISOString(),
+                  isSelected: false, // We'll need to check DOM for this
+                  color: restaurant.brandColor,
+                  logo: restaurant.logo,
+                  visualIndicators: {
+                    opacity: '1',
+                    borderColor: 'transparent',
+                    hasOrderPlaced: false,
+                    hasOrderingClosed: false,
+                    hasSoldOutInCard: hasSoldOutInCard,
+                  },
+                  menu: combinedMenuData,
+                  orderHistory: orderHistory, // Include raw order history data
+                  numSlotsAvailable: delivery.numSlotsAvailable, // Include slots available for stats display
+                };
+              });
+
+              return availabilityData;
+            } else {
+              console.log(
+                'LanchDrap: No deliveries found in page data, deliveries value:',
+                deliveries
+              );
+
+              // Try to handle single delivery case
+              if (singleDelivery?.restaurant) {
+                console.log('LanchDrap: Found single delivery, converting to availability data');
+
+                // Extract date from URL for daily tracking
+                const urlDate = window.LanchDrapDOMUtils.extractDateFromUrl();
+                if (!urlDate) {
+                  console.log('LanchDrap: No URL date found');
+                  return null;
+                }
+
+                // Convert single delivery to availability format
+                const restaurant = singleDelivery.restaurant;
+                const now = new Date();
+
+                console.log(`LanchDrap: Processing single delivery for ${restaurant.name}:`, {
+                  numSlotsAvailable: singleDelivery.numSlotsAvailable,
+                  isTakingOrders: singleDelivery.isTakingOrders,
+                  isCancelled: singleDelivery.isCancelled,
+                  isSuspended: singleDelivery.isSuspended,
+                  cancelledReason: singleDelivery.cancelledReason,
+                  hasMenu: !!singleDelivery.menu,
+                  menuSections: singleDelivery.menu?.sections?.length || 0,
+                  menuItems: singleDelivery.menu?.items?.length || 0,
+                });
+
+                // Determine status based on delivery data
+                let status = 'available';
+                let reason = null;
+                let hasSoldOutInCard = false;
+
+                // Check for sold-out conditions using delivery data
+                if (singleDelivery.numSlotsAvailable === 0) {
+                  status = 'soldout';
+                  reason = 'No delivery slots available';
+                  hasSoldOutInCard = true;
+                  console.log(
+                    `LanchDrap: ${restaurant.name} marked as soldout - no slots available`
+                  );
+                } else if (singleDelivery.isCancelled) {
+                  status = 'soldout';
+                  reason = singleDelivery.cancelledReason ?? 'Delivery cancelled';
+                  hasSoldOutInCard = true;
+                  console.log(
+                    `LanchDrap: ${restaurant.name} marked as soldout - cancelled: ${reason}`
+                  );
+                } else if (singleDelivery.isSuspended) {
+                  status = 'soldout';
+                  reason = 'Restaurant suspended';
+                  hasSoldOutInCard = true;
+                  console.log(`LanchDrap: ${restaurant.name} marked as soldout - suspended`);
+                } else if (!singleDelivery.isTakingOrders) {
+                  status = 'soldout';
+                  reason = 'Not taking orders';
+                  hasSoldOutInCard = true;
+                  console.log(
+                    `LanchDrap: ${restaurant.name} marked as soldout - not taking orders`
+                  );
+                } else {
+                  console.log(`LanchDrap: ${restaurant.name} marked as available`);
+                }
+
+                // Extract menu data from delivery and order history
+                const menuData = extractMenuFromDelivery(singleDelivery);
+                const orderHistoryMenuData = extractMenuFromOrderHistory(orderHistory);
+
+                // Combine menu data from delivery and order history
+                const combinedMenuData = [...menuData, ...orderHistoryMenuData];
+
+                const availabilityData = [
+                  {
+                    index: 0,
+                    id: restaurant.id,
+                    name: restaurant.name,
+                    restaurant: restaurant.name,
+                    status: status,
+                    reason: reason,
+                    timeSlot: {
+                      start: '12:15pm',
+                      end: '1:15pm',
+                      full: '12:15pm-1:15pm',
+                    },
+                    href: `/app/${urlDate}/${singleDelivery.id}`,
+                    urlDate: urlDate,
+                    timestamp: now.toISOString(),
+                    isSelected: true, // This is the selected restaurant
+                    color: restaurant.brandColor,
+                    logo: restaurant.logo,
+                    visualIndicators: {
+                      opacity: '1',
+                      borderColor: 'transparent',
+                      hasOrderPlaced: false,
+                      hasOrderingClosed: false,
+                      hasSoldOutInCard: hasSoldOutInCard,
+                    },
+                    menu: combinedMenuData,
+                    orderHistory: orderHistory, // Include raw order history data
+                    numSlotsAvailable: singleDelivery.numSlotsAvailable, // Include slots available for stats display
+                  },
+                ];
+
+                // Order history processing is now handled in the main tracking flow
+                // to avoid duplicate processing and ensure proper restaurant context
+
+                console.log(
+                  'LanchDrap: Converted single delivery to availability data:',
+                  availabilityData
+                );
+                return availabilityData;
+              }
+            }
+          } catch (error) {
+            console.log('LanchDrap: Error parsing page data for availability:', error);
+          }
+        } else {
+          console.log('LanchDrap: No page dataset found');
+        }
+      } else {
+        console.log('LanchDrap: No window.app found');
+      }
+      console.log('LanchDrap: extractAvailabilityFromPageData returning null');
+      return null;
+    } catch (_error) {
+      console.log('LanchDrap: Error in extractAvailabilityFromPageData:', _error);
+      return null;
+    }
+  }
+
   // Function to scrape restaurant availability from the main grid
   async function scrapeRestaurantAvailability() {
     try {
+      console.log('LanchDrap: scrapeRestaurantAvailability called');
+
       // Quick checks to avoid unnecessary processing
       if (
         document.querySelector('input[type="password"]') ||
@@ -235,11 +658,52 @@ window.LanchDrapRestaurantScraper = (() => {
         return null;
       }
 
+      // TEMPORARY: Disable page detection to test tracking
       // Check if we're on an individual restaurant page (not the main grid)
-      const urlParts = window.location.pathname.split('/');
-      if (urlParts.length >= 4 && urlParts[1] === 'app' && urlParts[3]) {
-        return null;
+      // Use the proper page detection logic instead of delivery data check
+      // if (
+      //   window.LanchDrapDOMUtils?.isRestaurantDetailPage &&
+      //   window.LanchDrapDOMUtils.isRestaurantDetailPage()
+      // ) {
+      //   console.log('LanchDrap: Skipping scraping - detected restaurant detail page');
+      //   return null; // We're on a restaurant detail page, not the grid
+      // }
+
+      console.log('LanchDrap: TEMPORARILY SKIPPING PAGE DETECTION - proceeding with scraping');
+
+      // First, try to extract from page data
+      const pageDataAvailability = await extractAvailabilityFromPageData();
+      if (pageDataAvailability && pageDataAvailability.length > 0) {
+        console.log('LanchDrap: Using availability data from page data');
+
+        // Track restaurant appearances in background (don't block UI)
+        // Add a small delay to ensure navigation has settled
+        console.log('LanchDrap: Scheduling tracking call with page data:', pageDataAvailability);
+        setTimeout(() => {
+          console.log('LanchDrap: Executing tracking call for page data');
+          trackRestaurantAppearances(pageDataAvailability)
+            .then((result) => {
+              console.log('LanchDrap: Tracking completed with result:', result);
+              // Add sellout indicators when tracking completes
+              if (result?.data?.data?.restaurants || result?.data?.restaurants) {
+                const restaurants = result.data.data?.restaurants || result.data.restaurants;
+                if (restaurants && Array.isArray(restaurants)) {
+                  // Add indicators
+                  addSellOutIndicators(restaurants);
+                }
+              }
+            })
+            .catch((error) => {
+              console.log('LanchDrap: Tracking error:', error);
+              console.log('LanchDrap: Tracking error details:', error.message, error.stack);
+            });
+        }, 200); // Small delay to ensure navigation has settled
+
+        return pageDataAvailability;
       }
+
+      // Fallback to DOM scraping if page data is not available
+      console.log('LanchDrap: Falling back to DOM scraping for availability data');
 
       // Extract date from URL for daily tracking
       const urlDate = window.LanchDrapDOMUtils.extractDateFromUrl();
@@ -442,8 +906,14 @@ window.LanchDrapRestaurantScraper = (() => {
 
   // Function to track restaurant appearances on daily pages
   async function trackRestaurantAppearances(availabilityData) {
+    // Hoist variables used in catch/finally to avoid ReferenceError
+    let currentUrl = null;
+    let urlDate = null;
     try {
+      console.log('LanchDrap: trackRestaurantAppearances called with data:', availabilityData);
+
       if (typeof LanchDrapApiClient === 'undefined' || typeof LanchDrapConfig === 'undefined') {
+        console.log('LanchDrap: API client or config not available');
         return;
       }
 
@@ -454,9 +924,9 @@ window.LanchDrapRestaurantScraper = (() => {
       window.lanchDrapTrackingAbortController = new AbortController();
 
       // Store current URL to validate against when response comes back
-      const currentUrl = window.location.href;
+      currentUrl = window.location.href;
 
-      const urlDate = window.LanchDrapDOMUtils.extractDateFromUrl();
+      urlDate = window.LanchDrapDOMUtils.extractDateFromUrl();
       if (!urlDate) {
         return;
       }
@@ -482,16 +952,72 @@ window.LanchDrapRestaurantScraper = (() => {
           status: restaurant.status,
           href: restaurant.href,
           color: restaurant.color,
+          logo: restaurant.logo,
           isSelected: restaurant.isSelected,
+          menu: restaurant.menu || [],
+          orderHistory: restaurant.orderHistory || [], // Include order history in tracking data
         })),
         date: urlDate,
         timeSlot: timeSlot,
       };
 
+      console.log('LanchDrap: Sending tracking data to API:', trackingData);
+      console.log(
+        'LanchDrap: Menu and order history data being sent:',
+        trackingData.restaurants.map((r) => ({
+          id: r.id,
+          name: r.name,
+          menuItems: r.menu?.length || 0,
+          orderHistoryItems: r.orderHistory?.length || 0,
+        }))
+      );
+
       const result = await apiClient.trackRestaurantAppearances(
         trackingData,
         window.lanchDrapTrackingAbortController.signal
       );
+
+      console.log('LanchDrap: Tracking API response:', result);
+
+      // Process order history for restaurants that have order data
+      if (result?.success && availabilityData) {
+        // Only process order history if we have actual order data from the page
+        const pageOrderHistoryData =
+          window.LanchDrapOrderHistoryParser?.extractOrderHistoryFromPageData();
+        const pageOrderHistory = pageOrderHistoryData?.orders;
+
+        if (pageOrderHistory && pageOrderHistory.length > 0) {
+          console.log(
+            `LanchDrap: Found ${pageOrderHistory.length} orders on page, processing order history`
+          );
+
+          // Get user ID for storing order history
+          if (window.lanchDrapUserIdManager) {
+            try {
+              const userId = await window.lanchDrapUserIdManager.getUserId();
+              if (userId && window.LanchDrapOrderHistoryParser) {
+                // Store order history in background (don't block UI)
+                setTimeout(async () => {
+                  try {
+                    const orderResult =
+                      await window.LanchDrapOrderHistoryParser.processAndStoreOrderHistory(
+                        userId,
+                        'current_restaurant' // We'll determine the actual restaurant ID from context
+                      );
+                    console.log(`LanchDrap: Order history processing result:`, orderResult);
+                  } catch (error) {
+                    console.log(`LanchDrap: Error processing order history:`, error);
+                  }
+                }, 2000); // Delay to avoid blocking UI and after tracking completes
+              }
+            } catch (error) {
+              console.log(`LanchDrap: Error getting user ID for order history:`, error);
+            }
+          }
+        } else {
+          console.log('LanchDrap: No order history found on page, skipping order storage');
+        }
+      }
 
       // Check if the request was aborted
       if (window.lanchDrapTrackingAbortController.signal.aborted) {
@@ -520,13 +1046,13 @@ window.LanchDrapRestaurantScraper = (() => {
       }
 
       // Also check if URL changed during the request
-      if (window.location.href !== currentUrl) {
+      if (currentUrl && window.location.href !== currentUrl) {
         return null;
       }
 
       // Also check if the date in the URL changed during the request
       const currentUrlDate = window.LanchDrapDOMUtils.extractDateFromUrl();
-      if (currentUrlDate !== urlDate) {
+      if (urlDate && currentUrlDate !== urlDate) {
         return null;
       }
     } finally {

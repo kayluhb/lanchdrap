@@ -3,32 +3,43 @@ const CONFIG = {
   // API endpoints - update these with your actual Cloudflare Worker URL
   API_BASE_URL: 'https://lunchdrop-ratings.caleb-brown.workers.dev',
 
-  // API endpoints
+  // API endpoints - Tracking, admin, and order endpoints enabled
   ENDPOINTS: {
-    // Health endpoints
-    HEALTH: '/api/health',
-
-    // Rating endpoints
-    RATINGS: '/api/ratings',
-    RATINGS_STATS: '/api/ratings/stats',
-    RATINGS_UPDATE_RESTAURANT: '/api/ratings/restaurant',
-
-    // Restaurant endpoints
-    RESTAURANTS: '/api/restaurants',
+    // Tracking endpoint enabled
     RESTAURANTS_APPEARANCES_TRACK: '/api/restaurants/appearances/track',
-    RESTAURANTS_UPDATE: '/api/restaurants/update',
-    RESTAURANTS_UPDATE_APPEARANCES: '/api/restaurants/update-appearances',
-    RESTAURANTS_GET_BY_ID: '/api/restaurant',
-    RESTAURANTS_SEARCH: '/api/restaurants/search',
-    RESTAURANTS_STATS: '/api/restaurants/stats',
-    RESTAURANTS_USERS: '/api/restaurants/users',
 
-    // Sync endpoints
-    SYNC: '/api/sync',
+    // Admin endpoints
+    CLEAR_RESTAURANT_NAMES: '/api/admin/clear-restaurant-names',
 
-    // Order history endpoints
+    // Order endpoints enabled for order history functionality
     ORDERS: '/api/orders',
     ORDERS_SUMMARY: '/api/orders/summary',
+
+    // Restaurant stats endpoints enabled
+    RESTAURANTS_STATS: '/api/restaurants/stats',
+
+    // Ratings endpoints temporarily enabled for popup
+    RATINGS: '/api/ratings',
+
+    // Editing endpoints re-enabled
+    RESTAURANTS_UPDATE_APPEARANCES: '/api/restaurants/update-appearances',
+
+    // Lookup endpoints for edit dialog
+    RESTAURANTS_GET_BY_ID: '/api/restaurant',
+    RESTAURANTS_SEARCH: '/api/restaurants/search',
+
+    // All other endpoints disabled
+    // HEALTH: '/api/health',
+    // RATINGS_STATS: '/api/ratings/stats',
+    // RATINGS_UPDATE_RESTAURANT: '/api/ratings/restaurant',
+    // RESTAURANTS: '/api/restaurants',
+    // RESTAURANTS_UPDATE: '/api/restaurants/update',
+    // RESTAURANTS_UPDATE_APPEARANCES: '/api/restaurants/update-appearances',
+    // RESTAURANTS_GET_BY_ID: '/api/restaurant',
+    // RESTAURANTS_SEARCH: '/api/restaurants/search',
+    // RESTAURANTS_STATS: '/api/restaurants/stats',
+    // RESTAURANTS_USERS: '/api/restaurants/users',
+    // SYNC: '/api/sync',
   },
 
   // Extension settings
@@ -51,6 +62,9 @@ const CONFIG = {
     // Sell out indicator settings
     SELL_OUT_THRESHOLD: 0.8, // Threshold (0-1) for showing "likely to sell out" indicator
     SELL_OUT_MIN_DIFFERENCE: 0.2, // Minimum difference (0-1) between highest and second highest rate
+
+    // Temporary feature flags
+    TEMP_ENABLE_POPUP_RATINGS: true,
   },
 
   // User identification

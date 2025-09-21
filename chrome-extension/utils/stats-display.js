@@ -391,14 +391,44 @@ window.LanchDrapStatsDisplay = (() => {
     // Use restaurant's color for styling
     const restaurantColor = stats.color || 'rgb(100, 100, 100)'; // Default gray if no color
 
-    // Helper function to convert RGB to HSL for better gradient control
-    function rgbToHsl(rgb) {
-      const match = rgb.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
-      if (!match) return { h: 0, s: 0, l: 50 };
+    // Helper: parse color string (#RRGGBB, #RGB, rgb(), rgba()) to {r,g,b}
+    function parseColorToRgb(color) {
+      if (!color || typeof color !== 'string') return null;
+      const c = color.trim();
+      // rgb() or rgba()
+      let m = c.match(/^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i);
+      if (m) {
+        return { r: parseInt(m[1], 10), g: parseInt(m[2], 10), b: parseInt(m[3], 10) };
+      }
+      // #RRGGBB
+      m = c.match(/^#([0-9a-fA-F]{6})$/);
+      if (m) {
+        const intVal = parseInt(m[1], 16);
+        return { r: (intVal >> 16) & 255, g: (intVal >> 8) & 255, b: intVal & 255 };
+      }
+      // #RGB
+      m = c.match(/^#([0-9a-fA-F]{3})$/);
+      if (m) {
+        const rHex = m[1][0];
+        const gHex = m[1][1];
+        const bHex = m[1][2];
+        return {
+          r: parseInt(rHex + rHex, 16),
+          g: parseInt(gHex + gHex, 16),
+          b: parseInt(bHex + bHex, 16),
+        };
+      }
+      return null;
+    }
 
-      const r = parseInt(match[1], 10) / 255;
-      const g = parseInt(match[2], 10) / 255;
-      const b = parseInt(match[3], 10) / 255;
+    // Helper: convert color string to HSL for better gradient control
+    function colorToHsl(color) {
+      const rgbVals = parseColorToRgb(color);
+      if (!rgbVals) return { h: 0, s: 0, l: 50 };
+
+      const r = rgbVals.r / 255;
+      const g = rgbVals.g / 255;
+      const b = rgbVals.b / 255;
 
       const max = Math.max(r, g, b);
       const min = Math.min(r, g, b);
@@ -428,7 +458,7 @@ window.LanchDrapStatsDisplay = (() => {
     }
 
     // Create gradient colors from restaurant color - make them more subtle
-    const hsl = rgbToHsl(restaurantColor);
+    const hsl = colorToHsl(restaurantColor);
     const gradientStart = `hsl(${hsl.h}, ${Math.min(hsl.s + 10, 80)}%, ${Math.min(hsl.l + 25, 90)}%)`;
     const gradientEnd = `hsl(${hsl.h}, ${Math.max(hsl.s - 5, 20)}%, ${Math.max(hsl.l + 10, 85)}%)`;
     const accentColor = `hsl(${hsl.h}, ${Math.min(hsl.s + 20, 90)}%, ${Math.max(hsl.l - 15, 25)}%)`;
@@ -443,13 +473,36 @@ window.LanchDrapStatsDisplay = (() => {
     const restaurantName = stats.name || stats.id;
     const displayTitle = `📊 ${createPossessive(restaurantName)} Stats`;
 
+    // Prepare last order items with fallback to recentOrders[0].items
+    const userHistory = stats.userOrderHistory || null;
+    const fallbackLastItems =
+      userHistory?.recentOrders &&
+      Array.isArray(userHistory.recentOrders) &&
+      userHistory.recentOrders.length > 0
+        ? userHistory.recentOrders[0]?.items || []
+        : [];
+    const lastItems =
+      userHistory?.lastOrderItems && userHistory.lastOrderItems.length > 0
+        ? userHistory.lastOrderItems
+        : fallbackLastItems;
+    const lastItemsHtml =
+      lastItems && lastItems.length > 0
+        ? lastItems
+            .map(
+              (item) =>
+                `<strong>${item.name || item.fullDescription || 'Unknown Item'}</strong> (${item.quantity || 1})` +
+                `${item.options ? `<br>(${item.options})` : ''}`
+            )
+            .join(', ')
+        : 'No items recorded';
+
     const statsHTML = `
       <div class="ld-tracking-container" style="
         background: linear-gradient(135deg, ${gradientStart} 0%, ${gradientEnd} 100%);
         border: 1px solid ${borderColor};
-        border-radius: 16px;
+        border-radius: 20px;
         box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.08);
-        margin: 16px 0;
+        margin: 24px 0;
         overflow: hidden;
         font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
         backdrop-filter: blur(10px);
@@ -457,19 +510,19 @@ window.LanchDrapStatsDisplay = (() => {
       ">
         <div class="ld-tracking-header" style="
           background: rgba(255, 255, 255, 0.1);
-          padding: 16px 20px;
+          padding: 20px 24px;
           border-bottom: 1px solid ${borderColor};
           backdrop-filter: blur(5px);
         ">
           <span class="ld-tracking-title ld-edit-stats-trigger" style="
             color: ${textColor};
-            font-size: 18px;
+            font-size: 20px;
             font-weight: 700;
             display: flex;
             align-items: center;
             gap: 8px;
             background: ${textBackgroundColor};
-            padding: 8px 16px;
+            padding: 10px 18px;
             border-radius: 12px;
             box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
             border: 1px solid rgba(0, 0, 0, 0.05);
@@ -478,7 +531,7 @@ window.LanchDrapStatsDisplay = (() => {
           " data-restaurant-id="${stats.id || 'unknown'}" data-restaurant-name="${(stats.name || '').replace(/"/g, '&quot;')}" title="${getEditTriggerProps(stats.id, stats.name).title}">${displayTitle}             ${createKeyElement(`restaurant:${stats.id || 'unknown'}`, 'Click to select restaurant key')}</span>
           ${apiErrorIndicator}
         </div>
-        <div class="ld-tracking-stats" style="padding: 20px;">
+        <div class="ld-tracking-stats" style="padding: 24px;">
           ${
             stats.ratingSynopsis
               ? `
@@ -487,21 +540,23 @@ window.LanchDrapStatsDisplay = (() => {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 12px 16px;
-            margin: 8px 0;
+            gap: 16px;
+            flex-wrap: wrap;
+            padding: 14px 20px;
+            margin: 16px 0;
             background: ${cardBackgroundColor};
             border-radius: 12px;
             border: 1px solid ${borderColor};
             backdrop-filter: blur(5px);
             transition: all 0.2s ease;
           ">
-            <div style="display: flex; align-items: center; gap: 12px;">
+            <div style="display: flex; align-items: center; gap: 14px;">
               <span class="ld-stat-label" style="
                 color: ${secondaryTextColor};
                 font-weight: 500;
                 font-size: 14px;
                 background: ${textBackgroundColor};
-                padding: 4px 8px;
+                padding: 6px 10px;
                 border-radius: 6px;
                 border: 1px solid rgba(0, 0, 0, 0.05);
               ">Rating</span>
@@ -510,21 +565,21 @@ window.LanchDrapStatsDisplay = (() => {
                 font-weight: 700;
                 font-size: 16px;
                 background: ${textBackgroundColor};
-                padding: 4px 12px;
+                padding: 6px 14px;
                 border-radius: 20px;
-                min-width: 40px;
+                min-width: 72px;
                 text-align: center;
                 box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
                 border: 1px solid rgba(0, 0, 0, 0.05);
               ">${stats.ratingSynopsis.summary}</span>
             </div>
-            <div style="display: flex; align-items: center; gap: 12px;">
+            <div style="display: flex; align-items: center; gap: 14px;">
               <span class="ld-stat-label" style="
                 color: ${secondaryTextColor};
                 font-weight: 500;
                 font-size: 14px;
                 background: ${textBackgroundColor};
-                padding: 4px 8px;
+                padding: 6px 10px;
                 border-radius: 6px;
                 border: 1px solid rgba(0, 0, 0, 0.05);
               ">Distribution</span>
@@ -533,7 +588,7 @@ window.LanchDrapStatsDisplay = (() => {
                 font-weight: 600;
                 font-size: 14px;
                 background: ${textBackgroundColor};
-                padding: 4px 8px;
+                padding: 6px 10px;
                 border-radius: 6px;
                 border: 1px solid rgba(0, 0, 0, 0.05);
               ">${stats.ratingSynopsis.distribution}</span>
@@ -547,21 +602,23 @@ window.LanchDrapStatsDisplay = (() => {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 12px 16px;
-            margin: 8px 0;
+            gap: 16px;
+            flex-wrap: wrap;
+            padding: 14px 20px;
+            margin: 16px 0;
             background: ${cardBackgroundColor};
             border-radius: 12px;
             border: 1px solid ${borderColor};
             backdrop-filter: blur(5px);
             transition: all 0.2s ease;
           ">
-            <div style="display: flex; align-items: center; gap: 12px;">
+            <div style="display: flex; align-items: center; gap: 14px;">
               <span class="ld-stat-label" style="
                 color: ${secondaryTextColor};
                 font-weight: 500;
                 font-size: 14px;
               background: ${textBackgroundColor};
-              padding: 4px 8px;
+              padding: 6px 10px;
               border-radius: 6px;
               border: 1px solid rgba(0, 0, 0, 0.05);
               border: 1px solid rgba(0, 0, 0, 0.05);
@@ -571,21 +628,21 @@ window.LanchDrapStatsDisplay = (() => {
                 font-weight: 700;
                 font-size: 16px;
               background: ${textBackgroundColor};
-              padding: 4px 12px;
+              padding: 6px 14px;
               border-radius: 20px;
-              min-width: 40px;
+              min-width: 72px;
               text-align: center;
               box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
               border: 1px solid rgba(0, 0, 0, 0.05);
               ">${stats.totalAppearances || 0}</span>
             </div>
-            <div style="display: flex; align-items: center; gap: 12px;">
+            <div style="display: flex; align-items: center; gap: 14px;">
               <span class="ld-stat-label" style="
                 color: ${secondaryTextColor};
                 font-weight: 500;
                 font-size: 14px;
               background: ${textBackgroundColor};
-              padding: 4px 8px;
+              padding: 6px 10px;
               border-radius: 6px;
               border: 1px solid rgba(0, 0, 0, 0.05);
               border: 1px solid rgba(0, 0, 0, 0.05);
@@ -595,7 +652,7 @@ window.LanchDrapStatsDisplay = (() => {
                 font-weight: 600;
                 font-size: 14px;
               background: ${textBackgroundColor};
-              padding: 4px 8px;
+              padding: 6px 10px;
               border-radius: 6px;
               border: 1px solid rgba(0, 0, 0, 0.05);
               border: 1px solid rgba(0, 0, 0, 0.05);
@@ -608,21 +665,23 @@ window.LanchDrapStatsDisplay = (() => {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 12px 16px;
-            margin: 8px 0;
+            gap: 16px;
+            flex-wrap: wrap;
+            padding: 14px 20px;
+            margin: 16px 0;
             background: ${cardBackgroundColor};
             border-radius: 12px;
             border: 1px solid ${borderColor};
             backdrop-filter: blur(5px);
             transition: all 0.2s ease;
           ">
-            <div style="display: flex; align-items: center; gap: 12px;">
+            <div style="display: flex; align-items: center; gap: 14px;">
               <span class="ld-stat-label" style="
                 color: ${secondaryTextColor};
                 font-weight: 500;
                 font-size: 14px;
               background: ${textBackgroundColor};
-              padding: 4px 8px;
+              padding: 6px 10px;
               border-radius: 6px;
               border: 1px solid rgba(0, 0, 0, 0.05);
               border: 1px solid rgba(0, 0, 0, 0.05);
@@ -632,21 +691,21 @@ window.LanchDrapStatsDisplay = (() => {
                 font-weight: 700;
                 font-size: 16px;
               background: ${textBackgroundColor};
-              padding: 4px 12px;
+              padding: 6px 14px;
               border-radius: 20px;
-              min-width: 40px;
+              min-width: 72px;
               text-align: center;
               box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
               border: 1px solid rgba(0, 0, 0, 0.05);
               ">${stats.totalSoldOuts || 0}</span>
             </div>
-            <div style="display: flex; align-items: center; gap: 12px;">
+            <div style="display: flex; align-items: center; gap: 14px;">
               <span class="ld-stat-label" style="
                 color: ${secondaryTextColor};
                 font-weight: 500;
                 font-size: 14px;
               background: ${textBackgroundColor};
-              padding: 4px 8px;
+              padding: 6px 10px;
               border-radius: 6px;
               border: 1px solid rgba(0, 0, 0, 0.05);
               border: 1px solid rgba(0, 0, 0, 0.05);
@@ -656,14 +715,49 @@ window.LanchDrapStatsDisplay = (() => {
                 font-weight: 700;
                 font-size: 16px;
                 background: linear-gradient(45deg, ${accentColor}, ${restaurantColor});
-                padding: 4px 12px;
+                padding: 6px 14px;
                 border-radius: 20px;
-                min-width: 50px;
+                min-width: 80px;
                 text-align: center;
                 text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
                 box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
               ">${stats.soldOutRate ? `${(stats.soldOutRate * 100).toFixed(1)}%` : '0%'}</span>
             </div>
+            ${
+              stats.numSlotsAvailable !== undefined
+                ? `
+            <div style="
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+              margin-bottom: 12px;
+              gap: 14px;
+            ">
+              <span style="
+                color: ${textColor};
+                font-weight: 600;
+                font-size: 14px;
+                background: ${textBackgroundColor};
+                padding: 6px 10px;
+                border-radius: 6px;
+                border: 1px solid rgba(0, 0, 0, 0.05);
+              ">Slots Available</span>
+              <span class="ld-stat-value" style="
+                color: white;
+                font-weight: 700;
+                font-size: 16px;
+                background: linear-gradient(45deg, ${accentColor}, ${restaurantColor});
+                padding: 6px 14px;
+                border-radius: 20px;
+                min-width: 72px;
+                text-align: center;
+                text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+              ">${stats.numSlotsAvailable}</span>
+            </div>
+            `
+                : ''
+            }
           </div>
           ${
             stats.userOrderHistory
@@ -697,8 +791,8 @@ window.LanchDrapStatsDisplay = (() => {
               display: flex;
               justify-content: space-between;
               align-items: center;
-              padding: 12px 16px;
-              margin: 8px 0;
+              padding: 14px 20px;
+              margin: 12px 0;
               background: ${cardBackgroundColor};
               border-radius: 12px;
               border: 1px solid ${borderColor};
@@ -711,7 +805,7 @@ window.LanchDrapStatsDisplay = (() => {
                   font-weight: 500;
                   font-size: 14px;
               background: ${textBackgroundColor};
-              padding: 4px 8px;
+              padding: 6px 10px;
               border-radius: 6px;
               border: 1px solid rgba(0, 0, 0, 0.05);
               border: 1px solid rgba(0, 0, 0, 0.05);
@@ -721,9 +815,9 @@ window.LanchDrapStatsDisplay = (() => {
                   font-weight: 700;
                   font-size: 16px;
               background: ${textBackgroundColor};
-              padding: 4px 12px;
+              padding: 6px 14px;
               border-radius: 20px;
-              min-width: 40px;
+                  min-width: 56px;
               text-align: center;
               box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
               border: 1px solid rgba(0, 0, 0, 0.05);
@@ -735,7 +829,7 @@ window.LanchDrapStatsDisplay = (() => {
                   font-weight: 500;
                   font-size: 14px;
               background: ${textBackgroundColor};
-              padding: 4px 8px;
+              padding: 6px 10px;
               border-radius: 6px;
               border: 1px solid rgba(0, 0, 0, 0.05);
               border: 1px solid rgba(0, 0, 0, 0.05);
@@ -745,7 +839,7 @@ window.LanchDrapStatsDisplay = (() => {
                   font-weight: 600;
                   font-size: 14px;
               background: ${textBackgroundColor};
-              padding: 4px 8px;
+              padding: 6px 10px;
               border-radius: 6px;
               border: 1px solid rgba(0, 0, 0, 0.05);
               border: 1px solid rgba(0, 0, 0, 0.05);
@@ -753,14 +847,13 @@ window.LanchDrapStatsDisplay = (() => {
               </div>
             </div>
             ${
-              stats.userOrderHistory.lastOrderItems &&
-              stats.userOrderHistory.lastOrderItems.length > 0
+              lastItems && lastItems.length > 0
                 ? `
             <div class="ld-stat-item" style="
               display: flex;
               flex-direction: column;
-              padding: 12px 16px;
-              margin: 8px 0;
+              padding: 14px 20px;
+              margin: 12px 0;
               background: ${cardBackgroundColor};
               border-radius: 12px;
               border: 1px solid ${borderColor};
@@ -771,9 +864,9 @@ window.LanchDrapStatsDisplay = (() => {
                 color: ${secondaryTextColor};
                 font-weight: 500;
                 font-size: 14px;
-                margin-bottom: 8px;
+                margin-bottom: 10px;
               background: ${textBackgroundColor};
-              padding: 4px 8px;
+              padding: 6px 10px;
               border-radius: 6px;
               border: 1px solid rgba(0, 0, 0, 0.05);
               border: 1px solid rgba(0, 0, 0, 0.05);
@@ -785,17 +878,12 @@ window.LanchDrapStatsDisplay = (() => {
                 font-size: 13px;
                 line-height: 1.4;
                 background: ${textBackgroundColor};
-                padding: 8px 12px;
+                padding: 10px 14px;
                 border-radius: 8px;
                 box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
                 border: 1px solid rgba(0, 0, 0, 0.05);
               ">
-                ${stats.userOrderHistory.lastOrderItems
-                  .map(
-                    (item) =>
-                      `<strong>${item.name}</strong> (${item.quantity})<br>${item.options ? `(${item.options})` : ''}`
-                  )
-                  .join(', ')}
+                ${lastItemsHtml}
               </div>
             </div>
             `
@@ -818,7 +906,7 @@ window.LanchDrapStatsDisplay = (() => {
     // Add event listener for edit dialog
     const editTrigger = container.querySelector('.ld-edit-stats-trigger');
     if (editTrigger) {
-      editTrigger.addEventListener('click', (e) => {
+      editTrigger.addEventListener('click', async (e) => {
         e.preventDefault();
         e.stopPropagation();
 
@@ -830,8 +918,29 @@ window.LanchDrapStatsDisplay = (() => {
           return;
         }
 
-        const restaurantId = editTrigger.dataset.restaurantId;
-        const restaurantName = editTrigger.dataset.restaurantName;
+        let restaurantId = editTrigger.dataset.restaurantId;
+        let restaurantName = editTrigger.dataset.restaurantName;
+
+        // Fallbacks if dataset is missing/unknown
+        if (!restaurantId || restaurantId === 'unknown') {
+          try {
+            const context = await window.LanchDrapRestaurantContext.getCurrentRestaurantContext();
+            if (context?.id) restaurantId = context.id;
+            if (context?.name) restaurantName = restaurantName || context.name;
+          } catch (_e) {}
+
+          // Try delivery data as last resort
+          try {
+            if (typeof window !== 'undefined' && window.app?.dataset?.page) {
+              const pageData = JSON.parse(window.app.dataset.page);
+              const delivery = pageData?.props?.delivery;
+              if (delivery?.restaurant?.id) restaurantId = restaurantId || delivery.restaurant.id;
+              if (delivery?.restaurant?.name)
+                restaurantName = restaurantName || delivery.restaurant.name;
+            }
+          } catch (_e) {}
+        }
+
         openEditDialog(restaurantId, restaurantName);
       });
     } else {
@@ -852,7 +961,13 @@ window.LanchDrapStatsDisplay = (() => {
   // Function to display stats for selected restaurant on daily pages
   async function displaySelectedRestaurantStats(availabilityData) {
     try {
+      console.log(
+        'LanchDrap: displaySelectedRestaurantStats called with availabilityData:',
+        availabilityData
+      );
+
       if (typeof LanchDrapApiClient === 'undefined' || typeof LanchDrapConfig === 'undefined') {
+        console.log('LanchDrap: Stats display - API client or config not available');
         return;
       }
 
@@ -866,140 +981,262 @@ window.LanchDrapStatsDisplay = (() => {
         }
       }
 
-      // Find the selected restaurant
-      const selectedRestaurant = availabilityData.find((restaurant) => restaurant.isSelected);
+      // Get restaurant context first
+      const restaurantContext =
+        await window.LanchDrapRestaurantContext.getCurrentRestaurantContext();
+
+      // Find the selected restaurant or use restaurant context
+      let selectedRestaurant = availabilityData.find((restaurant) => restaurant.isSelected);
+
+      // If no selected restaurant found, try to find by restaurant context ID
       if (!selectedRestaurant) {
+        if (restaurantContext.id) {
+          selectedRestaurant = availabilityData.find(
+            (restaurant) => restaurant.id === restaurantContext.id
+          );
+          console.log(
+            'LanchDrap: Stats display - no selected restaurant found, looking for restaurant by context ID:',
+            restaurantContext.id
+          );
+          console.log(
+            'LanchDrap: Stats display - found restaurant by context ID:',
+            selectedRestaurant
+          );
+        }
+      }
+
+      if (!selectedRestaurant) {
+        console.log(
+          'LanchDrap: Stats display - no selected restaurant found in availability data, returning'
+        );
         return;
       }
+
+      console.log(
+        'LanchDrap: Stats display - selected restaurant found, proceeding with stats display'
+      );
+
+      // Get restaurant name and logo from context if available
+      const restaurantName =
+        restaurantContext.name || selectedRestaurant.name || selectedRestaurant.id;
+      const restaurantLogo = restaurantContext.logo || selectedRestaurant.logo;
+
+      console.log('LanchDrap: Stats display - got restaurant name and logo:', {
+        restaurantName,
+        restaurantLogo,
+      });
 
       // Hide skeleton loading state if it exists
       hideSkeletonLoading();
 
+      console.log('LanchDrap: Stats display - called hideSkeletonLoading');
+
       // Check if stats are already displayed for this restaurant
       const existingStats = document.getElementById('lanchdrap-restaurant-stats');
+      console.log('LanchDrap: Stats display - checking for existing stats:', existingStats);
       if (existingStats) {
         // Check if it's for the same restaurant
         const existingRestaurantId = existingStats.dataset.restaurantId;
+        console.log(
+          'LanchDrap: Stats display - existing restaurant ID:',
+          existingRestaurantId,
+          'current restaurant ID:',
+          selectedRestaurant.id
+        );
         if (existingRestaurantId === selectedRestaurant.id) {
+          console.log(
+            'LanchDrap: Stats display - already showing stats for this restaurant, returning'
+          );
           return; // Already showing stats for this restaurant
         } else {
+          console.log(
+            'LanchDrap: Stats display - removing existing stats for different restaurant'
+          );
           // Remove existing stats for different restaurant
           existingStats.remove();
         }
       }
 
-      // Check if stats are currently being processed to prevent race conditions
-      if (window.lanchDrapStatsProcessing) {
-        return;
-      }
-
-      const apiClient = new LanchDrapApiClient.ApiClient(
-        LanchDrapConfig.CONFIG.API_BASE_URL,
-        LanchDrapConfig.CONFIG.ENDPOINTS
-      );
-
-      // Set processing flag after we've confirmed we can proceed
-      window.lanchDrapStatsProcessing = true;
-      // Create fallback stats immediately (don't block UI)
-      const fallbackStats = {
-        name: selectedRestaurant.name,
-        id: selectedRestaurant.id,
-        color: selectedRestaurant.color,
-        timeRange: 'all',
-        totalDays: 0,
-        totalAppearances: 0,
-        appearancesInRange: 0,
-        appearanceRate: 0,
-        lastAppearance: null,
-        firstSeen: null,
-        lastUpdated: new Date().toISOString(),
-        apiError: false,
-        loading: true,
-        loadingMessage: 'Loading stats...',
-      };
-
-      // Create stats display immediately with fallback data
-      const statsContainer = renderStatsComponent(
-        fallbackStats,
-        'lanchdrap-restaurant-stats',
-        'Selected Restaurant Stats'
-      );
-
-      // Get user ID for order history
-      const userId = await lanchDrapUserIdManager.getUserId();
+      // Remove processing flag check to prevent blocking
 
       // Generate unique request ID for this stats request
       const requestId = ++currentStatsRequestId;
       const currentUrl = window.location.href;
-      const _currentRestaurantId = selectedRestaurant.id;
+      let statsContainer = null;
 
-      // Fetch combined stats with user order history in background and update UI when ready
-      const combinedStatsPromise = apiClient.getRestaurantStatsWithUserHistory(
-        selectedRestaurant.id,
-        userId
-      );
+      try {
+        // Get user ID for order history
+        const userId = await window.lanchDrapUserIdManager.getUserId();
 
-      Promise.all([combinedStatsPromise])
-        .then(([stats]) => {
+        // Get restaurant ID for API call
+        const restaurantId = selectedRestaurant.id;
+
+        // API call enabled - restaurant stats endpoint is now available
+        console.log(
+          'LanchDrap: Stats display - calling API with restaurantId:',
+          restaurantId,
+          'userId:',
+          userId
+        );
+        console.log('LanchDrap: Stats display - about to call API...');
+        // Ensure API client is initialized (was missing before)
+        const apiClient = new LanchDrapApiClient.ApiClient(
+          LanchDrapConfig.CONFIG.API_BASE_URL,
+          LanchDrapConfig.CONFIG.ENDPOINTS
+        );
+        const stats = await apiClient.getRestaurantStatsWithUserHistory(restaurantId, userId);
+        console.log('LanchDrap: Stats display - API call completed, response:', stats);
+        console.log('LanchDrap: Stats display - API response type:', typeof stats);
+        console.log('LanchDrap: Stats display - API response is null check:', stats === null);
+        console.log(
+          'LanchDrap: Stats display - API response is undefined check:',
+          stats === undefined
+        );
+        console.log(
+          'LanchDrap: Stats display - API response keys:',
+          stats ? Object.keys(stats) : 'null'
+        );
+        console.log('LanchDrap: Stats display - API response success check:', !!stats);
+        console.log(
+          'LanchDrap: Stats display - API response truthy check:',
+          stats ? 'truthy' : 'falsy'
+        );
+        console.log('LanchDrap: Stats display - About to check if (!stats), stats value:', stats);
+        console.log('LanchDrap: Stats display - !stats evaluation:', !stats);
+
+        // Check if stats is an empty object
+        if (stats && typeof stats === 'object') {
+          console.log(
+            'LanchDrap: Stats display - stats is object, checking if empty:',
+            Object.keys(stats).length === 0
+          );
+          console.log('LanchDrap: Stats display - stats object keys:', Object.keys(stats));
+        }
+
+        if (!stats) {
+          console.log('LanchDrap: Stats display - no stats returned from API, using fallback');
+          // Use fallback stats if API fails
+          const fallbackStats = {
+            name: restaurantName,
+            id: selectedRestaurant.id,
+            color: selectedRestaurant.color,
+            logo: restaurantLogo,
+            timeRange: 'all',
+            totalDays: 0,
+            totalAppearances: 0,
+            appearancesInRange: 0,
+            appearanceRate: 0,
+            lastAppearance: null,
+            firstSeen: null,
+            lastUpdated: new Date().toISOString(),
+            apiError: true,
+            loading: false,
+            apiDisabled: false,
+            message: 'Stats API unavailable - showing fallback data',
+            numSlotsAvailable: selectedRestaurant.numSlotsAvailable,
+          };
+
+          console.log(
+            'LanchDrap: Stats display - rendering fallback stats component with data:',
+            fallbackStats
+          );
+          statsContainer = renderStatsComponent(
+            fallbackStats,
+            'lanchdrap-restaurant-stats',
+            'Selected Restaurant Stats'
+          );
+          console.log(
+            'LanchDrap: Stats display - fallback stats container created:',
+            statsContainer
+          );
+        } else {
+          console.log(
+            'LanchDrap: Stats display - API response is truthy, proceeding with stats rendering'
+          );
           // Check if this is still the current request
           if (requestId !== currentStatsRequestId) {
+            console.log('LanchDrap: Stats display - request ID mismatch, returning');
             return;
           }
 
           // Validate that we're still on the same page and restaurant
           if (window.location.href !== currentUrl) {
+            console.log('LanchDrap: Stats display - URL changed during request, returning');
+            console.log('LanchDrap: Stats display - current URL:', window.location.href);
+            console.log('LanchDrap: Stats display - original URL:', currentUrl);
             return;
           }
 
           // Use the color from the selected restaurant if the API doesn't have it yet
           if (!stats.color && selectedRestaurant.color) {
+            console.log(
+              'LanchDrap: Stats display - using restaurant color from selected restaurant:',
+              selectedRestaurant.color
+            );
             stats.color = selectedRestaurant.color;
+          }
+
+          // Add slots available information from the current delivery data
+          if (selectedRestaurant.numSlotsAvailable !== undefined) {
+            console.log(
+              'LanchDrap: Stats display - adding slots available:',
+              selectedRestaurant.numSlotsAvailable
+            );
+            stats.numSlotsAvailable = selectedRestaurant.numSlotsAvailable;
           }
 
           // Add userId to stats for display
           stats.userId = userId;
 
-          const updatedContainer = renderStatsComponent(
+          console.log('LanchDrap: Stats display - rendering stats component with data:', stats);
+          statsContainer = renderStatsComponent(
             stats,
             'lanchdrap-restaurant-stats',
             'Selected Restaurant Stats'
           );
+          console.log('LanchDrap: Stats display - stats container created:', statsContainer);
+        }
+      } catch (error) {
+        console.log('LanchDrap: Stats display - API error:', error);
+        console.log('LanchDrap: Stats display - API error message:', error.message);
+        console.log('LanchDrap: Stats display - API error stack:', error.stack);
+        // Use fallback stats on error
+        const fallbackStats = {
+          name: restaurantName,
+          id: selectedRestaurant.id,
+          color: selectedRestaurant.color,
+          logo: restaurantLogo,
+          timeRange: 'all',
+          totalDays: 0,
+          totalAppearances: 0,
+          appearancesInRange: 0,
+          appearanceRate: 0,
+          lastAppearance: null,
+          firstSeen: null,
+          lastUpdated: new Date().toISOString(),
+          apiError: true,
+          loading: false,
+          apiDisabled: false,
+          message: 'Stats API error - showing fallback data',
+          numSlotsAvailable: selectedRestaurant.numSlotsAvailable,
+        };
 
-          // Check if the container was actually updated
-          const existingContainer = document.getElementById('lanchdrap-restaurant-stats');
-          if (existingContainer) {
-            existingContainer.replaceWith(updatedContainer);
-          } else {
-          }
-        })
-        .catch((_error) => {
-          // Check if this is still the current request
-          if (requestId !== currentStatsRequestId) {
-            return;
-          }
-
-          // Check if URL changed during the request
-          if (window.location.href !== currentUrl) {
-            return;
-          }
-
-          // Update with error state
-          const errorStats = {
-            ...fallbackStats,
-            apiError: true,
-            loading: false,
-            errorMessage: 'API temporarily unavailable',
-          };
-          renderStatsComponent(
-            errorStats,
-            'lanchdrap-restaurant-stats',
-            'Selected Restaurant Stats'
-          );
-        })
-        .finally(() => {
-          // Clear the processing flag
-          window.lanchDrapStatsProcessing = false;
-        });
+        console.log(
+          'LanchDrap: Stats display - rendering error fallback stats component with data:',
+          fallbackStats
+        );
+        statsContainer = renderStatsComponent(
+          fallbackStats,
+          'lanchdrap-restaurant-stats',
+          'Selected Restaurant Stats'
+        );
+        console.log(
+          'LanchDrap: Stats display - error fallback stats container created:',
+          statsContainer
+        );
+      } finally {
+        // Processing flag removed
+      }
 
       // Insert the stats after the restaurant title element
       let restaurantNameElement = document.querySelector('.text-3xl.font-bold');
@@ -1009,7 +1246,7 @@ window.LanchDrapStatsDisplay = (() => {
         );
       }
 
-      if (restaurantNameElement) {
+      if (restaurantNameElement && statsContainer) {
         const insertionPoint = restaurantNameElement.parentNode || restaurantNameElement;
         insertionPoint.insertBefore(statsContainer, restaurantNameElement.nextSibling);
         if (window.LanchDrapKeyManager) {
@@ -1017,6 +1254,12 @@ window.LanchDrapStatsDisplay = (() => {
         } else {
           updateKeyVisibility();
         }
+      } else if (!statsContainer) {
+        console.log('LanchDrap: Stats display - no stats container created, cannot insert');
+      } else if (!restaurantNameElement) {
+        console.log(
+          'LanchDrap: Stats display - no restaurant name element found, cannot insert stats'
+        );
       }
     } catch (_error) {
       // Clear the processing flag on error
@@ -1043,8 +1286,8 @@ window.LanchDrapStatsDisplay = (() => {
         return; // Not on a detail page
       }
 
-      const restaurantName = restaurantNameElement.textContent?.trim();
-      if (!restaurantName) {
+      const domRestaurantName = restaurantNameElement.textContent?.trim();
+      if (!domRestaurantName) {
         return;
       }
 
@@ -1053,112 +1296,117 @@ window.LanchDrapStatsDisplay = (() => {
         return;
       }
 
-      // Create API client instance
+      // API client enabled - restaurant stats endpoint is now available
       const apiClient = new LanchDrapApiClient.ApiClient(
         LanchDrapConfig.CONFIG.API_BASE_URL,
         LanchDrapConfig.CONFIG.ENDPOINTS
       );
 
-      // Store the restaurant name for future use (extract identifier from URL)
-      const urlParts = window.location.pathname.split('/');
-      let restaurantId = null;
+      // Get restaurant information using centralized context utility
+      const restaurantContext =
+        await window.LanchDrapRestaurantContext.getCurrentRestaurantContext();
+      const restaurantId = restaurantContext.id;
+      const restaurantName = restaurantContext.name;
+      const restaurantLogo = restaurantContext.logo;
       let stats = null;
 
-      // Expected URL structure: /app/2025-09-08/eajz7qx8
-      // We want the last part (restaurant ID), not the date
-      if (urlParts.length >= 4 && urlParts[1] === 'app') {
-        restaurantId = urlParts[urlParts.length - 1];
+      console.log('LanchDrap: Stats display - restaurant context:', restaurantContext);
 
-        // Validate that it's not a date (YYYY-MM-DD format)
-        const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
-        if (dateRegex.test(restaurantId)) {
+      if (!restaurantId) {
+        console.log('LanchDrap: Stats display - no restaurant ID available, returning');
+        return; // No restaurant ID available
+      }
+
+      // Use restaurant name from context, fallback to DOM if not available
+      const finalRestaurantName =
+        restaurantName || restaurantNameElement.textContent?.trim() || restaurantId;
+
+      try {
+        // Get user ID for order history
+        const userId = await window.lanchDrapUserIdManager.getUserId();
+
+        // Generate unique request ID for this stats request
+        const requestId = ++currentStatsRequestId;
+        const currentUrl = window.location.href;
+        const _currentRestaurantId = restaurantId;
+
+        // API call enabled - restaurant stats endpoint is now available
+        console.log(
+          'LanchDrap: Stats display - calling API with restaurantId:',
+          restaurantId,
+          'userId:',
+          userId
+        );
+        stats = await apiClient.getRestaurantStatsWithUserHistory(restaurantId, userId);
+        console.log('LanchDrap: Stats display - API response:', stats);
+
+        if (!stats) {
+          console.log('LanchDrap: Stats display - no stats returned from API, returning');
           return;
         }
 
-        const localKey = `restaurant_name:${restaurantId}`;
-        localStorage.setItem(localKey, restaurantName);
-
-        // Also store in chrome.storage.local for popup access
-        if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
-          chrome.storage.local.set({ [localKey]: restaurantName });
+        // Check if this is still the current request
+        if (requestId !== currentStatsRequestId) {
+          return;
         }
 
+        // Validate that we're still on the same page and restaurant
+        if (window.location.href !== currentUrl) {
+          return;
+        }
+
+        // Detail page: no selectedRestaurant context here. Skip color/slots enrichment.
+
+        // Add userId to stats for display
+        stats.userId = userId;
+
+        // Detail page: enrich with delivery context (slots available, color) if present
         try {
-          // Get user ID for order history
-          const userId = await lanchDrapUserIdManager.getUserId();
-
-          // Generate unique request ID for this stats request
-          const requestId = ++currentStatsRequestId;
-          const currentUrl = window.location.href;
-          const _currentRestaurantId = restaurantId;
-
-          // Fetch combined restaurant stats with user order history
-          stats = await apiClient.getRestaurantStatsWithUserHistory(restaurantId, userId);
-
-          if (!stats) {
-            return;
+          if (typeof window !== 'undefined' && window.app && window.app.dataset?.page) {
+            const pageData = JSON.parse(window.app.dataset.page);
+            const delivery = pageData?.props?.delivery;
+            if (delivery && typeof delivery.numSlotsAvailable !== 'undefined') {
+              stats.numSlotsAvailable = delivery.numSlotsAvailable;
+            }
+            // Also use brand color if API didn't include one
+            const brandColor = delivery?.restaurant?.brandColor;
+            if (!stats.color && brandColor) {
+              stats.color = brandColor;
+            }
           }
+        } catch (_e) {}
 
-          // Check if this is still the current request
-          if (requestId !== currentStatsRequestId) {
-            return;
-          }
-
-          // Validate that we're still on the same page and restaurant
-          if (window.location.href !== currentUrl) {
-            return;
-          }
-
-          // Add userId to stats for display
-          stats.userId = userId;
-
-          // Check if we need to update the restaurant name or menu in backend
-          // Only update if we have a real name (not just an ID) and it's different from what's stored
-          const needsNameUpdate =
-            restaurantName !== restaurantId &&
-            restaurantName.length > 3 &&
-            stats.name !== restaurantName;
-
-          // Parse menu items from the page
-          const menuItems = window.LanchDrapOrderParser
-            ? window.LanchDrapOrderParser.parseMenuFromPage()
-            : [];
-          const needsMenuUpdate = menuItems.length > 0;
-
-          if (needsNameUpdate || needsMenuUpdate) {
-            apiClient
-              .updateRestaurant(restaurantId, restaurantName, menuItems)
-              .catch((_error) => {});
-          }
-        } catch (_apiError) {
-          // Check if this is still the current request
-          if (requestId !== currentStatsRequestId) {
-            return;
-          }
-
-          // Check if URL changed during the request
-          if (window.location.href !== currentUrl) {
-            return;
-          }
-
-          // Create fallback stats when API is unavailable
-          stats = {
-            name: restaurantName,
-            id: restaurantId,
-            timeRange: 'all',
-            totalDays: 0,
-            totalAppearances: 0,
-            appearancesInRange: 0,
-            appearanceRate: 0,
-            lastAppearance: null,
-            firstSeen: null,
-            lastUpdated: new Date().toISOString(),
-            apiError: true,
-            errorMessage: 'API temporarily unavailable',
-          };
+        // Check if we need to update the restaurant name or menu in backend
+        // Only update if we have a real name (not just an ID) and it's different from what's stored
+        // Restaurant updates are now handled through the tracking endpoint
+        // No need for separate update calls since menu data comes from delivery data
+      } catch (_apiError) {
+        // Check if this is still the current request
+        if (requestId !== currentStatsRequestId) {
+          return;
         }
-      } else {
-        return;
+
+        // Check if URL changed during the request
+        if (window.location.href !== currentUrl) {
+          return;
+        }
+
+        // Create fallback stats when API is unavailable
+        stats = {
+          name: finalRestaurantName,
+          id: restaurantId,
+          logo: restaurantLogo,
+          timeRange: 'all',
+          totalDays: 0,
+          totalAppearances: 0,
+          appearancesInRange: 0,
+          appearanceRate: 0,
+          lastAppearance: null,
+          firstSeen: null,
+          lastUpdated: new Date().toISOString(),
+          apiError: true,
+          errorMessage: 'API temporarily unavailable',
+        };
       }
 
       // Check if tracking info is already displayed for this restaurant
@@ -1303,122 +1551,7 @@ window.LanchDrapStatsDisplay = (() => {
           </div>
         </div>
 
-        <div style="margin-bottom: 24px;">
-          <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #333;">
-            Rating Statistics
-          </label>
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
-            <div>
-              <label style="display: block; margin-bottom: 4px; font-size: 12px; color: #666;">
-                Total Ratings
-              </label>
-              <input 
-                type="number" 
-                id="total-ratings" 
-                min="0"
-                style="
-                  width: 100%;
-                  padding: 8px;
-                  border: 2px solid #e1e5e9;
-                  border-radius: 6px;
-                  font-size: 14px;
-                  box-sizing: border-box;
-                "
-              />
-            </div>
-            <div>
-              <label style="display: block; margin-bottom: 4px; font-size: 12px; color: #666;">
-                Average Rating
-              </label>
-              <input 
-                type="number" 
-                id="average-rating" 
-                min="1" 
-                max="4" 
-                step="0.1"
-                style="
-                  width: 100%;
-                  padding: 8px;
-                  border: 2px solid #e1e5e9;
-                  border-radius: 6px;
-                  font-size: 14px;
-                  box-sizing: border-box;
-                "
-              />
-            </div>
-          </div>
-          <div>
-            <label style="display: block; margin-bottom: 4px; font-size: 12px; color: #666;">
-              Rating Distribution (🤮 😐 🤤 🤯)
-            </label>
-            <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;">
-              <div>
-                <label style="display: block; margin-bottom: 2px; font-size: 11px; color: #666;">🤮 (1)</label>
-                <input 
-                  type="number" 
-                  id="rating-1" 
-                  min="0"
-                  style="
-                    width: 100%;
-                    padding: 6px;
-                    border: 2px solid #e1e5e9;
-                    border-radius: 4px;
-                    font-size: 12px;
-                    box-sizing: border-box;
-                  "
-                />
-              </div>
-              <div>
-                <label style="display: block; margin-bottom: 2px; font-size: 11px; color: #666;">😐 (2)</label>
-                <input 
-                  type="number" 
-                  id="rating-2" 
-                  min="0"
-                  style="
-                    width: 100%;
-                    padding: 6px;
-                    border: 2px solid #e1e5e9;
-                    border-radius: 4px;
-                    font-size: 12px;
-                    box-sizing: border-box;
-                  "
-                />
-              </div>
-              <div>
-                <label style="display: block; margin-bottom: 2px; font-size: 11px; color: #666;">🤤 (3)</label>
-                <input 
-                  type="number" 
-                  id="rating-3" 
-                  min="0"
-                  style="
-                    width: 100%;
-                    padding: 6px;
-                    border: 2px solid #e1e5e9;
-                    border-radius: 4px;
-                    font-size: 12px;
-                    box-sizing: border-box;
-                  "
-                />
-              </div>
-              <div>
-                <label style="display: block; margin-bottom: 2px; font-size: 11px; color: #666;">🤯 (4)</label>
-                <input 
-                  type="number" 
-                  id="rating-4" 
-                  min="0"
-                  style="
-                    width: 100%;
-                    padding: 6px;
-                    border: 2px solid #e1e5e9;
-                    border-radius: 4px;
-                    font-size: 12px;
-                    box-sizing: border-box;
-                  "
-                />
-              </div>
-            </div>
-          </div>
-        </div>
+        
 
         <div style="display: flex; gap: 12px; justify-content: flex-end;">
           <button 
@@ -1479,20 +1612,39 @@ window.LanchDrapStatsDisplay = (() => {
         LanchDrapConfig.CONFIG.ENDPOINTS
       );
 
-      // Get current restaurant data
-      const restaurantData = await apiClient.getRestaurantById(restaurantId);
+      // Fetch restaurant by ID to prefill appearances/soldout and rating data
+      let restaurantData = null;
+      try {
+        const endpoint = `${apiClient.getEndpoint('RESTAURANTS_GET_BY_ID')}/${restaurantId}`;
+        restaurantData = await apiClient.request(endpoint);
+      } catch (_e) {}
 
-      if (restaurantData?.appearances) {
+      // Fallback: try stats endpoint if direct lookup failed or missing fields
+      if (!restaurantData || (!restaurantData.appearances && !restaurantData.data?.appearances)) {
+        try {
+          const params = new URLSearchParams();
+          params.append('restaurant', restaurantId);
+          const statsEndpoint = `${apiClient.getEndpoint('RESTAURANTS_STATS')}?${params.toString()}`;
+          const statsData = await apiClient.request(statsEndpoint);
+          // Some endpoints return wrapped `{ data: ... }` and some raw; support both
+          restaurantData = statsData?.data || statsData || restaurantData;
+        } catch (_e) {}
+      }
+
+      const appearancesArray = restaurantData?.appearances || restaurantData?.data?.appearances;
+      const soldOutArray = restaurantData?.soldOutDates || restaurantData?.data?.soldOutDates;
+
+      if (appearancesArray) {
         const appearanceDatesTextarea = document.getElementById('appearance-dates');
         const soldoutDatesTextarea = document.getElementById('soldout-dates');
 
         if (appearanceDatesTextarea) {
-          appearanceDatesTextarea.value = restaurantData.appearances.join('\n');
+          appearanceDatesTextarea.value = appearancesArray.join('\n');
         }
 
         if (soldoutDatesTextarea) {
           // Handle both cases: soldOutDates exists and is an array, or it's undefined/null
-          const soldOutDates = restaurantData.soldOutDates || [];
+          const soldOutDates = soldOutArray || [];
           soldoutDatesTextarea.value = soldOutDates.join('\n');
         }
 
@@ -1569,17 +1721,27 @@ window.LanchDrapStatsDisplay = (() => {
         .map((date) => date.trim())
         .filter((date) => date.length > 0);
 
-      // Collect rating data
-      const ratingData = {
-        totalRatings: parseInt(totalRatingsInput.value, 10) || 0,
-        averageRating: parseFloat(averageRatingInput.value) || 0,
-        ratingDistribution: {
-          1: parseInt(rating1Input.value, 10) || 0,
-          2: parseInt(rating2Input.value, 10) || 0,
-          3: parseInt(rating3Input.value, 10) || 0,
-          4: parseInt(rating4Input.value, 10) || 0,
-        },
-      };
+      // Collect rating data (optional - fields may not exist in the dialog)
+      let ratingData = null;
+      if (
+        totalRatingsInput &&
+        averageRatingInput &&
+        rating1Input &&
+        rating2Input &&
+        rating3Input &&
+        rating4Input
+      ) {
+        ratingData = {
+          totalRatings: parseInt(totalRatingsInput.value, 10) || 0,
+          averageRating: parseFloat(averageRatingInput.value) || 0,
+          ratingDistribution: {
+            1: parseInt(rating1Input.value, 10) || 0,
+            2: parseInt(rating2Input.value, 10) || 0,
+            3: parseInt(rating3Input.value, 10) || 0,
+            4: parseInt(rating4Input.value, 10) || 0,
+          },
+        };
+      }
 
       // Validate dates
       const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
@@ -1618,8 +1780,9 @@ window.LanchDrapStatsDisplay = (() => {
             }
           }
         }
-      } catch (_error) {
-        alert('Error saving changes. Please try again.');
+      } catch (error) {
+        const message = error && error.message ? error.message : 'Unknown error';
+        alert(`Error saving changes: ${message}`);
       } finally {
         saveButton.disabled = false;
         saveButton.textContent = 'Save Changes';
@@ -1627,7 +1790,7 @@ window.LanchDrapStatsDisplay = (() => {
     });
   }
 
-  // Save restaurant data via API
+  // Save restaurant data via API - DISABLED (only tracking endpoint enabled)
   async function saveRestaurantData(restaurantId, appearanceDates, soldoutDates, ratingData) {
     if (typeof LanchDrapApiClient === 'undefined' || typeof LanchDrapConfig === 'undefined') {
       throw new Error('API client not available');
@@ -1641,8 +1804,8 @@ window.LanchDrapStatsDisplay = (() => {
     // Update restaurant with new appearance and sold out dates
     await apiClient.updateRestaurantAppearances(restaurantId, appearanceDates, soldoutDates);
 
-    // Update restaurant rating data if provided
-    if (ratingData) {
+    // Update restaurant rating data if provided and endpoint is available
+    if (ratingData && typeof apiClient.updateRestaurantRatingData === 'function') {
       await apiClient.updateRestaurantRatingData(restaurantId, ratingData);
     }
   }

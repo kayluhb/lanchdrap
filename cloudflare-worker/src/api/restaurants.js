@@ -1,6 +1,7 @@
 // Restaurant API routes
 // Following modern API patterns with proper error handling and validation
 
+import { Menu } from '../utils/models.js';
 import { createApiResponse, createErrorResponse } from '../utils/response.js';
 import { compareMenus, mergeMenus } from '../utils/restaurants.js';
 
@@ -10,25 +11,33 @@ function getRatingEmoji(rating) {
   return emojis[rating] || '⭐';
 }
 
-// Helper function to get restaurant ID by name
-async function getRestaurantIdByName(env, restaurantName) {
+// Helper function to store menu data separately
+async function storeMenuData(env, restaurantId, menuItems) {
   try {
-    const nameKey = `restaurant_name:${restaurantName}`;
-    const restaurantId = await env.LANCHDRAP_RATINGS.get(nameKey);
-    return restaurantId;
-  } catch (_error) {
-    return null;
-  }
-}
+    const menuKey = `restaurant_menu:${restaurantId}`;
 
-// Helper function to ensure name mapping exists
-async function ensureNameMapping(env, restaurantId, restaurantName, _context = '') {
-  if (restaurantName && restaurantName !== restaurantId) {
-    const nameKey = `restaurant_name:${restaurantName}`;
-    const existingMapping = await env.LANCHDRAP_RATINGS.get(nameKey);
-    if (!existingMapping) {
-      await env.LANCHDRAP_RATINGS.put(nameKey, restaurantId);
+    // Get existing menu data
+    const existingMenuData = await env.LANCHDRAP_RATINGS.get(menuKey);
+    let menu;
+
+    if (existingMenuData) {
+      // Parse existing menu and add new items
+      const existingData = JSON.parse(existingMenuData);
+      menu = Menu.fromJSON(existingData);
+      menu.addMenuItems(menuItems);
+    } else {
+      // Create new menu
+      menu = new Menu({
+        restaurantId: restaurantId,
+        items: menuItems,
+      });
     }
+
+    // Save updated menu to KV
+    await env.LANCHDRAP_RATINGS.put(menuKey, JSON.stringify(menu.toJSON()));
+  } catch (_error) {
+    // Log error but don't fail the main tracking operation
+    // Error storing menu data
   }
 }
 
@@ -38,16 +47,9 @@ function updateRestaurantTimestamp(restaurantData) {
 }
 
 // Helper function to calculate sold out rate excluding today's date from sold out count
-function calculateSoldOutRateExcludingToday(appearances, soldOutDates) {
-  const today = new Date().toISOString().split('T')[0]; // Get today's date in YYYY-MM-DD format
-
-  // Include all appearances (including today)
+function calculateSoldOutRate(appearances, soldOutDates) {
   const totalAppearances = appearances.length;
-
-  // Filter out today's date from sold out dates only
-  const soldOutDatesExcludingToday = soldOutDates.filter((date) => date !== today);
-  const totalSoldOuts = soldOutDatesExcludingToday.length;
-
+  const totalSoldOuts = soldOutDates.length;
   return {
     rate: totalAppearances > 0 ? (totalSoldOuts / totalAppearances).toFixed(3) : 0,
     totalAppearances,
@@ -72,7 +74,22 @@ async function trackRestaurantAppearances(env, restaurants, date) {
 
     let restaurantData;
     if (existingData) {
-      restaurantData = JSON.parse(existingData);
+      try {
+        restaurantData = JSON.parse(existingData);
+      } catch (_e) {
+        // Malformed KV data: reset to a clean record rather than throwing
+        restaurantData = {
+          id: restaurantId,
+          name: restaurantName !== restaurantId ? restaurantName : null, // Don't store ID as name
+          appearances: [],
+          soldOutDates: [],
+          color: restaurantInfo.color || null, // Store the color
+          logo: restaurantInfo.logo || null, // Store the logo URL
+          firstSeen: date,
+          lastSeen: date,
+          createdAt: new Date().toISOString(),
+        };
+      }
     } else {
       // Create new restaurant record
       restaurantData = {
@@ -81,15 +98,18 @@ async function trackRestaurantAppearances(env, restaurants, date) {
         appearances: [],
         soldOutDates: [],
         color: restaurantInfo.color || null, // Store the color
-        menu: restaurantInfo.menu || [], // Store menu items
+        logo: restaurantInfo.logo || null, // Store the logo URL
         firstSeen: date,
         lastSeen: date,
         createdAt: new Date().toISOString(),
       };
 
-      // Create name mapping for new restaurant if name is different from ID
-      await ensureNameMapping(env, restaurantId, restaurantName, 'new restaurant creation');
+      // Name mapping no longer needed - we use restaurant IDs directly
     }
+
+    // Ensure arrays exist if missing
+    if (!Array.isArray(restaurantData.appearances)) restaurantData.appearances = [];
+    if (!Array.isArray(restaurantData.soldOutDates)) restaurantData.soldOutDates = [];
 
     // Track if any changes were made to avoid unnecessary KV writes
     let dataChanged = false;
@@ -119,10 +139,13 @@ async function trackRestaurantAppearances(env, restaurants, date) {
       dataChanged = true;
     }
 
-    // Initialize menu if it doesn't exist (for existing records)
-    if (!restaurantData.menu) {
-      restaurantData.menu = [];
+    // Initialize logo if it doesn't exist (for existing records)
+    if (!restaurantData.logo && restaurantInfo.logo) {
+      restaurantData.logo = restaurantInfo.logo;
+      dataChanged = true;
     }
+
+    // Menu data is now stored separately in restaurant_menu:<id> KV records
 
     // Track sold out status if restaurant is sold out
     if (restaurantInfo.status === 'soldout' && !restaurantData.soldOutDates.includes(date)) {
@@ -138,56 +161,42 @@ async function trackRestaurantAppearances(env, restaurants, date) {
       restaurantName !== restaurantId &&
       restaurantData.name !== restaurantName
     ) {
-      const oldName = restaurantData.name;
       restaurantData.name = restaurantName;
       dataChanged = true;
 
-      // Remove old name mapping if it exists
-      if (oldName && oldName !== restaurantId) {
-        const oldNameKey = `restaurant_name:${oldName}`;
-        await env.LANCHDRAP_RATINGS.delete(oldNameKey);
-      }
-
-      // Add new name mapping
-      await ensureNameMapping(env, restaurantId, restaurantName, 'name update');
+      // Name mapping no longer needed - we use restaurant IDs directly
     } else if (restaurantName === restaurantId && restaurantData.name === restaurantId) {
       // If both the incoming name and stored name are the ID, set stored name to null
       restaurantData.name = null;
     } else if (restaurantName && restaurantName !== restaurantId && !restaurantData.name) {
-      // If we have a name but the restaurant doesn't have one stored, set it and create mapping
+      // If we have a name but the restaurant doesn't have one stored, set it
       restaurantData.name = restaurantName;
-      await ensureNameMapping(
-        env,
-        restaurantId,
-        restaurantName,
-        'existing restaurant name assignment'
-      );
     }
 
     // Update color if provided and different
     if (restaurantInfo.color && restaurantData.color !== restaurantInfo.color) {
       restaurantData.color = restaurantInfo.color;
       updateRestaurantTimestamp(restaurantData);
+      dataChanged = true;
     }
 
-    // Update menu if provided and different
-    if (restaurantInfo.menu && Array.isArray(restaurantInfo.menu)) {
-      const mergedMenu = mergeMenus(restaurantData.menu, restaurantInfo.menu);
-      const menuChanged = compareMenus(restaurantData.menu, mergedMenu);
-      if (menuChanged) {
-        restaurantData.menu = mergedMenu;
-        updateRestaurantTimestamp(restaurantData);
-        dataChanged = true;
-      }
+    // Update logo if provided and different
+    if (restaurantInfo.logo && restaurantData.logo !== restaurantInfo.logo) {
+      restaurantData.logo = restaurantInfo.logo;
+      updateRestaurantTimestamp(restaurantData);
+      dataChanged = true;
     }
 
-    // Ensure name mapping exists if restaurant has a name
-    await ensureNameMapping(
-      env,
-      restaurantId,
-      restaurantData.name,
-      'trackRestaurantAppearances verification'
-    );
+    // Store menu data separately in restaurant_menu:<id> KV record
+    if (
+      restaurantInfo.menu &&
+      Array.isArray(restaurantInfo.menu) &&
+      restaurantInfo.menu.length > 0
+    ) {
+      await storeMenuData(env, restaurantId, restaurantInfo.menu);
+    }
+
+    // Name mapping no longer needed - we use restaurant IDs directly
 
     // Only save to KV if data actually changed
     if (dataChanged) {
@@ -315,7 +324,7 @@ export async function getAppearances(request, env) {
 
     // Calculate sold out rate (decimal 0-1, extension will convert to percentage)
     // Exclude today's date from the calculation
-    const soldOutStats = calculateSoldOutRateExcludingToday(appearances, soldOutDates);
+    const soldOutStats = calculateSoldOutRate(appearances, soldOutDates);
     const soldOutRate = soldOutStats.rate;
 
     // Get user order history if userId is provided
@@ -435,7 +444,21 @@ export async function updateAppearances(request, env) {
 
     let restaurantData;
     if (existingData) {
-      restaurantData = JSON.parse(existingData);
+      try {
+        restaurantData = JSON.parse(existingData);
+      } catch (_e) {
+        // If stored data is malformed, start fresh instead of failing with 500
+        restaurantData = {
+          id: restaurantId,
+          name: restaurantId,
+          appearances: [],
+          soldOutDates: [],
+          menu: [],
+          firstSeen: null,
+          lastSeen: null,
+          createdAt: new Date().toISOString(),
+        };
+      }
     } else {
       // Create new restaurant record if it doesn't exist
       restaurantData = {
@@ -448,6 +471,14 @@ export async function updateAppearances(request, env) {
         lastSeen: null,
         createdAt: new Date().toISOString(),
       };
+    }
+
+    // Ensure arrays are initialized if missing in existing records
+    if (!Array.isArray(restaurantData.appearances)) {
+      restaurantData.appearances = [];
+    }
+    if (!Array.isArray(restaurantData.soldOutDates)) {
+      restaurantData.soldOutDates = [];
     }
 
     // Sort dates to ensure proper ordering
@@ -582,7 +613,7 @@ export async function update(request, env) {
       hasChanges = true;
 
       // Add new name mapping (only if name is different from ID)
-      await ensureNameMapping(env, restaurantId, restaurantName, 'update endpoint name change');
+      // Name mapping no longer used
     }
 
     if (!hasChanges) {
@@ -604,7 +635,7 @@ export async function update(request, env) {
     }
 
     // Ensure name mapping exists if restaurant has a name
-    await ensureNameMapping(env, restaurantId, restaurantData.name, 'update endpoint verification');
+    // Name mapping no longer used
 
     // Update timestamp and save to KV
     updateRestaurantTimestamp(restaurantData);
@@ -694,14 +725,11 @@ export async function getRestaurantById(request, env) {
   try {
     const url = new URL(request.url);
     const pathParts = url.pathname.split('/');
-    let restaurantId = pathParts[pathParts.length - 1]; // Get ID from URL path
+    const restaurantId = pathParts[pathParts.length - 1]; // Get ID from URL path
 
     if (!restaurantId) {
       return createErrorResponse('Restaurant ID is required', 400);
     }
-
-    // Check if a name is provided in query params for potential update
-    const providedName = url.searchParams.get('name');
 
     // Check if userId and orderDate are provided for user order lookup
     const userId = url.searchParams.get('userId');
@@ -709,18 +737,8 @@ export async function getRestaurantById(request, env) {
 
     // Check if the provided ID is actually a restaurant name
     // If we can't find a restaurant with this ID, try looking it up as a name
-    let restaurantKey = `restaurant:${restaurantId}`;
-    let restaurantData = await env.LANCHDRAP_RATINGS.get(restaurantKey);
-
-    if (!restaurantData) {
-      // Try to find by name
-      const foundId = await getRestaurantIdByName(env, restaurantId);
-      if (foundId) {
-        restaurantId = foundId;
-        restaurantKey = `restaurant:${restaurantId}`;
-        restaurantData = await env.LANCHDRAP_RATINGS.get(restaurantKey);
-      }
-    }
+    const restaurantKey = `restaurant:${restaurantId}`;
+    const restaurantData = await env.LANCHDRAP_RATINGS.get(restaurantKey);
 
     if (!restaurantData) {
       return createErrorResponse('Restaurant not found', 404);
@@ -730,28 +748,13 @@ export async function getRestaurantById(request, env) {
     const appearances = data.appearances || [];
     const soldOutDates = data.soldOutDates || [];
 
-    // Ensure name mapping exists if restaurant has a name
-    await ensureNameMapping(env, restaurantId, data.name, 'getRestaurantById verification');
-
-    // Update name if provided and different from stored name
-    let nameUpdated = false;
-    if (providedName && providedName !== restaurantId && providedName !== data.name) {
-      // Only update if the provided name is better (not just the ID) and different
-      data.name = providedName;
-      updateRestaurantTimestamp(data);
-
-      // Save updated data to KV
-      await env.LANCHDRAP_RATINGS.put(restaurantKey, JSON.stringify(data));
-      nameUpdated = true;
-    }
-
     // Calculate stats
     const lastAppearance = appearances.length > 0 ? appearances[appearances.length - 1] : null;
     const firstSeen = data.firstSeen || (appearances.length > 0 ? appearances[0] : null);
 
     // Calculate sold out rate (decimal 0-1, extension will convert to percentage)
     // Exclude today's date from the calculation
-    const soldOutStats = calculateSoldOutRateExcludingToday(appearances, soldOutDates);
+    const soldOutStats = calculateSoldOutRate(appearances, soldOutDates);
     const soldOutRate = soldOutStats.rate;
 
     // Get user's order for the specific date if userId and orderDate are provided
@@ -819,7 +822,6 @@ export async function getRestaurantById(request, env) {
       soldOutDates: soldOutDates, // Include the sold out dates for editing
       // Add timezone info to help with date display
       timezone: 'America/Chicago', // LunchDrop appears to be in Central Time
-      nameUpdated: nameUpdated, // Indicate if name was updated during this request
     };
 
     // Include user order if available
@@ -856,78 +858,6 @@ export async function getRestaurantById(request, env) {
     });
   } catch (error) {
     return createErrorResponse('Failed to get restaurant', 500, { error: error.message });
-  }
-}
-
-// Search restaurant by name
-export async function searchRestaurantByName(request, env) {
-  try {
-    const url = new URL(request.url);
-    const restaurantName = url.searchParams.get('name');
-
-    if (!restaurantName) {
-      return createErrorResponse('Restaurant name is required', 400);
-    }
-
-    // Try to find restaurant ID by name
-    const restaurantId = await getRestaurantIdByName(env, restaurantName);
-
-    if (!restaurantId) {
-      return createErrorResponse('Restaurant not found', 404);
-    }
-
-    // Get restaurant data
-    const restaurantKey = `restaurant:${restaurantId}`;
-    const restaurantData = await env.LANCHDRAP_RATINGS.get(restaurantKey);
-
-    if (!restaurantData) {
-      return createErrorResponse('Restaurant data not found', 404);
-    }
-
-    const data = JSON.parse(restaurantData);
-    const appearances = data.appearances || [];
-    const soldOutDates = data.soldOutDates || [];
-
-    // Calculate stats
-    const lastAppearance = appearances.length > 0 ? appearances[appearances.length - 1] : null;
-    const firstSeen = data.firstSeen || (appearances.length > 0 ? appearances[0] : null);
-
-    // Calculate sold out rate (decimal 0-1, extension will convert to percentage)
-    // Exclude today's date from the calculation
-    const soldOutStats = calculateSoldOutRateExcludingToday(appearances, soldOutDates);
-    const soldOutRate = soldOutStats.rate;
-
-    return new Response(
-      JSON.stringify({
-        name: data.name || restaurantName,
-        id: data.id || restaurantId,
-        color: data.color || null,
-        menu: data.menu || [],
-        timeRange: 'all',
-        totalDays: 7,
-        totalAppearances: appearances.length,
-        appearancesInRange: appearances.length,
-        appearanceRate: 1.0, // Since we're searching by name, we found it (100% appearance rate)
-        totalSoldOuts: soldOutStats.totalSoldOuts,
-        soldOutRate: parseFloat(soldOutRate),
-        lastAppearance,
-        firstSeen,
-        lastUpdated: data.updatedAt || data.createdAt || new Date().toISOString(),
-        appearances: appearances,
-        soldOutDates: soldOutDates, // Include the sold out dates for editing
-        timezone: 'America/Chicago',
-        foundByName: true, // Indicate this was found by name lookup
-      }),
-      {
-        status: 200,
-        headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
-        },
-      }
-    );
-  } catch (error) {
-    return createErrorResponse('Failed to search restaurant', 500, { error: error.message });
   }
 }
 
@@ -1358,126 +1288,6 @@ export async function deleteUserRestaurantHistory(request, env) {
   }
 }
 
-// Clean up duplicate orders for a user-restaurant combination
-export async function cleanupDuplicateOrders(request, env) {
-  try {
-    const { userId, restaurantId } = await request.json();
-
-    if (!userId || !restaurantId) {
-      return createErrorResponse('Missing required fields: userId, restaurantId', 400);
-    }
-
-    const userRestaurantKey = `user_restaurant_history:${userId}:${restaurantId}`;
-    const historyDataRaw = await env.LANCHDRAP_RATINGS.get(userRestaurantKey);
-
-    if (!historyDataRaw) {
-      return createApiResponse({
-        success: true,
-        message: 'No order history found',
-        data: { userId, restaurantId, originalCount: 0, cleanedCount: 0 },
-      });
-    }
-
-    const historyData = JSON.parse(historyDataRaw);
-
-    // Handle both old and new data structures for migration
-    let originalCount = 0;
-    const cleanedData = {};
-
-    if (historyData.orders && Array.isArray(historyData.orders)) {
-      // Old structure - convert to new structure
-      originalCount = historyData.orders.length;
-      const seenOrders = new Set();
-
-      for (const order of historyData.orders) {
-        const orderKey = `${order.date}_${JSON.stringify(
-          order.items.map((item) => ({
-            name: item.name,
-            quantity: item.quantity,
-            fullDescription: item.fullDescription,
-          }))
-        )}`;
-
-        if (!seenOrders.has(orderKey)) {
-          seenOrders.add(orderKey);
-          cleanedData[order.date] = {
-            items: order.items,
-          };
-        }
-      }
-    } else if (
-      historyData.orders &&
-      typeof historyData.orders === 'object' &&
-      !Array.isArray(historyData.orders)
-    ) {
-      // Handle malformed data where orders is an object but should be the root structure
-      originalCount = Object.keys(historyData.orders).length;
-      const seenOrders = new Set();
-
-      for (const [date, orderData] of Object.entries(historyData.orders)) {
-        const orderKey = `${date}_${JSON.stringify(
-          orderData.items.map((item) => ({
-            name: item.name,
-            quantity: item.quantity,
-            fullDescription: item.fullDescription,
-          }))
-        )}`;
-
-        if (!seenOrders.has(orderKey)) {
-          seenOrders.add(orderKey);
-          cleanedData[date] = orderData;
-        }
-      }
-    } else {
-      // New structure - already date-keyed
-      originalCount = Object.keys(historyData).length;
-      const seenOrders = new Set();
-
-      for (const [date, orderData] of Object.entries(historyData)) {
-        const orderKey = `${date}_${JSON.stringify(
-          orderData.items.map((item) => ({
-            name: item.name,
-            quantity: item.quantity,
-            fullDescription: item.fullDescription,
-          }))
-        )}`;
-
-        if (!seenOrders.has(orderKey)) {
-          seenOrders.add(orderKey);
-          cleanedData[date] = orderData;
-        }
-      }
-    }
-
-    // Only save to KV if data actually changed
-    const cleanedCount = Object.keys(cleanedData).length;
-    if (cleanedCount !== originalCount) {
-      await env.LANCHDRAP_RATINGS.put(userRestaurantKey, JSON.stringify(cleanedData));
-    }
-
-    const finalCleanedCount = Object.keys(cleanedData).length;
-    const duplicatesRemoved = originalCount - finalCleanedCount;
-
-    return createApiResponse({
-      success: true,
-      message:
-        duplicatesRemoved > 0
-          ? 'Duplicate orders cleaned up successfully'
-          : 'No duplicates found (no KV write)',
-      data: {
-        userId,
-        restaurantId,
-        originalCount,
-        cleanedCount: finalCleanedCount,
-        duplicatesRemoved,
-        dataChanged: duplicatesRemoved > 0,
-      },
-    });
-  } catch (_error) {
-    return createErrorResponse('Failed to cleanup duplicate orders', 500);
-  }
-}
-
 // Get user's restaurant order summary (all restaurants they've ordered from)
 export async function getUserRestaurantSummary(request, env) {
   try {
@@ -1543,8 +1353,26 @@ export async function getUserRestaurantSummary(request, env) {
             }
             const lastOrderDate = orders.length > 0 ? orders[0].date : null; // First item is newest
 
+            // Look up restaurant record to include display name (and optional color/logo)
+            let restaurantName = restaurantId;
+            let color = null;
+            let logo = null;
+            try {
+              const restaurantKey = `restaurant:${restaurantId}`;
+              const restaurantDataRaw = await env.LANCHDRAP_RATINGS.get(restaurantKey);
+              if (restaurantDataRaw) {
+                const restaurantData = JSON.parse(restaurantDataRaw);
+                restaurantName = restaurantData.name || restaurantId;
+                color = restaurantData.color || null;
+                logo = restaurantData.logo || null;
+              }
+            } catch (_e) {}
+
             restaurants.push({
               restaurantId,
+              restaurantName,
+              color,
+              logo,
               totalOrders: orders.length,
               lastOrderDate,
               recentOrders: orders.slice(0, 5), // First 5 orders (newest)
@@ -1680,7 +1508,7 @@ export async function getRestaurantStatsWithUserHistory(request, env) {
 
     // Calculate sold out rate (decimal 0-1, extension will convert to percentage)
     // Exclude today's date from the calculation
-    const soldOutStats = calculateSoldOutRateExcludingToday(appearances, soldOutDates);
+    const soldOutStats = calculateSoldOutRate(appearances, soldOutDates);
     const soldOutRate = soldOutStats.rate;
 
     // Get user order history if userId is provided

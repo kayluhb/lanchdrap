@@ -48,8 +48,11 @@ async function initializeExtension() {
 // Main function to handle page changes
 async function handlePageChange() {
   try {
+    console.log('LanchDrap: handlePageChange called, current URL:', window.location.href);
+
     // Skip if on login page
     if (window.LanchDrapDOMUtils.isLoginPage()) {
+      console.log('LanchDrap: On login page, skipping');
       return;
     }
 
@@ -58,6 +61,7 @@ async function handlePageChange() {
 
     // Handle restaurant grid pages (daily pages)
     if (window.LanchDrapDOMUtils.isRestaurantGridPage()) {
+      console.log('LanchDrap: Detected restaurant grid page');
       // Show skeleton loading state immediately
       if (window.LanchDrapStatsDisplay?.showSkeletonLoading) {
         window.LanchDrapStatsDisplay.showSkeletonLoading();
@@ -65,15 +69,19 @@ async function handlePageChange() {
 
       // Wait for navigation to settle before scraping and displaying stats
       setTimeout(async () => {
+        console.log('LanchDrap: Timeout callback executing');
         // Double-check we're still on a restaurant grid page
         if (!window.LanchDrapDOMUtils.isRestaurantGridPage()) {
+          console.log('LanchDrap: No longer on restaurant grid page, skipping');
           return;
         }
 
         // Scrape restaurant availability and display stats
+        console.log('LanchDrap: Calling scrapeRestaurantAvailability from content script');
         const availabilityData =
           await window.LanchDrapRestaurantScraper.scrapeRestaurantAvailability();
 
+        console.log('LanchDrap: Got availability data:', availabilityData);
         if (availabilityData && availabilityData.length > 0) {
           // Display stats for selected restaurant
           await window.LanchDrapStatsDisplay.displaySelectedRestaurantStats(availabilityData);
@@ -202,40 +210,25 @@ setupEventListeners();
 // Listen for messages from popup
 chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
   if (request.action === 'getRestaurantInfo') {
-    try {
-      // Try to get restaurant info from the current page
-      let restaurantInfo = null;
+    (async () => {
+      try {
+        // Use centralized restaurant context utility
+        const restaurantContext =
+          await window.LanchDrapRestaurantContext.getCurrentRestaurantContext();
 
-      // Method 1: Look for restaurant name in common selectors
-      const restaurantNameElement = document.querySelector('.text-3xl.font-bold');
-      if (restaurantNameElement) {
-        const restaurantName = restaurantNameElement.textContent?.trim();
-
-        // Try to get restaurant ID from URL
-        const urlParts = window.location.pathname.split('/');
-        let restaurantId = null;
-
-        if (urlParts.length >= 4 && urlParts[1] === 'app') {
-          const potentialId = urlParts[urlParts.length - 1];
-          // Check if it's not a date
-          const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
-          if (!dateRegex.test(potentialId)) {
-            restaurantId = potentialId;
-          }
-        }
-
-        if (restaurantName && restaurantId) {
-          restaurantInfo = {
-            restaurantName: restaurantName,
-            restaurantId: restaurantId,
+        if (restaurantContext.hasValidId && restaurantContext.hasValidName) {
+          const restaurantInfo = {
+            restaurantName: restaurantContext.name,
+            restaurantId: restaurantContext.id,
           };
+          sendResponse(restaurantInfo);
+        } else {
+          sendResponse(null);
         }
+      } catch (_error) {
+        sendResponse(null);
       }
-
-      sendResponse(restaurantInfo);
-    } catch (_error) {
-      sendResponse(null);
-    }
+    })();
     return true; // Keep message channel open for async response
   }
 });

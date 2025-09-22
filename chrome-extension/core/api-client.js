@@ -74,36 +74,7 @@ class ApiClient {
     throw new Error(errorMessage);
   }
 
-  // All other API methods disabled - only tracking enabled
-  // async submitRating(ratingData) {
-  //   return this.request(this.getEndpoint('RATINGS'), {
-  //     method: 'POST',
-  //     body: JSON.stringify(ratingData),
-  //   });
-  // }
-
-  // async getRatingStats(options = {}) {
-  //   const params = new URLSearchParams();
-  //   if (options.restaurant) params.append('restaurant', options.restaurant);
-  //   if (options.timeRange) params.append('timeRange', options.timeRange);
-  //   const endpoint = `${this.getEndpoint('RATINGS_STATS')}${params.toString() ? `?${params.toString()}` : ''}`;
-  //   return this.request(endpoint);
-  // }
-
-  // async getDailyAvailability(date) {
-  //   const endpoint = `/api/restaurants/daily-availability?date=${date}`;
-  //   return this.request(endpoint);
-  // }
-
-  // async getRestaurantById(restaurantId, restaurantName = null) {
-  //   let endpoint = `${this.getEndpoint('RESTAURANTS_GET_BY_ID')}/${restaurantId}`;
-  //   if (restaurantName && restaurantName !== restaurantId) {
-  //     const params = new URLSearchParams();
-  //     params.append('name', restaurantName);
-  //     endpoint += `?${params.toString()}`;
-  //   }
-  //   return this.request(endpoint);
-  // }
+  // Get restaurant by ID
   async getRestaurantById(restaurantId, restaurantName = null) {
     let endpoint = `${this.getEndpoint('RESTAURANTS_GET_BY_ID')}/${restaurantId}`;
     if (restaurantName && restaurantName !== restaurantId) {
@@ -123,15 +94,7 @@ class ApiClient {
     });
   }
 
-  // Clear restaurant name lookup records (admin function)
-  async clearRestaurantNameRecords() {
-    return this.request(this.getEndpoint('CLEAR_RESTAURANT_NAMES'), {
-      method: 'POST',
-      body: JSON.stringify({}),
-    });
-  }
-
-  // All other API methods disabled - only tracking enabled
+  // Update restaurant
   async updateRestaurant(
     restaurantId,
     restaurantName = null,
@@ -147,6 +110,7 @@ class ApiClient {
     });
   }
 
+  // Store user order
   async storeUserOrder(userId, restaurantId, orderData) {
     return this.request(this.getEndpoint('ORDERS'), {
       method: 'POST',
@@ -154,6 +118,7 @@ class ApiClient {
     });
   }
 
+  // Update user order
   async updateUserOrder(userId, restaurantId, orderDate, items) {
     const endpoint = `${this.getEndpoint('ORDERS')}/${orderDate}`;
     return this.request(endpoint, {
@@ -162,16 +127,7 @@ class ApiClient {
     });
   }
 
-  // async getUserOrderHistory(userId, restaurantId = null) {
-  //   const params = new URLSearchParams();
-  //   params.append('userId', userId);
-  //   if (restaurantId) {
-  //     params.append('restaurantId', restaurantId);
-  //   }
-  //   const endpoint = `${this.getEndpoint('ORDERS')}?${params.toString()}`;
-  //   return this.request(endpoint);
-  // }
-
+  // Get user restaurant summary
   async getUserRestaurantSummary(userId) {
     const params = new URLSearchParams();
     params.append('userId', userId);
@@ -179,6 +135,7 @@ class ApiClient {
     return this.request(endpoint);
   }
 
+  // Get restaurant stats with user history
   async getRestaurantStatsWithUserHistory(restaurantId, userId, signal = null) {
     console.log('LanchDrap: API Client - getRestaurantStatsWithUserHistory called with:', {
       restaurantId,
@@ -194,13 +151,7 @@ class ApiClient {
     return result;
   }
 
-  // async getRestaurantUsers(restaurantId) {
-  //   const params = new URLSearchParams();
-  //   params.append('restaurantId', restaurantId);
-  //   const endpoint = `${this.getEndpoint('RESTAURANTS_USERS')}?${params.toString()}`;
-  //   return this.request(endpoint);
-  // }
-
+  // Update restaurant appearances
   async updateRestaurantAppearances(restaurantId, appearanceDates, soldoutDates) {
     return this.request(this.getEndpoint('RESTAURANTS_UPDATE_APPEARANCES'), {
       method: 'POST',
@@ -208,8 +159,7 @@ class ApiClient {
     });
   }
 
-  // ratings update endpoint removed per admin request
-
+  // Delete user restaurant history
   async deleteUserRestaurantHistory(userId, restaurantId, orderDate) {
     const params = new URLSearchParams();
     params.append('userId', userId);

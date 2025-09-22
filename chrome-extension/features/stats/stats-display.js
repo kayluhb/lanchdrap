@@ -6,37 +6,26 @@ window.LanchDrapStatsDisplay = (() => {
   // Request tracking for race condition protection
   let currentStatsRequestId = 0;
 
-  // Utility function to create key elements with consistent styling
+  // Utility function to create key elements via centralized KeyManager
   function createKeyElement(keyText, title = 'Click to select key') {
-    const keysVisible = window.LanchDrapKeyManager
-      ? window.LanchDrapKeyManager.areKeysVisible()
-      : false;
-    return `
-      <span style="
-        font-size: 12px;
-        font-weight: 500;
-        color: #4a4a4a;
-        background: rgba(0, 0, 0, 0.05);
-        padding: 2px 6px;
-        border-radius: 4px;
-        font-family: monospace;
-        cursor: pointer;
-        user-select: all;
-        display: ${keysVisible ? 'inline' : 'none'};
-      " title="${title}" class="ld-key-element">${keyText}</span>
-    `;
+    try {
+      if (window.LanchDrapKeyManager?.createKeyElement) {
+        return window.LanchDrapKeyManager.createKeyElement(keyText, title);
+      }
+    } catch (_e) {}
+    return '';
   }
 
   // Utility function to get edit trigger properties
   function getEditTriggerProps(restaurantId, restaurantName) {
-    const keysVisible = window.LanchDrapKeyManager
-      ? window.LanchDrapKeyManager.areKeysVisible()
-      : false;
+    try {
+      if (window.LanchDrapKeyManager?.createEditTrigger) {
+        return window.LanchDrapKeyManager.createEditTrigger(restaurantId, restaurantName);
+      }
+    } catch (_e) {}
     return {
-      cursor: keysVisible ? 'pointer' : 'default',
-      title: keysVisible
-        ? 'Click to edit restaurant stats'
-        : 'Enable keys visibility to edit stats',
+      cursor: 'default',
+      title: 'Enable keys visibility to edit stats',
       dataRestaurantId: restaurantId,
       dataRestaurantName: restaurantName,
     };
@@ -60,146 +49,7 @@ window.LanchDrapStatsDisplay = (() => {
     return `${name}'s`;
   }
 
-  // Konami code detection
-  const konamiCode = [
-    'ArrowUp',
-    'ArrowUp',
-    'ArrowDown',
-    'ArrowDown',
-    'ArrowLeft',
-    'ArrowRight',
-    'ArrowLeft',
-    'ArrowRight',
-    'KeyB',
-    'KeyA',
-    'Enter',
-  ];
-  let konamiSequence = [];
-  let keysVisible = false;
-
-  // Initialize key visibility from localStorage
-  function initializeKeyVisibility() {
-    const stored = localStorage.getItem('lanchdrap_keys_visible');
-
-    // Default to false (hidden) if no stored value exists
-    keysVisible = stored === 'true';
-
-    // If this is the first time, ensure keys start hidden
-    if (stored === null) {
-      keysVisible = false;
-      localStorage.setItem('lanchdrap_keys_visible', 'false');
-    }
-  }
-
-  // Toggle key visibility
-  function toggleKeyVisibility() {
-    keysVisible = !keysVisible;
-    localStorage.setItem('lanchdrap_keys_visible', keysVisible.toString());
-
-    // Update all existing key elements
-    updateKeyVisibility();
-
-    // Show feedback
-    showKonamiFeedback();
-  }
-
-  // Update visibility of all key elements
-  function updateKeyVisibility() {
-    const keyElements = document.querySelectorAll('.ld-key-element');
-    keyElements.forEach((element) => {
-      const newDisplay = keysVisible ? 'inline' : 'none';
-      element.style.display = newDisplay;
-    });
-
-    // Also update edit triggers cursor and title
-    const editTriggers = document.querySelectorAll('.ld-edit-stats-trigger');
-    editTriggers.forEach((trigger) => {
-      trigger.style.cursor = keysVisible ? 'pointer' : 'default';
-      trigger.title = keysVisible
-        ? 'Click to edit restaurant stats'
-        : 'Enable keys visibility to edit stats';
-    });
-  }
-
-  // Show visual feedback for Konami code
-  function showKonamiFeedback() {
-    // Create or update feedback element
-    let feedback = document.getElementById('lanchdrap-konami-feedback');
-    if (!feedback) {
-      feedback = document.createElement('div');
-      feedback.id = 'lanchdrap-konami-feedback';
-      feedback.style.cssText = `
-        position: fixed;
-        top: 20px;
-        right: 20px;
-        background: linear-gradient(45deg, #ff6b6b, #4ecdc4);
-        color: white;
-        padding: 12px 20px;
-        border-radius: 8px;
-        font-weight: bold;
-        font-size: 14px;
-        z-index: 10001;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-        transform: translateX(100%);
-        transition: transform 0.3s ease;
-      `;
-      document.body.appendChild(feedback);
-    }
-
-    feedback.textContent = keysVisible ? '🔑 Keys Visible' : '🔒 Keys Hidden';
-
-    // Animate in
-    setTimeout(() => {
-      feedback.style.transform = 'translateX(0)';
-    }, 10);
-
-    // Animate out after 2 seconds
-    setTimeout(() => {
-      feedback.style.transform = 'translateX(100%)';
-      setTimeout(() => {
-        if (feedback.parentNode) {
-          feedback.parentNode.removeChild(feedback);
-        }
-      }, 300);
-    }, 2000);
-  }
-
-  // Handle Konami code input
-  function handleKonamiInput(event) {
-    // Reset sequence if too much time has passed
-    if (
-      konamiSequence.length > 0 &&
-      Date.now() - konamiSequence[konamiSequence.length - 1].timestamp > 3000
-    ) {
-      konamiSequence = [];
-    }
-
-    // Add current key to sequence
-    konamiSequence.push({
-      key: event.code,
-      timestamp: Date.now(),
-    });
-
-    // Keep only the last 11 keys
-    if (konamiSequence.length > konamiCode.length) {
-      konamiSequence = konamiSequence.slice(-konamiCode.length);
-    }
-
-    // Check if sequence matches Konami code
-    if (konamiSequence.length === konamiCode.length) {
-      const sequenceKeys = konamiSequence.map((item) => item.key);
-      if (sequenceKeys.every((key, index) => key === konamiCode[index])) {
-        toggleKeyVisibility();
-        konamiSequence = []; // Reset sequence
-      }
-    }
-  }
-
-  // Initialize Konami code detection
-  function initializeKonamiCode() {
-    initializeKeyVisibility();
-    document.addEventListener('keydown', handleKonamiInput);
-  }
+  // Local Konami/visibility logic removed in favor of centralized KeyManager
 
   // Function to create skeleton loading component
   function createSkeletonComponent() {
@@ -322,6 +172,59 @@ window.LanchDrapStatsDisplay = (() => {
     return container.firstElementChild;
   }
 
+  // Find a robust insertion anchor for both grid and detail pages
+  function findInsertionAnchor() {
+    try {
+      // Prefer a visible page title when present
+      const title = document.querySelector('.text-3xl.font-bold');
+      if (title) return { node: title, mode: 'after' };
+
+      // Try a known fallback title location
+      const fallbackTitle = document.querySelector(
+        '#app > div:nth-child(1) > div:nth-child(2) > div:nth-child(2) > div:nth-child(7) > div > div > div:nth-child(1) > div:nth-child(1)'
+      );
+      if (fallbackTitle) return { node: fallbackTitle, mode: 'after' };
+
+      // If on grid page, insert before the restaurant grid
+      if (window.LanchDrapDOMUtils?.getCachedRestaurantGrid) {
+        const grid = window.LanchDrapDOMUtils.getCachedRestaurantGrid();
+        if (grid && grid.parentNode) return { node: grid, mode: 'before' };
+      }
+
+      // Fallback: insert after the first heading on the page
+      const anyHeading = document.querySelector('h1, h2');
+      if (anyHeading) return { node: anyHeading, mode: 'after' };
+
+      // Last resort: insert at top of main content if available
+      const main = document.querySelector('main');
+      if (main && main.firstChild) return { node: main.firstChild, mode: 'before' };
+
+      // Absolute fallback: after #app container start
+      const app = document.getElementById('app');
+      if (app && app.firstChild) return { node: app.firstChild, mode: 'before' };
+    } catch (_e) {}
+    return null;
+  }
+
+  // Function to clear restaurant stats
+  function clearRestaurantStats() {
+    const existingStats = document.getElementById('lanchdrap-restaurant-stats');
+    const existingSkeleton = document.getElementById('lanchdrap-restaurant-stats-skeleton');
+    console.log('LanchDrap: clearRestaurantStats called.');
+    console.log('LanchDrap: Found existing stats element:', existingStats);
+    console.log('LanchDrap: Found existing skeleton element:', existingSkeleton);
+    if (existingStats) {
+      existingStats.remove();
+      console.log('LanchDrap: Cleared existing restaurant stats (ID: lanchdrap-restaurant-stats)');
+    }
+    if (existingSkeleton) {
+      existingSkeleton.remove();
+      console.log(
+        'LanchDrap: Cleared existing skeleton loading state (ID: lanchdrap-restaurant-stats-skeleton)'
+      );
+    }
+  }
+
   // Function to show skeleton loading state
   function showSkeletonLoading() {
     // Remove any existing stats or skeleton
@@ -335,19 +238,14 @@ window.LanchDrapStatsDisplay = (() => {
       existingSkeleton.remove();
     }
 
-    // Find the insertion point using the same logic as displaySelectedRestaurantStats
-    let restaurantNameElement = document.querySelector('.text-3xl.font-bold');
-    if (!restaurantNameElement) {
-      restaurantNameElement = document.querySelector(
-        '#app > div:nth-child(1) > div:nth-child(2) > div:nth-child(2) > div:nth-child(7) > div > div > div:nth-child(1) > div:nth-child(1)'
-      );
-    }
-
-    if (restaurantNameElement) {
+    const anchor = findInsertionAnchor();
+    if (anchor) {
       const skeleton = createSkeletonComponent();
-      const insertionPoint = restaurantNameElement.parentNode || restaurantNameElement;
-      insertionPoint.insertBefore(skeleton, restaurantNameElement.nextSibling);
-    } else {
+      if (anchor.mode === 'after' && anchor.node.parentNode) {
+        anchor.node.parentNode.insertBefore(skeleton, anchor.node.nextSibling);
+      } else if (anchor.mode === 'before' && anchor.node.parentNode) {
+        anchor.node.parentNode.insertBefore(skeleton, anchor.node);
+      }
     }
   }
 
@@ -363,14 +261,10 @@ window.LanchDrapStatsDisplay = (() => {
   function renderStatsComponent(stats, containerId, _title) {
     // Ensure key visibility is initialized before rendering
     if (!window.lanchdrapKonamiInitialized) {
-      // Use centralized key manager if available, otherwise fallback to local implementation
-      if (window.LanchDrapKeyManager) {
+      if (window.LanchDrapKeyManager?.initializeKonamiCode) {
         window.LanchDrapKeyManager.initializeKonamiCode();
-      } else {
-        initializeKonamiCode();
       }
       window.lanchdrapKonamiInitialized = true;
-    } else {
     }
 
     // Add API error indicator if applicable
@@ -951,7 +845,7 @@ window.LanchDrapStatsDisplay = (() => {
       const styleLink = document.createElement('link');
       styleLink.id = 'lanchdrap-tracking-styles';
       styleLink.rel = 'stylesheet';
-      styleLink.href = chrome.runtime.getURL('content-styles.css');
+      styleLink.href = chrome.runtime.getURL('styles/content-styles.css');
       document.head.appendChild(styleLink);
     }
 
@@ -973,10 +867,16 @@ window.LanchDrapStatsDisplay = (() => {
 
       // Validate that the availability data matches the current URL date
       if (availabilityData && availabilityData.length > 0) {
-        const currentUrlDate = window.LanchDrapDOMUtils.extractDateFromUrl();
+        const currentUrlDate = window.LanchDrapJsonDataLoader?.extractDateFromUrl();
         const dataUrlDate = availabilityData[0]?.urlDate;
 
         if (currentUrlDate && dataUrlDate && currentUrlDate !== dataUrlDate) {
+          console.log(
+            'LanchDrap: Stats display - date mismatch, currentUrlDate:',
+            currentUrlDate,
+            'dataUrlDate:',
+            dataUrlDate
+          );
           return;
         }
       }
@@ -987,8 +887,8 @@ window.LanchDrapStatsDisplay = (() => {
       // If no selected restaurant found and NOT on grid, try using restaurant context ID (detail pages)
       if (!selectedRestaurant) {
         const onGrid =
-          typeof window.LanchDrapDOMUtils?.isRestaurantGridPage === 'function' &&
-          window.LanchDrapDOMUtils.isRestaurantGridPage();
+          typeof window.LanchDrapDOMUtils?.isDayOverviewPage === 'function' &&
+          window.LanchDrapDOMUtils.isDayOverviewPage();
         if (!onGrid) {
           const restaurantContext =
             await window.LanchDrapRestaurantContext.getCurrentRestaurantContext();
@@ -1020,10 +920,7 @@ window.LanchDrapStatsDisplay = (() => {
         restaurantLogo,
       });
 
-      // Hide skeleton loading state if it exists
-      hideSkeletonLoading();
-
-      console.log('LanchDrap: Stats display - called hideSkeletonLoading');
+      // Don't hide skeleton yet; we'll replace it seamlessly when stats are ready
 
       // Check if stats are already displayed for this restaurant
       const existingStats = document.getElementById('lanchdrap-restaurant-stats');
@@ -1232,28 +1129,29 @@ window.LanchDrapStatsDisplay = (() => {
         // Processing flag removed
       }
 
-      // Insert the stats after the restaurant title element
-      let restaurantNameElement = document.querySelector('.text-3xl.font-bold');
-      if (!restaurantNameElement) {
-        restaurantNameElement = document.querySelector(
-          '#app > div:nth-child(1) > div:nth-child(2) > div:nth-child(2) > div:nth-child(7) > div > div > div:nth-child(1) > div:nth-child(1)'
-        );
-      }
-
-      if (restaurantNameElement && statsContainer) {
-        const insertionPoint = restaurantNameElement.parentNode || restaurantNameElement;
-        insertionPoint.insertBefore(statsContainer, restaurantNameElement.nextSibling);
-        if (window.LanchDrapKeyManager) {
-          window.LanchDrapKeyManager.forceUpdateKeyVisibility();
+      if (statsContainer) {
+        const existingSkeleton = document.getElementById('lanchdrap-restaurant-stats-skeleton');
+        if (existingSkeleton && existingSkeleton.parentNode) {
+          existingSkeleton.replaceWith(statsContainer);
         } else {
-          updateKeyVisibility();
+          const anchor = findInsertionAnchor();
+          if (anchor && anchor.node.parentNode) {
+            if (anchor.mode === 'after') {
+              anchor.node.parentNode.insertBefore(statsContainer, anchor.node.nextSibling);
+            } else {
+              anchor.node.parentNode.insertBefore(statsContainer, anchor.node);
+            }
+          } else {
+            console.log(
+              'LanchDrap: Stats display - no insertion anchor found, cannot insert stats'
+            );
+          }
+        }
+        if (window.LanchDrapKeyManager?.forceUpdateKeyVisibility) {
+          window.LanchDrapKeyManager.forceUpdateKeyVisibility();
         }
       } else if (!statsContainer) {
         console.log('LanchDrap: Stats display - no stats container created, cannot insert');
-      } else if (!restaurantNameElement) {
-        console.log(
-          'LanchDrap: Stats display - no restaurant name element found, cannot insert stats'
-        );
       }
     } catch (_error) {
       // Clear the processing flag on error
@@ -1423,8 +1321,7 @@ window.LanchDrapStatsDisplay = (() => {
       // Set processing flag after we've confirmed we can proceed
       window.lanchDrapStatsProcessing = true;
 
-      // Hide skeleton loading state if it exists
-      hideSkeletonLoading();
+      // Don't hide skeleton here; replace it seamlessly during insertion
 
       // Create tracking info display using shared component
       const trackingInfo = renderStatsComponent(
@@ -1433,11 +1330,18 @@ window.LanchDrapStatsDisplay = (() => {
         'Restaurant Stats'
       );
 
-      // Insert the tracking info near the restaurant name
-      // Try to find a good insertion point near the restaurant name
-      const insertionPoint = restaurantNameElement.parentNode || restaurantNameElement;
-      insertionPoint.insertBefore(trackingInfo, restaurantNameElement.nextSibling);
-      updateKeyVisibility();
+      // Insert or replace skeleton in-place
+      const existingSkeleton = document.getElementById('lanchdrap-restaurant-stats-skeleton');
+      if (existingSkeleton && existingSkeleton.parentNode) {
+        existingSkeleton.replaceWith(trackingInfo);
+      } else {
+        // Try to find a good insertion point near the restaurant name
+        const insertionPoint = restaurantNameElement.parentNode || restaurantNameElement;
+        insertionPoint.insertBefore(trackingInfo, restaurantNameElement.nextSibling);
+      }
+      if (window.LanchDrapKeyManager?.forceUpdateKeyVisibility) {
+        window.LanchDrapKeyManager.forceUpdateKeyVisibility();
+      }
     } catch (_error) {
       // Clear the processing flag on error
       window.lanchDrapStatsProcessing = false;
@@ -1810,9 +1714,8 @@ window.LanchDrapStatsDisplay = (() => {
     displaySelectedRestaurantStats,
     displayRestaurantTrackingInfo,
     openEditDialog,
-    toggleKeyVisibility,
-    initializeKonamiCode,
     showSkeletonLoading,
     hideSkeletonLoading,
+    clearRestaurantStats,
   };
 })();

@@ -61,50 +61,69 @@ async function handlePageChange() {
     await initializeExtension();
 
     // Determine page type once
-    const isGrid = window.LanchDrapDOMUtils.isRestaurantGridPage();
-    const isDetail = window.LanchDrapDOMUtils.isRestaurantDetailPage();
+    const isDayOverview = window.LanchDrapDOMUtils.isDayOverviewPage();
+    const isDeliveryDetail = window.LanchDrapDOMUtils.isDeliveryDetailPage();
 
-    // Handle restaurant grid pages (daily pages) exclusively
-    if (isGrid) {
-      console.log('LanchDrap: Detected restaurant grid page');
+    console.log(
+      'LanchDrap: Page type detection - isDayOverview:',
+      isDayOverview,
+      'isDeliveryDetail:',
+      isDeliveryDetail
+    );
+
+    // Handle day overview pages (daily pages) exclusively
+    if (isDayOverview) {
+      console.log('LanchDrap: Detected day overview page');
+      // Clear any existing stats (including skeleton) to prevent stale data display
+      if (window.LanchDrapStatsDisplay?.clearRestaurantStats) {
+        window.LanchDrapStatsDisplay.clearRestaurantStats();
+      }
+
       // Show skeleton loading state immediately
       if (window.LanchDrapStatsDisplay?.showSkeletonLoading) {
         window.LanchDrapStatsDisplay.showSkeletonLoading();
       }
 
-      // Wait for navigation to settle before scraping and displaying stats
+      // Wait for navigation to settle and new page data to load
       setTimeout(async () => {
         console.log('LanchDrap: Timeout callback executing');
-        // Double-check we're still on a restaurant grid page
-        if (!window.LanchDrapDOMUtils.isRestaurantGridPage()) {
-          console.log('LanchDrap: No longer on restaurant grid page, skipping');
+        // Double-check we're still on a day overview page
+        if (!window.LanchDrapDOMUtils.isDayOverviewPage()) {
+          console.log('LanchDrap: No longer on day overview page, skipping');
           return;
         }
 
-        // Prefer API when the day date changed since the last handled render
-        const currentDate = window.LanchDrapDOMUtils.extractDateFromUrl();
-        const preferApi = !!lastHandledDate && !!currentDate && currentDate !== lastHandledDate;
+        // Update last handled date
+        const currentDate = window.LanchDrapJsonDataLoader?.extractDateFromUrl();
+        const isNewDay = !!lastHandledDate && !!currentDate && currentDate !== lastHandledDate;
         lastHandledDate = currentDate || lastHandledDate;
 
-        // Scrape restaurant availability and display stats
-        console.log('LanchDrap: Calling scrapeRestaurantAvailability from content script');
-        let availabilityData = await window.LanchDrapRestaurantScraper.scrapeRestaurantAvailability(
+        // Re-check page type after navigation has settled
+        const stillIsDayOverview = window.LanchDrapDOMUtils.isDayOverviewPage();
+        if (!stillIsDayOverview) {
+          console.log(
+            'LanchDrap: Page type changed to delivery detail page, skipping stats display'
+          );
+          return;
+        }
+
+        // Load restaurant availability from JSON data
+        console.log('LanchDrap: Calling loadRestaurantAvailability from content script');
+
+        // For new day navigation, prefer API to get fresh data
+        // For same day or initial load, prefer page data
+        const preferApi = isNewDay;
+        console.log('LanchDrap: Using data source preference:', preferApi ? 'api' : 'page');
+
+        const availabilityData = await window.LanchDrapRestaurantScraper.loadRestaurantAvailability(
           {
             prefer: preferApi ? 'api' : 'page',
           }
         );
 
-        // If preferring API and no data yet, wait briefly and retry once for fresh data
-        if (preferApi && (!availabilityData || availabilityData.length === 0)) {
-          await new Promise((r) => setTimeout(r, 250));
-          availabilityData = await window.LanchDrapRestaurantScraper.scrapeRestaurantAvailability({
-            prefer: 'api',
-          });
-        }
-
-        console.log('LanchDrap: Got availability data:', availabilityData);
+        console.log('LanchDrap: Got availabilityData:', availabilityData);
         if (availabilityData && availabilityData.length > 0) {
-          // Display stats for selected restaurant
+          // Display stats for selected restaurant; it will replace skeleton in-place
           await window.LanchDrapStatsDisplay.displaySelectedRestaurantStats(availabilityData);
         }
         // Nothing else to reset
@@ -112,7 +131,7 @@ async function handlePageChange() {
     }
 
     // Handle restaurant detail pages only when not a grid page
-    else if (isDetail) {
+    else if (isDeliveryDetail) {
       await window.LanchDrapStatsDisplay.displayRestaurantTrackingInfo();
     }
 
@@ -133,7 +152,7 @@ function handleUrlChange() {
 
     // Detect day-to-day navigation by comparing /app/:date segment
     try {
-      const currentDate = window.LanchDrapDOMUtils.extractDateFromUrl();
+      const currentDate = window.LanchDrapJsonDataLoader?.extractDateFromUrl();
       lastUrlDate = currentDate || lastUrlDate;
     } catch {}
 
@@ -189,7 +208,7 @@ function setupEventListeners() {
   const observer = new MutationObserver((mutations) => {
     let shouldHandleChange = false;
 
-    mutations.forEach((mutation) => {
+    for (const mutation of mutations) {
       // Check if restaurant cards were added/removed
       if (mutation.type === 'childList') {
         const addedNodes = Array.from(mutation.addedNodes);
@@ -209,7 +228,7 @@ function setupEventListeners() {
           shouldHandleChange = true;
         }
       }
-    });
+    }
 
     if (shouldHandleChange) {
       clearTimeout(urlChangeTimeout);

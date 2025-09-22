@@ -13,17 +13,19 @@
     {
       "matches": ["https://lunchdrop.com/*", "https://*.lunchdrop.com/*"],
       "js": [
-        "utils/userId.js",
-        "utils/apiClient.js",
-        "config.js",
-        "utils/key-manager.js",
-        "utils/dom-utils.js",
-        "utils/restaurant-context.js",
-        "utils/order-parser.js",
-        "utils/order-history-parser.js",
-        "utils/restaurant-scraper.js",
-        "utils/stats-display.js",
-        "utils/rating-widget.js",
+        "core/user-id.js",
+        "core/api-client.js",
+        "config/config.js",
+        "core/models.js",
+        "core/dom-utils.js",
+        "core/json-data-loader.js",
+        "features/keys/key-manager.js",
+        "features/stats/restaurant-context.js",
+        "features/orders/order-parser.js",
+        "features/orders/order-history-parser.js",
+        "features/stats/restaurant-scraper.js",
+        "features/stats/stats-display.js",
+        "features/rating/rating-widget.js",
         "content.js"
       ]
     }
@@ -33,7 +35,7 @@
   },
   "web_accessible_resources": [
     {
-      "resources": ["styles.css", "content-styles.css", "utils/*", "config.js"],
+      "resources": ["styles.css", "styles/content-styles.css", "core/*", "features/*", "config/*"],
       "matches": ["https://*.lunchdrop.com/*"]
     }
   ],

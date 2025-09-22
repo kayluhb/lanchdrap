@@ -136,18 +136,34 @@ window.LanchDrapDOMUtils = (() => {
   }
 
   // Function to check if we're on a restaurant detail page
-  function isRestaurantDetailPage() {
+  function isDeliveryDetailPage() {
     try {
-      // Check if we have delivery data (indicates restaurant detail page)
+      // A detail page has a URL like /app/YYYY-MM-DD/delivery-id
+      const path = window.location.pathname || '';
+      const parts = path.split('/').filter(Boolean);
+
+      // Must have at least 4 parts: '', 'app', 'YYYY-MM-DD', 'delivery-id'
+      const urlHasDeliveryId = parts.length > 3;
+
       if (typeof window !== 'undefined' && window.app) {
         const appElement = window.app;
         if (appElement?.dataset?.page) {
           try {
             const pageData = JSON.parse(appElement.dataset.page);
             console.log('LanchDrap: isRestaurantDetailPage checking pageData:', pageData);
+
+            // Must have a `delivery` object in props with a `restaurant` ID
             const hasDeliveryRestaurant = !!pageData.props?.delivery?.restaurant?.id;
-            console.log('LanchDrap: isRestaurantDetailPage result:', hasDeliveryRestaurant);
-            return hasDeliveryRestaurant;
+
+            console.log(
+              'LanchDrap: isRestaurantDetailPage - hasDeliveryRestaurant:',
+              hasDeliveryRestaurant,
+              'urlHasDeliveryId:',
+              urlHasDeliveryId
+            );
+
+            // It's a detail page if it has delivery data and the URL explicitly has a delivery ID
+            return hasDeliveryRestaurant && urlHasDeliveryId;
           } catch (error) {
             console.log('LanchDrap: Error parsing page data for detail page check:', error);
           }
@@ -155,12 +171,13 @@ window.LanchDrapDOMUtils = (() => {
       }
       return false;
     } catch (_error) {
+      console.log('LanchDrap: Error in isRestaurantDetailPage:', _error);
       return false;
     }
   }
 
   // Function to check if we're on the main restaurant grid page
-  function isRestaurantGridPage() {
+  function isDayOverviewPage() {
     try {
       // Check if we have deliveries data (indicates grid page)
       if (typeof window !== 'undefined' && window.app) {
@@ -169,13 +186,20 @@ window.LanchDrapDOMUtils = (() => {
           try {
             const pageData = JSON.parse(appElement.dataset.page);
             console.log('LanchDrap: isRestaurantGridPage checking pageData:', pageData);
+
+            // Check for grid page indicators
             const hasLunchDayDeliveries = !!pageData.props?.lunchDay?.deliveries;
+            const urlHasDeliveryId = pageData.url && pageData.url.split('/').length > 3; // /app/date/delivery-id
+
             console.log(
-              'LanchDrap: isRestaurantGridPage looking for lunchDay.deliveries, found:',
-              hasLunchDayDeliveries
+              'LanchDrap: isDayOverviewPage - hasLunchDayDeliveries:',
+              hasLunchDayDeliveries,
+              'urlHasDeliveryId:',
+              urlHasDeliveryId
             );
-            console.log('LanchDrap: pageData.props structure:', pageData.props);
-            return hasLunchDayDeliveries;
+
+            // Day overview page has lunchDay.deliveries and URL doesn't have a delivery ID
+            return hasLunchDayDeliveries && !urlHasDeliveryId;
           } catch (error) {
             console.log('LanchDrap: Error parsing page data for grid page check:', error);
           }
@@ -204,8 +228,8 @@ window.LanchDrapDOMUtils = (() => {
     extractDateFromUrl,
     extractCityFromUrl,
     generateOrderId,
-    isRestaurantDetailPage,
-    isRestaurantGridPage,
+    isDeliveryDetailPage,
+    isDayOverviewPage,
     isLoginPage,
   };
 })();

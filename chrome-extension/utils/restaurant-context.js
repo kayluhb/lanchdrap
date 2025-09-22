@@ -17,6 +17,40 @@ window.LanchDrapRestaurantContext = (() => {
       }
 
       console.log('LanchDrap: No restaurant ID found in page data');
+      // Fallback: try to infer via delivery link + API (works on confirmation pages)
+      try {
+        const urlDate = window.LanchDrapDOMUtils?.extractDateFromUrl
+          ? window.LanchDrapDOMUtils.extractDateFromUrl()
+          : null;
+        if (urlDate) {
+          // Find any link pointing to /app/:date/:deliveryId
+          const deliveryLink = Array.from(
+            document.querySelectorAll('a[href*="/app/" ] , a[href*="/app/"]')
+          )
+            .map((a) => a.getAttribute('href'))
+            .filter((href) => typeof href === 'string' && href.includes(`/app/${urlDate}/`))[0];
+
+          if (deliveryLink) {
+            const parts = deliveryLink.split('/').filter(Boolean);
+            const deliveryId = parts[parts.length - 1];
+            if (deliveryId && window.LanchDrapRestaurantScraper?.scrapeRestaurantAvailability) {
+              // Prefer API to avoid stale initial render
+              const availability =
+                await window.LanchDrapRestaurantScraper.scrapeRestaurantAvailability({
+                  prefer: 'api',
+                });
+              if (Array.isArray(availability) && availability.length > 0) {
+                const match = availability.find((r) => r.href && r.href.endsWith(`/${deliveryId}`));
+                if (match?.id) {
+                  console.log('LanchDrap: Inferred restaurant ID via delivery link:', match.id);
+                  return match.id;
+                }
+              }
+            }
+          }
+        }
+      } catch (_e) {}
+
       return null;
     } catch (_error) {
       console.log('LanchDrap: Error in getRestaurantIdFromPage:', _error);

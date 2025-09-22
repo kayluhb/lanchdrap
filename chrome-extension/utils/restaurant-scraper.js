@@ -5,238 +5,9 @@
 window.LanchDrapRestaurantScraper = (() => {
   let restaurantAvailabilityData = null;
 
-  // Function to get restaurant name from local storage or API
-  async function getRestaurantName(restaurantIdentifier) {
-    try {
-      // First check local storage
-      const localKey = `restaurant_name:${restaurantIdentifier}`;
-      const localName = localStorage.getItem(localKey);
-      if (localName) {
-        return localName;
-      }
+  // [Removed] getRestaurantName - not needed with API-provided names
 
-      // API endpoint removed - can't fetch restaurant names from API anymore
-      // Restaurant names will be learned through the update-name endpoint
-
-      return null;
-    } catch (_error) {
-      return null;
-    }
-  }
-
-  // Function to process restaurant cards and extract data
-  async function processRestaurantCards(restaurantCards, urlDate) {
-    try {
-      // CRITICAL: Validate that we're processing cards for the correct date
-      const currentUrlDate = window.LanchDrapDOMUtils.extractDateFromUrl();
-      if (currentUrlDate !== urlDate) {
-        return null;
-      }
-
-      const availabilityData = [];
-      const now = new Date();
-
-      // Process cards in batches to avoid blocking the UI
-      const batchSize = 5;
-      const batches = [];
-      for (let i = 0; i < restaurantCards.length; i += batchSize) {
-        batches.push(restaurantCards.slice(i, i + batchSize));
-      }
-
-      for (const batch of batches) {
-        const batchPromises = batch.map(async (card, batchIndex) => {
-          const index = batches.indexOf(batch) * batchSize + batchIndex;
-          try {
-            // Extract restaurant information
-            const href = card.getAttribute('href');
-            const timeSlot = card
-              .querySelector('.text-base.font-bold.text-center')
-              ?.textContent?.trim();
-            const statusElement = card.querySelector('.text-sm.text-center');
-            const statusText = statusElement?.textContent?.trim();
-
-            // Determine availability status based on visual indicators
-            let status = 'available';
-            let reason = null;
-
-            // Check for "SOLD OUT" text inside the restaurant card
-            const cardText = card.textContent || '';
-            const soldOutRegex = /sold\s+out!?/i;
-            if (soldOutRegex.test(cardText)) {
-              status = 'soldout';
-              reason = 'Restaurant is sold out';
-            }
-            // Check for "Ordering Closed" text
-            else if (statusText?.includes('Ordering Closed')) {
-              status = 'soldout';
-              reason = 'Ordering closed for this time slot';
-            }
-            // Check for "Order Placed" (available)
-            else if (statusText?.includes('Order Placed')) {
-              status = 'available';
-              reason = 'Orders currently being accepted';
-            }
-
-            // Check visual indicators (opacity and border color)
-            const cardDiv = card.querySelector('div.relative.h-full.rounded-md');
-            let isSelected = false;
-            let color = null;
-            if (cardDiv) {
-              const opacity = window.getComputedStyle(cardDiv).opacity;
-              color = window.getComputedStyle(cardDiv).borderColor;
-
-              // Check if this is the selected restaurant (has 'border-2' class)
-              // Selected restaurants have the 'border-2' class
-              if (cardDiv.classList.contains('border-2')) {
-                isSelected = true;
-              }
-
-              // Reduced opacity often indicates closed/unavailable
-              if (opacity && parseFloat(opacity) < 1) {
-                if (status === 'available') {
-                  status = 'limited';
-                  reason = 'Reduced opacity suggests limited availability';
-                }
-              }
-            }
-
-            // Extract restaurant ID from page data (primary method)
-            let restaurantId = 'unknown';
-            let restaurantName = null;
-
-            // Try to get restaurant ID from page data first
-            if (window.LanchDrapUserIdManager?.LanchDrapUserIdManager) {
-              const userIdManager = new window.LanchDrapUserIdManager.LanchDrapUserIdManager();
-              const pageRestaurantId = userIdManager.getLunchdropRestaurantId();
-              if (pageRestaurantId) {
-                restaurantId = pageRestaurantId;
-              }
-            }
-
-            // Fallback: try to extract from image URL hash if no page data ID
-            if (restaurantId === 'unknown') {
-              const img = card.querySelector('img');
-              if (img?.src) {
-                // Extract restaurant hash from the image URL
-                // URL format: https://lunchdrop.s3.amazonaws.com/restaurant-logos/[hash].png
-                const urlParts = img.src.split('/');
-                if (urlParts.length > 0) {
-                  const filename = urlParts[urlParts.length - 1];
-                  if (filename.includes('.')) {
-                    const hash = filename.split('.')[0];
-                    restaurantId = hash;
-                  }
-                }
-              }
-            }
-
-            // Try to get restaurant name from local storage or use identifier
-            restaurantName = await getRestaurantName(restaurantId);
-            if (!restaurantName || restaurantName === restaurantId) {
-              // Use the ID as the name only if we don't have a better name
-              restaurantName = restaurantId;
-            }
-
-            // Parse time slot
-            let timeSlotData = null;
-            if (timeSlot) {
-              const timeMatch = timeSlot.match(/(\d{1,2}):(\d{2})-(\d{1,2}):(\d{2})(am|pm)/);
-              if (timeMatch) {
-                const [_, startHour, startMin, endHour, endMin, period] = timeMatch;
-                timeSlotData = {
-                  start: `${startHour}:${startMin}${period}`,
-                  end: `${endHour}:${endMin}${period}`,
-                  full: timeSlot,
-                };
-              }
-            }
-
-            // Extract logo URL from image
-            let logoUrl = null;
-            const img = card.querySelector('img');
-            if (img?.src) {
-              logoUrl = img.src;
-            }
-
-            const restaurantInfo = {
-              index,
-              id: restaurantId,
-              name: restaurantName,
-              restaurant: restaurantName, // Keep for backward compatibility
-              status,
-              reason,
-              timeSlot: timeSlotData,
-              href,
-              urlDate: urlDate,
-              timestamp: now.toISOString(),
-              isSelected,
-              color, // Add the color to the main object
-              logo: logoUrl, // Add the logo URL
-              visualIndicators: {
-                opacity: window.getComputedStyle(card).opacity,
-                borderColor: window.getComputedStyle(
-                  card.querySelector('div.relative.h-full.rounded-md')
-                )?.borderColor,
-                hasOrderPlaced: statusText?.includes('Order Placed') || false,
-                hasOrderingClosed: statusText?.includes('Ordering Closed') || false,
-                hasSoldOutInCard: /sold\s+out!?/i.test(cardText),
-              },
-            };
-
-            return restaurantInfo;
-          } catch (_cardError) {
-            return null;
-          }
-        });
-
-        // Wait for batch to complete
-        const batchResults = await Promise.all(batchPromises);
-        availabilityData.push(...batchResults.filter((result) => result !== null));
-
-        // No delay needed - modern browsers handle this efficiently
-      }
-
-      // Store the scraped data
-      storeAvailabilityData(availabilityData);
-
-      // Report overall availability summary
-      reportAvailabilitySummary(availabilityData);
-
-      // Track restaurant appearances in background (don't block UI)
-      // Add a small delay to ensure navigation has settled
-      console.log('LanchDrap: Scheduling tracking call with data:', availabilityData);
-      setTimeout(() => {
-        console.log('LanchDrap: Executing tracking call');
-        trackRestaurantAppearances(availabilityData)
-          .then((result) => {
-            console.log('LanchDrap: Tracking completed with result:', result);
-            // Add sellout indicators when tracking completes
-            if (result?.data?.data?.restaurants || result?.data?.restaurants) {
-              const restaurants = result.data.data?.restaurants || result.data.restaurants;
-              if (restaurants && Array.isArray(restaurants)) {
-                // Add indicators
-                addSellOutIndicators(restaurants);
-              }
-            }
-          })
-          .catch((error) => {
-            console.log('LanchDrap: Tracking error:', error);
-            console.log('LanchDrap: Tracking error details:', error.message, error.stack);
-          });
-      }, 200); // Small delay to ensure navigation has settled
-
-      // Display stats for selected restaurant on daily pages
-      if (window.LanchDrapStatsDisplay?.displaySelectedRestaurantStats) {
-        await window.LanchDrapStatsDisplay.displaySelectedRestaurantStats(availabilityData);
-      }
-
-      // Store the data for other modules to access
-      restaurantAvailabilityData = availabilityData;
-      return availabilityData;
-    } catch (_error) {
-      return null;
-    }
-  }
+  // [Removed] HTML-based card scraping replaced by API and initial render data
 
   // Function to extract menu data from delivery
   function extractMenuFromDelivery(delivery) {
@@ -493,7 +264,7 @@ window.LanchDrapRestaurantScraper = (() => {
                   href: `/app/${urlDate}/${delivery.id}`,
                   urlDate: urlDate,
                   timestamp: now.toISOString(),
-                  isSelected: false, // We'll need to check DOM for this
+                  isSelected: false, // Will set based on URL delivery id if present
                   color: restaurant.brandColor,
                   logo: restaurant.logo,
                   visualIndicators: {
@@ -508,6 +279,33 @@ window.LanchDrapRestaurantScraper = (() => {
                   numSlotsAvailable: delivery.numSlotsAvailable, // Include slots available for stats display
                 };
               });
+
+              // Mark selected restaurant
+              try {
+                const path = window.location.pathname || '';
+                const parts = path.split('/').filter(Boolean);
+                if (parts.length >= 3 && parts[0] === 'app') {
+                  const currentDeliveryId = parts[2];
+                  availabilityData.forEach((r) => {
+                    r.isSelected = r.href?.endsWith(`/${currentDeliveryId}`);
+                  });
+                } else if (parts.length === 2 && parts[0] === 'app') {
+                  // On day page: prefer props.delivery.restaurant.id, else first delivery
+                  const selectedRestaurantIdFromProps = singleDelivery?.restaurant?.id;
+                  if (selectedRestaurantIdFromProps) {
+                    for (const r of availabilityData) {
+                      r.isSelected = r.id === selectedRestaurantIdFromProps;
+                    }
+                  } else if (availabilityData.length > 0) {
+                    availabilityData[0].isSelected = true;
+                  }
+                }
+              } catch (_e) {}
+
+              // Ensure at least one selection exists
+              if (!availabilityData.some((r) => r.isSelected) && availabilityData.length > 0) {
+                availabilityData[0].isSelected = true;
+              }
 
               return availabilityData;
             } else {
@@ -696,7 +494,7 @@ window.LanchDrapRestaurantScraper = (() => {
           href: `/app/${urlDate}/${delivery.id}`,
           urlDate: urlDate,
           timestamp: now.toISOString(),
-          isSelected: false,
+          isSelected: false, // Will set based on URL delivery id if present
           color: restaurant.brandColor,
           logo: restaurant.logo,
           visualIndicators: {
@@ -711,6 +509,46 @@ window.LanchDrapRestaurantScraper = (() => {
           numSlotsAvailable: delivery.numSlotsAvailable,
         };
       });
+
+      // Mark selected restaurant
+      try {
+        const path = window.location.pathname || '';
+        const parts = path.split('/').filter(Boolean);
+        if (parts.length >= 3 && parts[0] === 'app') {
+          const currentDeliveryId = parts[2];
+          availabilityData.forEach((r) => {
+            r.isSelected = r.href?.endsWith(`/${currentDeliveryId}`);
+          });
+        } else if (parts.length === 2 && parts[0] === 'app') {
+          // On day page: prefer the restaurant from existing orders, else first
+          let selectedByOrder = false;
+          // orderHistory is not passed here; try reading from page data
+          const pageOrdersData =
+            window.LanchDrapOrderHistoryParser?.extractOrderHistoryFromPageData();
+          const pageOrders = pageOrdersData?.orders;
+          if (pageOrders && Array.isArray(pageOrders) && pageOrders.length > 0) {
+            const firstOrderWithDelivery = pageOrders.find((o) => o && o.deliveryId);
+            const orderedDeliveryId = firstOrderWithDelivery?.deliveryId;
+            if (orderedDeliveryId) {
+              for (const r of availabilityData) {
+                if (r.href?.endsWith(`/${orderedDeliveryId}`)) {
+                  r.isSelected = true;
+                  selectedByOrder = true;
+                  break;
+                }
+              }
+            }
+          }
+          if (!selectedByOrder && availabilityData.length > 0) {
+            availabilityData[0].isSelected = true;
+          }
+        }
+      } catch (_e) {}
+
+      // Ensure at least one selection exists
+      if (!availabilityData.some((r) => r.isSelected) && availabilityData.length > 0) {
+        availabilityData[0].isSelected = true;
+      }
 
       return availabilityData;
     } catch (_error) {
@@ -730,7 +568,7 @@ window.LanchDrapRestaurantScraper = (() => {
       }
 
       const headers = {
-        Accept: 'text/html, application/xhtml+xml',
+        Accept: 'application/json, text/html',
         'X-Requested-With': 'XMLHttpRequest',
         'X-Inertia': 'true',
       };
@@ -738,7 +576,7 @@ window.LanchDrapRestaurantScraper = (() => {
       return headers;
     } catch (_error) {
       return {
-        Accept: 'text/html, application/xhtml+xml',
+        Accept: 'application/json, text/html',
         'X-Requested-With': 'XMLHttpRequest',
         'X-Inertia': 'true',
       };
@@ -789,6 +627,24 @@ window.LanchDrapRestaurantScraper = (() => {
       const orderHistory = props?.delivery?.orders;
       if (deliveries && Array.isArray(deliveries) && deliveries.length > 0) {
         const availabilityData = mapDeliveriesToAvailability(deliveries, orderHistory, urlDate);
+
+        // Selection on day pages: if props.delivery.restaurant exists, use it; else first
+        try {
+          const selectedRestaurantIdFromProps = props?.delivery?.restaurant?.id;
+          const path = window.location.pathname || '';
+          const parts = path.split('/').filter(Boolean);
+          const isDayPage = parts.length === 2 && parts[0] === 'app';
+          if (isDayPage) {
+            if (selectedRestaurantIdFromProps) {
+              for (const r of availabilityData) {
+                r.isSelected = r.id === selectedRestaurantIdFromProps;
+              }
+            } else if (availabilityData.length > 0) {
+              availabilityData[0].isSelected = true;
+            }
+          }
+        } catch (_e) {}
+
         return availabilityData;
       }
 
@@ -813,9 +669,11 @@ window.LanchDrapRestaurantScraper = (() => {
   }
 
   // Function to scrape restaurant availability from the main grid
-  async function scrapeRestaurantAvailability() {
+  // options: { prefer: 'page' | 'api' }
+  async function scrapeRestaurantAvailability(options = {}) {
     try {
       console.log('LanchDrap: scrapeRestaurantAvailability called');
+      const prefer = options.prefer === 'api' ? 'api' : 'page';
 
       // Quick checks to avoid unnecessary processing
       if (
@@ -839,206 +697,44 @@ window.LanchDrapRestaurantScraper = (() => {
 
       console.log('LanchDrap: TEMPORARILY SKIPPING PAGE DETECTION - proceeding with scraping');
 
-      // First, try to use the app's own JSON endpoint (Inertia) for the current day
-      const apiUrlDate = window.LanchDrapDOMUtils.extractDateFromUrl();
-      if (apiUrlDate) {
-        const apiAvailability = await fetchAvailabilityFromInertia(apiUrlDate);
-        if (apiAvailability && apiAvailability.length > 0) {
-          // Track restaurant appearances similarly to page-data path
-          setTimeout(() => {
-            trackRestaurantAppearances(apiAvailability)
-              .then((result) => {
-                if (result?.data?.data?.restaurants || result?.data?.restaurants) {
-                  const restaurants = result.data.data?.restaurants || result.data.restaurants;
-                  if (restaurants && Array.isArray(restaurants)) {
-                    addSellOutIndicators(restaurants);
-                  }
-                }
-              })
-              .catch((_error) => {});
-          }, 200);
-
-          return apiAvailability;
-        }
-      }
-
-      // Next, try to extract from page data
-      const pageDataAvailability = await extractAvailabilityFromPageData();
-      if (pageDataAvailability && pageDataAvailability.length > 0) {
-        console.log('LanchDrap: Using availability data from page data');
-
-        // Track restaurant appearances in background (don't block UI)
-        // Add a small delay to ensure navigation has settled
-        console.log('LanchDrap: Scheduling tracking call with page data:', pageDataAvailability);
-        setTimeout(() => {
-          console.log('LanchDrap: Executing tracking call for page data');
-          trackRestaurantAppearances(pageDataAvailability)
-            .then((result) => {
-              console.log('LanchDrap: Tracking completed with result:', result);
-              // Add sellout indicators when tracking completes
-              if (result?.data?.data?.restaurants || result?.data?.restaurants) {
-                const restaurants = result.data.data?.restaurants || result.data.restaurants;
-                if (restaurants && Array.isArray(restaurants)) {
-                  // Add indicators
-                  addSellOutIndicators(restaurants);
-                }
-              }
-            })
-            .catch((error) => {
-              console.log('LanchDrap: Tracking error:', error);
-              console.log('LanchDrap: Tracking error details:', error.message, error.stack);
-            });
-        }, 200); // Small delay to ensure navigation has settled
-
-        return pageDataAvailability;
-      }
-
-      // Fallback to DOM scraping if page data is not available
-      console.log('LanchDrap: Falling back to DOM scraping for availability data');
-
-      // Extract date from URL for daily tracking
       const urlDate = window.LanchDrapDOMUtils.extractDateFromUrl();
-      if (!urlDate) {
+
+      if (prefer === 'page') {
+        // 1) Try initial page render data
+        const pageDataAvailability = await extractAvailabilityFromPageData();
+        if (pageDataAvailability && pageDataAvailability.length > 0) {
+          console.log('LanchDrap: Using availability data from page data');
+          scheduleTrackingAndIndicators(pageDataAvailability);
+          return pageDataAvailability;
+        }
+
+        // 2) Fallback to API if page data missing
+        if (urlDate) {
+          const apiAvailability = await fetchAvailabilityFromInertia(urlDate);
+          if (apiAvailability && apiAvailability.length > 0) {
+            scheduleTrackingAndIndicators(apiAvailability);
+            return apiAvailability;
+          }
+        }
+      } else {
+        // prefer === 'api' path: 1) API first
+        if (urlDate) {
+          const apiAvailability = await fetchAvailabilityFromInertia(urlDate);
+          if (apiAvailability && apiAvailability.length > 0) {
+            scheduleTrackingAndIndicators(apiAvailability);
+            return apiAvailability;
+          }
+        }
+        // No page-data fallback when preferring API to avoid stale renders
         return null;
       }
 
-      // Use cached restaurant grid
-      const restaurantGrid = window.LanchDrapDOMUtils.getCachedRestaurantGrid();
-      if (!restaurantGrid) {
-        return;
-      }
-
-      // Get restaurant cards that match the specific URL pattern
-      const allAppLinks = restaurantGrid.querySelectorAll('a[href*="/app/"]');
-
-      // Debug: Log the first few hrefs to see the actual format
-      if (allAppLinks.length > 0) {
-      }
-
-      const restaurantCards = Array.from(allAppLinks).filter((link) => {
-        const href = link.getAttribute('href');
-        // More flexible pattern - just check if it contains /app/ and has some identifier
-        if (!href || !/\/app\/.*\/[a-zA-Z0-9]+/.test(href)) {
-          return false;
-        }
-
-        // CRITICAL: Only include cards that match the current URL date
-        const hrefDateMatch = href.match(/\/app\/(\d{4}-\d{2}-\d{2})/);
-        if (!hrefDateMatch || hrefDateMatch[1] !== urlDate) {
-          return false;
-        }
-
-        return true;
-      });
-
-      if (restaurantCards.length === 0) {
-        // Try to find valid restaurant cards with a broader search
-        const allPageAppLinks = document.querySelectorAll('a[href*="/app/"]');
-
-        const validPageLinks = Array.from(allPageAppLinks).filter((link) => {
-          const href = link.getAttribute('href');
-          if (!href || !/\/app\/.*\/[a-zA-Z0-9]+/.test(href)) {
-            return false;
-          }
-
-          // CRITICAL: Only include cards that match the current URL date
-          const hrefDateMatch = href.match(/\/app\/(\d{4}-\d{2}-\d{2})/);
-          if (!hrefDateMatch || hrefDateMatch[1] !== urlDate) {
-            return false;
-          }
-
-          return true;
-        });
-
-        if (validPageLinks.length > 0) {
-          // Use the first few valid restaurant links we can find
-          const cards = validPageLinks.slice(0, 10); // Limit to first 10
-          return await processRestaurantCards(cards, urlDate);
-        }
-        return null;
-      }
-
-      return await processRestaurantCards(restaurantCards, urlDate);
+      // No HTML scraping fallback: rely solely on API or initial page data
+      return null;
     } catch (_error) {}
   }
 
-  // Function to store availability data locally
-  function storeAvailabilityData(availabilityData) {
-    try {
-      if (!availabilityData || availabilityData.length === 0) {
-        return;
-      }
-
-      // Use the date from the first restaurant's URL date (they should all be the same)
-      const urlDate = availabilityData[0]?.urlDate;
-      if (!urlDate) {
-        return;
-      }
-
-      const storageKey = `availability:${urlDate}`;
-      const existingData = localStorage.getItem(storageKey);
-      let dailyData = [];
-
-      if (existingData) {
-        try {
-          const parsedData = JSON.parse(existingData);
-
-          // Check if data has TTL format and if it's expired
-          if (parsedData.expiresAt && parsedData.data) {
-            const expiresAt = new Date(parsedData.expiresAt);
-            if (new Date() < expiresAt) {
-              dailyData = parsedData.data;
-            } else {
-              // Data is expired, remove it
-              localStorage.removeItem(storageKey);
-            }
-          } else {
-            // Legacy format (no TTL), use the data directly
-            dailyData = Array.isArray(parsedData) ? parsedData : [];
-          }
-        } catch (_error) {
-          // If parsing fails, treat as empty data
-          dailyData = [];
-        }
-      }
-
-      // Add timestamp to each record
-      const timestampedData = availabilityData.map((item) => ({
-        ...item,
-        scrapedAt: new Date().toISOString(),
-      }));
-
-      // Create a Set to track existing restaurant IDs to prevent duplicates
-      const existingRestaurantIds = new Set(
-        dailyData.map((item) => `${item.id}-${item.timeSlot?.start}-${item.timeSlot?.end}`)
-      );
-
-      // Only add new records that don't already exist
-      const newRecords = timestampedData.filter((item) => {
-        const recordKey = `${item.id}-${item.timeSlot?.start}-${item.timeSlot?.end}`;
-        return !existingRestaurantIds.has(recordKey);
-      });
-
-      // If we have new records, add them
-      if (newRecords.length > 0) {
-        dailyData.push(...newRecords);
-      }
-
-      // Keep only last 50 records per day (reduced from 100 to prevent excessive storage)
-      if (dailyData.length > 50) {
-        dailyData = dailyData.slice(-50);
-      }
-
-      // Store data with TTL (Time To Live) - expires in 10 days
-      const dataWithTTL = {
-        data: dailyData,
-        expiresAt: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString(),
-        createdAt: new Date().toISOString(),
-      };
-
-      localStorage.setItem(storageKey, JSON.stringify(dataWithTTL));
-    } catch (_error) {}
-  }
+  // [Removed] Local storage of scraped availability - not needed
 
   // Function to clean up old availability data from localStorage
   function cleanupOldAvailabilityData() {
@@ -1170,45 +866,7 @@ window.LanchDrapRestaurantScraper = (() => {
 
       console.log('LanchDrap: Tracking API response:', result);
 
-      // Process order history for restaurants that have order data
-      if (result?.success && availabilityData) {
-        // Only process order history if we have actual order data from the page
-        const pageOrderHistoryData =
-          window.LanchDrapOrderHistoryParser?.extractOrderHistoryFromPageData();
-        const pageOrderHistory = pageOrderHistoryData?.orders;
-
-        if (pageOrderHistory && pageOrderHistory.length > 0) {
-          console.log(
-            `LanchDrap: Found ${pageOrderHistory.length} orders on page, processing order history`
-          );
-
-          // Get user ID for storing order history
-          if (window.lanchDrapUserIdManager) {
-            try {
-              const userId = await window.lanchDrapUserIdManager.getUserId();
-              if (userId && window.LanchDrapOrderHistoryParser) {
-                // Store order history in background (don't block UI)
-                setTimeout(async () => {
-                  try {
-                    const orderResult =
-                      await window.LanchDrapOrderHistoryParser.processAndStoreOrderHistory(
-                        userId,
-                        'current_restaurant' // We'll determine the actual restaurant ID from context
-                      );
-                    console.log(`LanchDrap: Order history processing result:`, orderResult);
-                  } catch (error) {
-                    console.log(`LanchDrap: Error processing order history:`, error);
-                  }
-                }, 2000); // Delay to avoid blocking UI and after tracking completes
-              }
-            } catch (error) {
-              console.log(`LanchDrap: Error getting user ID for order history:`, error);
-            }
-          }
-        } else {
-          console.log('LanchDrap: No order history found on page, skipping order storage');
-        }
-      }
+      // Removed: order history storage from tracking to avoid duplicate order API calls.
 
       // Check if the request was aborted
       if (window.lanchDrapTrackingAbortController.signal.aborted) {
@@ -1252,6 +910,31 @@ window.LanchDrapRestaurantScraper = (() => {
         window.lanchDrapTrackingAbortController = null;
       }
     }
+  }
+
+  // Helper: schedule tracking and sell-out indicators for availability
+  function scheduleTrackingAndIndicators(availabilityData) {
+    try {
+      setTimeout(() => {
+        // Only track on day landing pages (grid). Skip on detail pages.
+        const isGrid =
+          typeof window.LanchDrapDOMUtils?.isRestaurantGridPage === 'function' &&
+          window.LanchDrapDOMUtils.isRestaurantGridPage();
+        if (!isGrid) return;
+
+        trackRestaurantAppearances(availabilityData)
+          .then((result) => {
+            try {
+              const restaurants =
+                result?.data?.data?.restaurants || result?.data?.restaurants || null;
+              if (restaurants && Array.isArray(restaurants)) {
+                addSellOutIndicators(restaurants);
+              }
+            } catch (_e) {}
+          })
+          .catch((_error) => {});
+      }, 200);
+    } catch (_e) {}
   }
 
   // Function to add sell out indicators to restaurant cards
@@ -1370,66 +1053,9 @@ window.LanchDrapRestaurantScraper = (() => {
     } catch (_error) {}
   }
 
-  // Function to report availability summary
-  function reportAvailabilitySummary(availabilityData) {
-    try {
-      // Check if utilities are loaded
-      if (typeof LanchDrapApiClient === 'undefined' || typeof LanchDrapConfig === 'undefined') {
-        // Store data locally for later submission
-        storeAvailabilitySummaryLocally(availabilityData);
-        return;
-      }
+  // [Removed] Reporting availability summary - not needed
 
-      const urlDate = window.LanchDrapDOMUtils.extractDateFromUrl();
-      // Validate data before sending
-      if (!availabilityData || availabilityData.length === 0) {
-        return;
-      }
-
-      const summary = {
-        totalRestaurants: availabilityData.length,
-        available: availabilityData.filter((r) => r.status === 'available').length,
-        soldout: availabilityData.filter((r) => r.status === 'soldout').length,
-        limited: availabilityData.filter((r) => r.status === 'limited').length,
-        urlDate: urlDate,
-        timestamp: new Date().toISOString(),
-        timeSlot: availabilityData[0]?.timeSlot?.full || 'Unknown',
-        city: window.LanchDrapDOMUtils.extractCityFromUrl(),
-      };
-
-      // Validate required fields
-      if (!summary.totalRestaurants || !summary.timestamp) {
-        return;
-      }
-
-      // Availability summary endpoint removed - no longer sending summaries
-    } catch (_error) {}
-  }
-
-  // Function to store availability summary locally when utilities aren't loaded
-  function storeAvailabilitySummaryLocally(availabilityData) {
-    try {
-      const urlDate = window.LanchDrapDOMUtils.extractDateFromUrl();
-      const summary = {
-        totalRestaurants: availabilityData.length,
-        available: availabilityData.filter((r) => r.status === 'available').length,
-        soldout: availabilityData.filter((r) => r.status === 'soldout').length,
-        limited: availabilityData.filter((r) => r.status === 'limited').length,
-        urlDate: urlDate,
-        timestamp: new Date().toISOString(),
-        timeSlot: availabilityData[0]?.timeSlot?.full || 'Unknown',
-        city: window.LanchDrapDOMUtils.extractCityFromUrl(),
-        pendingSubmission: true,
-      };
-
-      // Store in localStorage for later submission
-      const pendingSummaries = JSON.parse(
-        localStorage.getItem('pendingAvailabilitySummaries') || '[]'
-      );
-      pendingSummaries.push(summary);
-      localStorage.setItem('pendingAvailabilitySummaries', JSON.stringify(pendingSummaries));
-    } catch (_error) {}
-  }
+  // [Removed] Local summary storage - not needed
 
   // Function to get restaurant availability data (for other modules)
   function getRestaurantAvailabilityData() {

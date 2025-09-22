@@ -4,6 +4,7 @@
 // Global state
 let isInitialized = false;
 let lastUrl = window.location.href;
+let lastHandledDate = null;
 
 // Initialize the extension
 async function initializeExtension() {
@@ -59,8 +60,12 @@ async function handlePageChange() {
     // Initialize if not already done
     await initializeExtension();
 
-    // Handle restaurant grid pages (daily pages)
-    if (window.LanchDrapDOMUtils.isRestaurantGridPage()) {
+    // Determine page type once
+    const isGrid = window.LanchDrapDOMUtils.isRestaurantGridPage();
+    const isDetail = window.LanchDrapDOMUtils.isRestaurantDetailPage();
+
+    // Handle restaurant grid pages (daily pages) exclusively
+    if (isGrid) {
       console.log('LanchDrap: Detected restaurant grid page');
       // Show skeleton loading state immediately
       if (window.LanchDrapStatsDisplay?.showSkeletonLoading) {
@@ -76,22 +81,38 @@ async function handlePageChange() {
           return;
         }
 
+        // Prefer API when the day date changed since the last handled render
+        const currentDate = window.LanchDrapDOMUtils.extractDateFromUrl();
+        const preferApi = !!lastHandledDate && !!currentDate && currentDate !== lastHandledDate;
+        lastHandledDate = currentDate || lastHandledDate;
+
         // Scrape restaurant availability and display stats
         console.log('LanchDrap: Calling scrapeRestaurantAvailability from content script');
-        const availabilityData =
-          await window.LanchDrapRestaurantScraper.scrapeRestaurantAvailability();
+        let availabilityData = await window.LanchDrapRestaurantScraper.scrapeRestaurantAvailability(
+          {
+            prefer: preferApi ? 'api' : 'page',
+          }
+        );
+
+        // If preferring API and no data yet, wait briefly and retry once for fresh data
+        if (preferApi && (!availabilityData || availabilityData.length === 0)) {
+          await new Promise((r) => setTimeout(r, 250));
+          availabilityData = await window.LanchDrapRestaurantScraper.scrapeRestaurantAvailability({
+            prefer: 'api',
+          });
+        }
 
         console.log('LanchDrap: Got availability data:', availabilityData);
         if (availabilityData && availabilityData.length > 0) {
           // Display stats for selected restaurant
           await window.LanchDrapStatsDisplay.displaySelectedRestaurantStats(availabilityData);
         }
+        // Nothing else to reset
       }, 500); // Wait 500ms for navigation to settle
     }
 
-    // Handle restaurant detail pages
-    if (window.LanchDrapDOMUtils.isRestaurantDetailPage()) {
-      // Display restaurant tracking info
+    // Handle restaurant detail pages only when not a grid page
+    else if (isDetail) {
       await window.LanchDrapStatsDisplay.displayRestaurantTrackingInfo();
     }
 
@@ -109,6 +130,12 @@ function handleUrlChange() {
 
   if (currentUrl !== lastUrl) {
     lastUrl = currentUrl;
+
+    // Detect day-to-day navigation by comparing /app/:date segment
+    try {
+      const currentDate = window.LanchDrapDOMUtils.extractDateFromUrl();
+      lastUrlDate = currentDate || lastUrlDate;
+    } catch {}
 
     // Clear DOM cache on URL change
     window.LanchDrapDOMUtils.clearDomCache();

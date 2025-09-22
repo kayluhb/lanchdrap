@@ -981,27 +981,22 @@ window.LanchDrapStatsDisplay = (() => {
         }
       }
 
-      // Get restaurant context first
-      const restaurantContext =
-        await window.LanchDrapRestaurantContext.getCurrentRestaurantContext();
-
-      // Find the selected restaurant or use restaurant context
+      // Find the selected restaurant first
       let selectedRestaurant = availabilityData.find((restaurant) => restaurant.isSelected);
 
-      // If no selected restaurant found, try to find by restaurant context ID
+      // If no selected restaurant found and NOT on grid, try using restaurant context ID (detail pages)
       if (!selectedRestaurant) {
-        if (restaurantContext.id) {
-          selectedRestaurant = availabilityData.find(
-            (restaurant) => restaurant.id === restaurantContext.id
-          );
-          console.log(
-            'LanchDrap: Stats display - no selected restaurant found, looking for restaurant by context ID:',
-            restaurantContext.id
-          );
-          console.log(
-            'LanchDrap: Stats display - found restaurant by context ID:',
-            selectedRestaurant
-          );
+        const onGrid =
+          typeof window.LanchDrapDOMUtils?.isRestaurantGridPage === 'function' &&
+          window.LanchDrapDOMUtils.isRestaurantGridPage();
+        if (!onGrid) {
+          const restaurantContext =
+            await window.LanchDrapRestaurantContext.getCurrentRestaurantContext();
+          if (restaurantContext.id) {
+            selectedRestaurant = availabilityData.find(
+              (restaurant) => restaurant.id === restaurantContext.id
+            );
+          }
         }
       }
 
@@ -1016,10 +1011,9 @@ window.LanchDrapStatsDisplay = (() => {
         'LanchDrap: Stats display - selected restaurant found, proceeding with stats display'
       );
 
-      // Get restaurant name and logo from context if available
-      const restaurantName =
-        restaurantContext.name || selectedRestaurant.name || selectedRestaurant.id;
-      const restaurantLogo = restaurantContext.logo || selectedRestaurant.logo;
+      // Get restaurant name and logo
+      const restaurantName = selectedRestaurant.name || selectedRestaurant.id;
+      const restaurantLogo = selectedRestaurant.logo;
 
       console.log('LanchDrap: Stats display - got restaurant name and logo:', {
         restaurantName,

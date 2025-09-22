@@ -22,6 +22,10 @@ window.LanchDrapOrderParser = (() => {
         'Thank you for your order',
         'Order successful',
         'Order complete',
+        'Your order was placed',
+        'Order submitted',
+        'Success! Your order',
+        'Payment complete',
       ];
 
       let orderConfirmationText = null;
@@ -151,11 +155,64 @@ window.LanchDrapOrderParser = (() => {
   async function detectAndStoreOrder() {
     try {
       // Parse order items first to create fingerprint
-      const orderItems = parseOrderItemsFromPage();
-      if (orderItems && orderItems.length > 0) {
+      let orderItems = parseOrderItemsFromPage();
+      console.log('LanchDrap: Order detection - found items:', orderItems?.length || 0);
+
+      // Detect confirmation text early so fallback logic can reference it
+      const confirmationPatterns = [
+        'Your order has been placed!',
+        'Your order has been placed',
+        'Your order was placed',
+        'Order placed',
+        'Order confirmed',
+        'Order submitted',
+        'Thank you for your order',
+        'Order successful',
+        'Order complete',
+        'Success! Your order',
+        'Payment complete',
+      ];
+      let orderConfirmationText = null;
+      try {
+        for (const pattern of confirmationPatterns) {
+          orderConfirmationText = Array.from(document.querySelectorAll('div')).find((div) =>
+            div.textContent.toLowerCase().includes(pattern.toLowerCase())
+          );
+          if (orderConfirmationText) break;
+        }
+      } catch (_e) {}
+
+      // Fallback: if DOM parsing failed, try extracting from page data order history
+      if (!orderItems || orderItems.length === 0) {
+        try {
+          const historyData =
+            window.LanchDrapOrderHistoryParser?.extractOrderHistoryFromPageData?.();
+          const parsedOrders = historyData?.orders;
+          if (parsedOrders && Array.isArray(parsedOrders) && parsedOrders.length > 0) {
+            // Prefer a paid order if available
+            const lastOrder = parsedOrders.find((o) => o && o.isPaid === true) || parsedOrders[0];
+            orderItems = (lastOrder.items || []).map((item) => ({
+              name: item.label || item.fullDescription || 'Item',
+              quantity: item.quantity || 1,
+              options: item.specialRequest || '',
+              fullDescription:
+                item.fullDescription ||
+                `${item.label || 'Item'}${item.description ? ` - ${item.description}` : ''}`,
+            }));
+            console.log(
+              'LanchDrap: Fallback order detection from page data - items:',
+              orderItems?.length || 0
+            );
+            // If no explicit confirmation text, require the fallback order to be paid
+            if (!orderConfirmationText && !(lastOrder && lastOrder.isPaid === true)) {
+              orderItems = [];
+            }
+          }
+        } catch (_e) {}
       }
 
       if (!orderItems || orderItems.length === 0) {
+        console.log('LanchDrap: No order items found after fallbacks, skipping order detection');
         return;
       }
 
@@ -166,10 +223,11 @@ window.LanchDrapOrderParser = (() => {
       const restaurantName = restaurantContext.name;
 
       if (!restaurantId) {
+        console.log('LanchDrap: No restaurant ID found, skipping order detection');
         return;
       }
 
-      // Debug: Log restaurant information
+      console.log('LanchDrap: Order detection - restaurant:', restaurantName, 'ID:', restaurantId);
 
       // Create order fingerprint based on actual content
       const orderFingerprint = createOrderFingerprint(orderItems, restaurantId, restaurantName);
@@ -186,47 +244,17 @@ window.LanchDrapOrderParser = (() => {
       // Debug: Log current URL and extracted date
       const _extractedDate = window.LanchDrapDOMUtils.extractDateFromUrl();
 
-      // Try multiple confirmation text patterns
-      const confirmationPatterns = [
-        'Your order has been placed!',
-        'Your order has been placed',
-        'Order placed',
-        'Order confirmed',
-        'Thank you for your order',
-        'Order successful',
-        'Order complete',
-      ];
-
-      let orderConfirmationText = null;
-
-      for (const pattern of confirmationPatterns) {
-        orderConfirmationText = Array.from(document.querySelectorAll('div')).find((div) =>
-          div.textContent.toLowerCase().includes(pattern.toLowerCase())
-        );
-        if (orderConfirmationText) {
-          break;
-        }
-      }
+      // orderConfirmationText already computed above
 
       if (!orderConfirmationText) {
-        return;
+        // Allow fallback path when we have items but no explicit confirmation banner
+        console.log(
+          'LanchDrap: No explicit confirmation text found; proceeding with items fallback'
+        );
       }
 
       // Find the order container - it should be a parent of the confirmation text
-      const orderContainer =
-        orderConfirmationText.closest('[id]') ||
-        orderConfirmationText.closest('.my-8') ||
-        orderConfirmationText.closest('div');
-
-      if (!orderContainer) {
-        return;
-      }
-
-      const isOrderPage = true; // We already confirmed this by finding the text
-
-      if (!isOrderPage) {
-        return;
-      }
+      // Note: We proceed without requiring a specific container when confirmation text is absent
 
       // Get user ID
       const userId = await lanchDrapUserIdManager.getUserId();
@@ -235,8 +263,20 @@ window.LanchDrapOrderParser = (() => {
       }
 
       // Create order data using existing restaurant context
-      // Use the date from the URL, not the current date
-      const urlDate = window.LanchDrapDOMUtils.extractDateFromUrl();
+      // Use the date from the URL if present; otherwise attempt deliveryTime derived by history parser
+      let urlDate = window.LanchDrapDOMUtils.extractDateFromUrl();
+      if (!urlDate && window.LanchDrapOrderHistoryParser?.extractOrderHistoryFromPageData) {
+        try {
+          const historyData = window.LanchDrapOrderHistoryParser.extractOrderHistoryFromPageData();
+          const deliveryTime = historyData?.delivery?.deliveryTime;
+          if (deliveryTime) {
+            const d = new Date(deliveryTime);
+            if (!Number.isNaN(d.getTime())) {
+              urlDate = d.toISOString().split('T')[0];
+            }
+          }
+        } catch (_e) {}
+      }
       const orderData = {
         date: urlDate || new Date().toISOString().split('T')[0], // Fallback to current date if no URL date
         restaurantName: restaurantName || restaurantId,
@@ -250,11 +290,14 @@ window.LanchDrapOrderParser = (() => {
             LanchDrapConfig.CONFIG.ENDPOINTS
           );
           const result = await apiClient.storeUserOrder(userId, restaurantId, orderData);
+          console.log('LanchDrap: Order storage result:', result);
 
           // Mark this specific order content as processed to prevent duplicate processing
           if (result?.success) {
             sessionStorage.setItem(orderProcessedKey, 'true');
+            console.log('LanchDrap: Order successfully stored and marked as processed');
           } else {
+            console.log('LanchDrap: Order storage failed:', result);
           }
         } catch (_error) {}
       } else {

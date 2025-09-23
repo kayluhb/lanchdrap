@@ -1,6 +1,8 @@
 // User ID utilities for LanchDrap extension
 // Handles user identification and management
 
+const USER_ID_STORAGE_KEY = 'lanchdrap_user_id';
+
 // Create global namespace for user ID management
 window.LanchDrapUserIdManager = (() => {
   // Function to get user ID strictly from the DOM/app state (never generate)
@@ -10,10 +12,10 @@ window.LanchDrapUserIdManager = (() => {
       if (typeof window !== 'undefined' && window.user && window.user.id) {
         const domUserId = String(window.user.id);
         try {
-          await chrome.storage.local.set({ lanchdrap_user_id: domUserId });
+          await chrome.storage.local.set({ [USER_ID_STORAGE_KEY]: domUserId });
         } catch (_e) {}
         try {
-          localStorage.setItem('lanchdrap_user_id', domUserId);
+          localStorage.setItem(USER_ID_STORAGE_KEY, domUserId);
         } catch (_e) {}
         return domUserId;
       }
@@ -30,10 +32,10 @@ window.LanchDrapUserIdManager = (() => {
           if (possibleIds.length > 0) {
             const domUserId = String(possibleIds[0]);
             try {
-              await chrome.storage.local.set({ lanchdrap_user_id: domUserId });
+              await chrome.storage.local.set({ [USER_ID_STORAGE_KEY]: domUserId });
             } catch (_e) {}
             try {
-              localStorage.setItem('lanchdrap_user_id', domUserId);
+              localStorage.setItem(USER_ID_STORAGE_KEY, domUserId);
             } catch (_e) {}
             return domUserId;
           }
@@ -42,14 +44,14 @@ window.LanchDrapUserIdManager = (() => {
 
       // 3) As a cache-only fallback, return a previously stored value (originated from DOM)
       try {
-        const result = await chrome.storage.local.get(['lanchdrap_user_id']);
+        const result = await chrome.storage.local.get([USER_ID_STORAGE_KEY]);
         if (result?.lanchdrap_user_id) {
           return result.lanchdrap_user_id;
         }
       } catch (_e) {}
 
       try {
-        const cached = localStorage.getItem('lanchdrap_user_id');
+        const cached = localStorage.getItem(USER_ID_STORAGE_KEY);
         if (cached) return cached;
       } catch (_e) {}
 
@@ -58,7 +60,7 @@ window.LanchDrapUserIdManager = (() => {
     } catch (_error) {
       // On unexpected errors, prefer safe null
       try {
-        const cached = localStorage.getItem('lanchdrap_user_id');
+        const cached = localStorage.getItem(USER_ID_STORAGE_KEY);
         return cached || null;
       } catch (_e) {
         return null;
@@ -66,52 +68,19 @@ window.LanchDrapUserIdManager = (() => {
     }
   }
 
-  // Function to extract restaurant ID from LunchDrop page data
-  function getLunchdropRestaurantId() {
-    try {
-      if (typeof window !== 'undefined' && window.app) {
-        const appElement = window.app;
-        if (appElement?.dataset?.page) {
-          const pageData = JSON.parse(appElement.dataset.page);
-
-          // Try to get restaurant ID from delivery data (detail pages)
-          if (pageData.props?.delivery?.restaurant?.id) {
-            return pageData.props.delivery.restaurant.id;
-          }
-
-          // For grid pages, we don't have a single restaurant ID
-          // This will be null and handled by the calling code
-          return null;
-        }
-      }
-      return null;
-    } catch (_error) {
-      console.log('LanchDrap: Error extracting restaurant ID from page data:', _error);
-      return null;
-    }
-  }
-
   // Function to clear user ID (for testing/reset purposes)
   async function clearUserId() {
     try {
-      await chrome.storage.local.remove(['lanchdrap_user_id']);
-      localStorage.removeItem('lanchdrap_user_id');
+      await chrome.storage.local.remove([USER_ID_STORAGE_KEY]);
+      localStorage.removeItem(USER_ID_STORAGE_KEY);
     } catch (_error) {
-      localStorage.removeItem('lanchdrap_user_id');
+      localStorage.removeItem(USER_ID_STORAGE_KEY);
     }
-  }
-
-  // Get user identification object (for backward compatibility)
-  async function getUserIdentification() {
-    const userId = await getUserId();
-    return userId ? { userId } : null;
   }
 
   // Return public API
   return {
     getUserId,
-    getUserIdentification,
-    getLunchdropRestaurantId,
     clearUserId,
   };
 })();
@@ -120,14 +89,6 @@ window.LanchDrapUserIdManager = (() => {
 window.LanchDrapUserIdManager.LanchDrapUserIdManager = class {
   async getUserId() {
     return window.LanchDrapUserIdManager.getUserId();
-  }
-
-  async getUserIdentification() {
-    return window.LanchDrapUserIdManager.getUserIdentification();
-  }
-
-  getLunchdropRestaurantId() {
-    return window.LanchDrapUserIdManager.getLunchdropRestaurantId();
   }
 
   async clearUserId() {

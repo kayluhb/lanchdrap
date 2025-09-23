@@ -253,7 +253,11 @@ window.LanchDrapStatsDisplay = (() => {
   function hideSkeletonLoading() {
     const skeleton = document.getElementById('lanchdrap-restaurant-stats-skeleton');
     if (skeleton) {
+      console.log('LanchDrap: Stats display - hideSkeletonLoading called, removing skeleton');
       skeleton.remove();
+      console.log('LanchDrap: Stats display - skeleton removed successfully');
+    } else {
+      console.log('LanchDrap: Stats display - hideSkeletonLoading called but no skeleton found');
     }
   }
 
@@ -1130,10 +1134,19 @@ window.LanchDrapStatsDisplay = (() => {
       }
 
       if (statsContainer) {
+        console.log(
+          'LanchDrap: Stats display - attempting to replace skeleton with stats container'
+        );
         const existingSkeleton = document.getElementById('lanchdrap-restaurant-stats-skeleton');
+        console.log('LanchDrap: Stats display - existing skeleton found:', !!existingSkeleton);
         if (existingSkeleton && existingSkeleton.parentNode) {
+          console.log('LanchDrap: Stats display - replacing skeleton with stats container');
           existingSkeleton.replaceWith(statsContainer);
+          console.log('LanchDrap: Stats display - skeleton replaced successfully');
         } else {
+          console.log(
+            'LanchDrap: Stats display - no skeleton to replace, inserting stats container'
+          );
           const anchor = findInsertionAnchor();
           if (anchor && anchor.node.parentNode) {
             if (anchor.mode === 'after') {

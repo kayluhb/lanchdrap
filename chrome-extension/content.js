@@ -1,46 +1,25 @@
 // Main content script for LanchDrap extension
-// Orchestrates all the modular functionality
+// Only waits for data layer initialization
 
 // Global state
 let isInitialized = false;
 let lastUrl = window.location.href;
-let lastHandledDate = null;
 
 // Initialize the extension
 async function initializeExtension() {
   if (isInitialized) return;
 
-  // Extract and store Lunchdrop user ID
+  // Initialize data layer if not already done
   try {
-    await window.lanchDrapUserIdManager.getUserId();
-  } catch {
-    // Silently fail if we can't extract the user ID
-  }
-
-  // Clear any existing DOM cache
-  window.LanchDrapDOMUtils.clearDomCache();
-
-  // Add floating rating button
-  window.LanchDrapRatingWidget.addFloatingButton();
-
-  // Check for pending rating prompt from before utilities were loaded
-  const pendingPrompt = localStorage.getItem('lanchdrap_pending_rating_prompt');
-  if (pendingPrompt) {
-    try {
-      const promptData = JSON.parse(pendingPrompt);
-
-      // Create order data from pending prompt
-      const orderData = {
-        restaurant: promptData.restaurant,
-        items: ['Detected from LanchDrap prompt'],
-        total: 'Unknown',
-        orderId: window.LanchDrapDOMUtils.generateOrderId(),
-      };
-      window.LanchDrapRatingWidget.setOrderData(orderData);
-
-      // Clear the pending prompt
-      localStorage.removeItem('lanchdrap_pending_rating_prompt');
-    } catch (_error) {}
+    if (window.LanchDrapDataLayer) {
+      // Initialize the data layer
+      await window.LanchDrapDataLayer.initialize();
+      console.log('LanchDrap: Data layer initialized');
+    } else {
+      console.warn('LanchDrap: Data layer not available');
+    }
+  } catch (error) {
+    console.warn('LanchDrap: Data layer initialization failed:', error);
   }
 
   isInitialized = true;
@@ -49,331 +28,144 @@ async function initializeExtension() {
 // Main function to handle page changes
 async function handlePageChange() {
   try {
-    console.log('LanchDrap: handlePageChange called, current URL:', window.location.href);
+    const currentUrl = window.location.href;
+    const urlChanged = currentUrl !== lastUrl;
 
-    // Skip if on login page
-    if (window.LanchDrapDOMUtils.isLoginPage()) {
-      console.log('LanchDrap: On login page, skipping');
-      return;
-    }
+    // Update last URL
+    lastUrl = currentUrl;
 
     // Initialize if not already done
     await initializeExtension();
 
-    // Determine page type once
-    const isDayOverview = window.LanchDrapDOMUtils.isDayOverviewPage();
-    const isDeliveryDetail = window.LanchDrapDOMUtils.isDeliveryDetailPage();
-
-    console.log(
-      'LanchDrap: Page type detection - isDayOverview:',
-      isDayOverview,
-      'isDeliveryDetail:',
-      isDeliveryDetail
-    );
-
-    // Handle day overview pages (daily pages) exclusively
-    if (isDayOverview) {
-      console.log('LanchDrap: Detected day overview page');
-      // Clear any existing stats (including skeleton) to prevent stale data display
-      if (window.LanchDrapStatsDisplay?.clearRestaurantStats) {
-        window.LanchDrapStatsDisplay.clearRestaurantStats();
-      }
-
-      // Show skeleton loading state immediately
-      if (window.LanchDrapStatsDisplay?.showSkeletonLoading) {
-        window.LanchDrapStatsDisplay.showSkeletonLoading();
-      }
-
-      // Wait for navigation to settle and new page data to load
-      setTimeout(async () => {
-        console.log('LanchDrap: Timeout callback executing');
-        // Double-check we're still on a day overview page
-        if (!window.LanchDrapDOMUtils.isDayOverviewPage()) {
-          console.log('LanchDrap: No longer on day overview page, skipping');
-          return;
-        }
-
-        // Update last handled date
-        const currentDate = window.LanchDrapJsonDataLoader?.extractDateFromUrl();
-        const isNewDay = !!lastHandledDate && !!currentDate && currentDate !== lastHandledDate;
-        lastHandledDate = currentDate || lastHandledDate;
-
-        // Re-check page type after navigation has settled
-        const stillIsDayOverview = window.LanchDrapDOMUtils.isDayOverviewPage();
-        if (!stillIsDayOverview) {
-          console.log(
-            'LanchDrap: Page type changed to delivery detail page, skipping stats display'
-          );
-          return;
-        }
-
-        // Load restaurant availability from JSON data
-        console.log('LanchDrap: Calling loadRestaurantAvailability from content script');
-
-        // For new day navigation, prefer API to get fresh data
-        // For same day or initial load, prefer page data
-        const preferApi = isNewDay;
-        console.log('LanchDrap: Using data source preference:', preferApi ? 'api' : 'page');
-
-        const availabilityData = await window.LanchDrapRestaurantScraper.loadRestaurantAvailability(
-          {
-            prefer: preferApi ? 'api' : 'page',
-          }
-        );
-
-        console.log('LanchDrap: Got availabilityData:', availabilityData);
-        if (availabilityData && availabilityData.length > 0) {
-          // Display stats for selected restaurant; it will replace skeleton in-place
-          await window.LanchDrapStatsDisplay.displaySelectedRestaurantStats(availabilityData);
-        }
-
-        // Check for order confirmation and store order history for this specific day
-        // This ensures order detection happens when navigating between days
-        console.log('LanchDrap: Running order detection for day overview page');
-        await window.LanchDrapOrderParser.detectAndStoreOrder();
-
-        // Nothing else to reset
-      }, 500); // Wait 500ms for navigation to settle
+    // Only call data layer handlePageChange if URL actually changed
+    // (data layer handles initial load automatically)
+    if (urlChanged && window.LanchDrapDataLayer?.handlePageChange) {
+      await window.LanchDrapDataLayer.handlePageChange();
     }
-
-    // Handle restaurant detail pages only when not a grid page
-    else if (isDeliveryDetail) {
-      console.log('LanchDrap: Detected delivery detail page');
-
-      // Clear any existing stats to prevent stale data display
-      if (window.LanchDrapStatsDisplay?.clearRestaurantStats) {
-        window.LanchDrapStatsDisplay.clearRestaurantStats();
-      }
-
-      // Show skeleton loading state immediately
-      if (window.LanchDrapStatsDisplay?.showSkeletonLoading) {
-        window.LanchDrapStatsDisplay.showSkeletonLoading();
-      }
-
-      // Extract restaurant data from the current delivery detail page
-      try {
-        // Get the current delivery data from page props
-        const pageData = window.LanchDrapJsonDataLoader?.extractPageData();
-        const delivery = pageData?.props?.delivery;
-
-        if (delivery?.restaurant) {
-          console.log('LanchDrap: Found delivery data on detail page:', delivery);
-
-          // Format the delivery as availability data for consistent stats display
-          const availabilityData = [
-            {
-              index: 0,
-              id: delivery.restaurant.id,
-              name: delivery.restaurant.name,
-              logo: delivery.restaurant.logo,
-              brandColor: delivery.restaurant.brandColor,
-              status:
-                delivery.isCancelled ||
-                delivery.isSuspended ||
-                !delivery.isTakingOrders ||
-                delivery.numSlotsAvailable === 0
-                  ? 'soldout'
-                  : 'available',
-              reason:
-                delivery.cancelledReason ||
-                (delivery.numSlotsAvailable === 0 ? 'No slots available' : null),
-              hasSoldOutInCard:
-                delivery.isCancelled ||
-                delivery.isSuspended ||
-                !delivery.isTakingOrders ||
-                delivery.numSlotsAvailable === 0,
-              timeSlot: {
-                full: delivery.deliveryTime
-                  ? (() => {
-                      try {
-                        const startTime = new Date(delivery.deliveryTime);
-                        const endTime = new Date(startTime.getTime() + 60 * 60 * 1000); // Add 1 hour
-                        const formatTime = (date) =>
-                          date
-                            .toLocaleTimeString('en-US', {
-                              hour: 'numeric',
-                              minute: '2-digit',
-                              hour12: true,
-                            })
-                            .toLowerCase()
-                            .replace(' ', '');
-                        return `${formatTime(startTime)}-${formatTime(endTime)}`;
-                      } catch (_e) {
-                        return 'unknown';
-                      }
-                    })()
-                  : 'unknown',
-              },
-              isSelected: true, // Mark as selected since we're on the detail page
-              slotsAvailable: delivery.numSlotsAvailable || 0,
-              menuData: [], // Will be populated by the restaurant scraper if needed
-            },
-          ];
-
-          console.log('LanchDrap: Formatted availability data for detail page:', availabilityData);
-
-          // Use the same comprehensive stats display as day overview pages
-          await window.LanchDrapStatsDisplay.displaySelectedRestaurantStats(availabilityData);
-        } else {
-          console.log('LanchDrap: No delivery restaurant data found on detail page');
-          // Fallback to the original tracking info display
-          await window.LanchDrapStatsDisplay.displayRestaurantTrackingInfo();
-        }
-      } catch (error) {
-        console.log('LanchDrap: Error processing delivery detail page:', error);
-        // Fallback to the original tracking info display
-        await window.LanchDrapStatsDisplay.displayRestaurantTrackingInfo();
-      }
-    }
-
-    // Check for order confirmation and store order history
-    await window.LanchDrapOrderParser.detectAndStoreOrder();
-
-    // Check for LanchDrap rating prompt
-    window.LanchDrapRatingWidget.detectLunchDropRatingPrompt();
-  } catch (_error) {}
-}
-
-// Handle URL changes (SPA navigation)
-function handleUrlChange() {
-  const currentUrl = window.location.href;
-
-  if (currentUrl !== lastUrl) {
-    lastUrl = currentUrl;
-
-    // Detect day-to-day navigation by comparing /app/:date segment
-    try {
-      const currentDate = window.LanchDrapJsonDataLoader?.extractDateFromUrl();
-      lastUrlDate = currentDate || lastUrlDate;
-    } catch {}
-
-    // Clear DOM cache on URL change
-    window.LanchDrapDOMUtils.clearDomCache();
-
-    // Clear restaurant availability data on URL change
-    if (window.LanchDrapRestaurantScraper?.clearRestaurantAvailabilityData) {
-      window.LanchDrapRestaurantScraper.clearRestaurantAvailabilityData();
-    }
-
-    // Clear any existing stats display on URL change
-    const existingStats = document.getElementById('lanchdrap-restaurant-stats');
-    const existingSkeleton = document.getElementById('lanchdrap-restaurant-stats-skeleton');
-    if (existingStats) {
-      existingStats.remove();
-    }
-    if (existingSkeleton) {
-      existingSkeleton.remove();
-    }
-
-    // Handle the page change
-    handlePageChange();
+  } catch (error) {
+    console.error('🚀 LanchDrap: Error in handlePageChange:', error);
   }
 }
 
-// Set up event listeners
+// Set up event listeners for page navigation
 function setupEventListeners() {
-  // Listen for URL changes (for SPA navigation)
-  let urlChangeTimeout;
+  // Handle initial page load
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+      handlePageChange();
+    });
+  } else {
+    handlePageChange();
+  }
+
+  // Listen for browser back/forward navigation
+  window.addEventListener('popstate', () => {
+    handlePageChange();
+  });
+
+  // Intercept programmatic navigation (pushState/replaceState)
   const originalPushState = history.pushState;
   const originalReplaceState = history.replaceState;
 
   history.pushState = (...args) => {
     originalPushState.apply(history, args);
-    clearTimeout(urlChangeTimeout);
-    urlChangeTimeout = setTimeout(handleUrlChange, 300);
+    // Small delay to allow DOM to update
+    setTimeout(() => {
+      handlePageChange();
+    }, 100);
   };
 
   history.replaceState = (...args) => {
     originalReplaceState.apply(history, args);
-    clearTimeout(urlChangeTimeout);
-    urlChangeTimeout = setTimeout(handleUrlChange, 300);
+    // Small delay to allow DOM to update
+    setTimeout(() => {
+      handlePageChange();
+    }, 100);
   };
 
-  // Listen for popstate events (back/forward navigation)
-  window.addEventListener('popstate', () => {
-    clearTimeout(urlChangeTimeout);
-    urlChangeTimeout = setTimeout(handleUrlChange, 300);
-  });
-
-  // Listen for DOM changes (for dynamic content)
+  // Listen for DOM changes that might indicate page content updates
+  // This is useful for SPAs that update content without changing the URL
   const observer = new MutationObserver((mutations) => {
     let shouldHandleChange = false;
 
     for (const mutation of mutations) {
-      // Check if restaurant cards were added/removed
-      if (mutation.type === 'childList') {
-        const addedNodes = Array.from(mutation.addedNodes);
-        const hasRestaurantContent = addedNodes.some((node) => {
-          if (node.nodeType === Node.ELEMENT_NODE) {
-            return (
-              node.querySelector &&
-              (node.querySelector('a[href*="/app/"]') ||
-                node.querySelector('.text-3xl.font-bold') ||
-                node.textContent?.includes('Your order has been placed'))
-            );
-          }
-          return false;
-        });
+      // Check if the app element or its data attributes changed
+      if (
+        mutation.type === 'attributes' &&
+        (mutation.attributeName === 'data-page' || mutation.target.id === 'app')
+      ) {
+        shouldHandleChange = true;
+        break;
+      }
 
-        if (hasRestaurantContent) {
+      // Check if child nodes were added to the app element or its descendants
+      if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
+        // Check if this is the app element or a descendant of it
+        const isAppElement = mutation.target.id === 'app';
+        const isAppDescendant = mutation.target.closest('#app') !== null;
+
+        if (isAppElement || isAppDescendant) {
           shouldHandleChange = true;
+          break;
+        }
+      }
+
+      // Also trigger on any significant content changes within the app
+      if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
+        // Check if any added node contains meaningful content
+        for (const node of mutation.addedNodes) {
+          if (node.nodeType === Node.ELEMENT_NODE) {
+            // Check if this looks like a page content change
+            const hasSignificantContent =
+              node.querySelector &&
+              (node.querySelector('[data-page]') ||
+                node.querySelector('.restaurant') ||
+                node.querySelector('.delivery') ||
+                node.textContent?.trim().length > 50);
+
+            if (hasSignificantContent) {
+              shouldHandleChange = true;
+              break;
+            }
+          }
         }
       }
     }
 
     if (shouldHandleChange) {
-      clearTimeout(urlChangeTimeout);
-      urlChangeTimeout = setTimeout(handlePageChange, 200);
+      // Debounce to avoid multiple rapid calls
+      clearTimeout(window.lanchdrapChangeTimeout);
+      window.lanchdrapChangeTimeout = setTimeout(() => {
+        handlePageChange();
+      }, 200);
     }
   });
 
-  // Start observing
-  observer.observe(document.body, {
-    childList: true,
-    subtree: true,
-  });
-
-  // Handle initial page load
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', handlePageChange);
+  // Start observing the app element for changes
+  const appElement = document.getElementById('app');
+  if (appElement) {
+    observer.observe(appElement, {
+      attributes: true,
+      childList: true,
+      subtree: true,
+      attributeFilter: ['data-page'],
+    });
   } else {
-    handlePageChange();
+    // If app element doesn't exist yet, wait for it
+    const checkForApp = setInterval(() => {
+      const app = document.getElementById('app');
+      if (app) {
+        observer.observe(app, {
+          attributes: true,
+          childList: true,
+          subtree: true,
+          attributeFilter: ['data-page'],
+        });
+        clearInterval(checkForApp);
+      }
+    }, 100);
   }
 }
 
 // Initialize when the script loads
 setupEventListeners();
-
-// Listen for messages from popup
-chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
-  if (request.action === 'getRestaurantInfo') {
-    (async () => {
-      try {
-        // Use centralized restaurant context utility
-        const restaurantContext =
-          await window.LanchDrapRestaurantContext.getCurrentRestaurantContext();
-
-        if (restaurantContext.hasValidId && restaurantContext.hasValidName) {
-          const restaurantInfo = {
-            restaurantName: restaurantContext.name,
-            restaurantId: restaurantContext.id,
-          };
-          sendResponse(restaurantInfo);
-        } else {
-          sendResponse(null);
-        }
-      } catch (_error) {
-        sendResponse(null);
-      }
-    })();
-    return true; // Keep message channel open for async response
-  }
-});
-
-// Export functions for potential external use
-window.LanchDrapExtension = {
-  handlePageChange,
-  clearDomCache: () => window.LanchDrapDOMUtils.clearDomCache(),
-  getOrderData: () => window.LanchDrapRatingWidget.getOrderData(),
-  setOrderData: (data) => window.LanchDrapRatingWidget.setOrderData(data),
-};

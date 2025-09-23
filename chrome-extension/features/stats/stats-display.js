@@ -1668,9 +1668,9 @@ window.LanchDrapStatsDisplay = (() => {
         // Trigger a page refresh to reload stats
         if (window.LanchDrapStatsDisplay) {
           // Check if we're on a restaurant detail page or daily page
-          if (window.LanchDrapDOMUtils?.isRestaurantDetailPage()) {
+          if (await window.LanchDrapRestaurantContext?.isRestaurantDetailPage()) {
             await window.LanchDrapStatsDisplay.displayRestaurantTrackingInfo();
-          } else if (window.LanchDrapDOMUtils?.isRestaurantGridPage()) {
+          } else if (window.LanchDrapRestaurantContext?.isRestaurantGridPage()) {
             const availabilityData =
               await window.LanchDrapRestaurantScraper.scrapeRestaurantAvailability();
             if (availabilityData && availabilityData.length > 0) {

@@ -126,6 +126,12 @@ async function handlePageChange() {
           // Display stats for selected restaurant; it will replace skeleton in-place
           await window.LanchDrapStatsDisplay.displaySelectedRestaurantStats(availabilityData);
         }
+
+        // Check for order confirmation and store order history for this specific day
+        // This ensures order detection happens when navigating between days
+        console.log('LanchDrap: Running order detection for day overview page');
+        await window.LanchDrapOrderParser.detectAndStoreOrder();
+
         // Nothing else to reset
       }, 500); // Wait 500ms for navigation to settle
     }

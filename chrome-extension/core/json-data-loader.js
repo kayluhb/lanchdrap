@@ -82,7 +82,7 @@ window.LanchDrapJsonDataLoader = (() => {
         return null;
       }
 
-      const urlDate = window.LanchDrapDOMUtils?.extractDateFromUrl();
+      const urlDate = extractDateFromUrl();
       if (!urlDate) {
         console.log('LanchDrap: No URL date found for processing deliveries');
         return null;
@@ -408,35 +408,59 @@ window.LanchDrapJsonDataLoader = (() => {
    */
   function extractOrderHistory() {
     try {
+      console.log('LanchDrap: extractOrderHistory called');
       const pageData = extractPageData();
-      if (!pageData) return { orders: [], delivery: null };
+      console.log('LanchDrap: Page data from extractPageData:', pageData);
+
+      if (!pageData) {
+        console.log('LanchDrap: No page data available, returning empty orders');
+        return { orders: [], delivery: null };
+      }
 
       const props = pageData.props;
-      if (!props) return { orders: [], delivery: null };
+      console.log('LanchDrap: Props from page data:', props);
+
+      if (!props) {
+        console.log('LanchDrap: No props in page data, returning empty orders');
+        return { orders: [], delivery: null };
+      }
 
       const orders = props.delivery?.orders;
       const delivery = props.delivery;
 
       console.log('LanchDrap: Found orders in page data:', orders);
       console.log('LanchDrap: Found delivery data:', delivery);
+      console.log('LanchDrap: Orders is array:', Array.isArray(orders));
+      console.log('LanchDrap: Orders length:', orders?.length);
 
       if (orders && Array.isArray(orders)) {
+        console.log('LanchDrap: Processing orders array with OrderHistoryParser');
         // Use the order history parser to parse the orders
         if (window.LanchDrapOrderHistoryParser) {
+          console.log('LanchDrap: OrderHistoryParser available, parsing orders...');
           const parsedOrders = window.LanchDrapOrderHistoryParser.parseOrders(orders);
+          console.log('LanchDrap: Parsed orders result:', parsedOrders);
           return {
             orders: parsedOrders,
             delivery: delivery,
           };
         } else {
+          console.log('LanchDrap: OrderHistoryParser not available, using raw orders');
           // Fallback to raw orders if parser not available
           return {
             orders: orders,
             delivery: delivery,
           };
         }
+      } else {
+        console.log('LanchDrap: Orders not found or not an array, checking props structure:', {
+          hasDelivery: !!props.delivery,
+          deliveryKeys: props.delivery ? Object.keys(props.delivery) : null,
+          propsKeys: Object.keys(props),
+        });
       }
 
+      console.log('LanchDrap: Returning empty orders from extractOrderHistory');
       return { orders: [], delivery: null };
     } catch (error) {
       console.log('LanchDrap: Error extracting order history:', error);

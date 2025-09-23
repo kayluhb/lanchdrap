@@ -1,6 +1,7 @@
 // Rating API routes
 // Following modern API patterns with proper error handling and validation
 
+import { invalidateUserHistoryCache } from '../utils/cache.js';
 import { Rating, RatingStats } from '../utils/models.js';
 import { createApiResponse, createErrorResponse } from '../utils/response.js';
 
@@ -133,6 +134,9 @@ export async function submitRating(request, env) {
 
     // Save updated history
     await env.LANCHDRAP_RATINGS.put(userRestaurantKey, JSON.stringify(historyData));
+
+    // Invalidate user history cache
+    await invalidateUserHistoryCache(rating.userId, rating.restaurant);
 
     // Store individual rating record for analytics (only for new ratings)
     if (!isUpdate) {

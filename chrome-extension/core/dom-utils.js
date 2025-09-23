@@ -189,7 +189,11 @@ window.LanchDrapDOMUtils = (() => {
 
             // Check for grid page indicators
             const hasLunchDayDeliveries = !!pageData.props?.lunchDay?.deliveries;
-            const urlHasDeliveryId = pageData.url && pageData.url.split('/').length > 3; // /app/date/delivery-id
+
+            // Use the same URL parsing logic as isDeliveryDetailPage for consistency
+            const path = window.location.pathname || '';
+            const parts = path.split('/').filter(Boolean);
+            const urlHasDeliveryId = parts.length > 3; // /app/date/delivery-id
 
             console.log(
               'LanchDrap: isDayOverviewPage - hasLunchDayDeliveries:',

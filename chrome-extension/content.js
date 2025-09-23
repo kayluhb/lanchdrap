@@ -138,7 +138,92 @@ async function handlePageChange() {
 
     // Handle restaurant detail pages only when not a grid page
     else if (isDeliveryDetail) {
-      await window.LanchDrapStatsDisplay.displayRestaurantTrackingInfo();
+      console.log('LanchDrap: Detected delivery detail page');
+
+      // Clear any existing stats to prevent stale data display
+      if (window.LanchDrapStatsDisplay?.clearRestaurantStats) {
+        window.LanchDrapStatsDisplay.clearRestaurantStats();
+      }
+
+      // Show skeleton loading state immediately
+      if (window.LanchDrapStatsDisplay?.showSkeletonLoading) {
+        window.LanchDrapStatsDisplay.showSkeletonLoading();
+      }
+
+      // Extract restaurant data from the current delivery detail page
+      try {
+        // Get the current delivery data from page props
+        const pageData = window.LanchDrapJsonDataLoader?.extractPageData();
+        const delivery = pageData?.props?.delivery;
+
+        if (delivery?.restaurant) {
+          console.log('LanchDrap: Found delivery data on detail page:', delivery);
+
+          // Format the delivery as availability data for consistent stats display
+          const availabilityData = [
+            {
+              index: 0,
+              id: delivery.restaurant.id,
+              name: delivery.restaurant.name,
+              logo: delivery.restaurant.logo,
+              brandColor: delivery.restaurant.brandColor,
+              status:
+                delivery.isCancelled ||
+                delivery.isSuspended ||
+                !delivery.isTakingOrders ||
+                delivery.numSlotsAvailable === 0
+                  ? 'soldout'
+                  : 'available',
+              reason:
+                delivery.cancelledReason ||
+                (delivery.numSlotsAvailable === 0 ? 'No slots available' : null),
+              hasSoldOutInCard:
+                delivery.isCancelled ||
+                delivery.isSuspended ||
+                !delivery.isTakingOrders ||
+                delivery.numSlotsAvailable === 0,
+              timeSlot: {
+                full: delivery.deliveryTime
+                  ? (() => {
+                      try {
+                        const startTime = new Date(delivery.deliveryTime);
+                        const endTime = new Date(startTime.getTime() + 60 * 60 * 1000); // Add 1 hour
+                        const formatTime = (date) =>
+                          date
+                            .toLocaleTimeString('en-US', {
+                              hour: 'numeric',
+                              minute: '2-digit',
+                              hour12: true,
+                            })
+                            .toLowerCase()
+                            .replace(' ', '');
+                        return `${formatTime(startTime)}-${formatTime(endTime)}`;
+                      } catch (_e) {
+                        return 'unknown';
+                      }
+                    })()
+                  : 'unknown',
+              },
+              isSelected: true, // Mark as selected since we're on the detail page
+              slotsAvailable: delivery.numSlotsAvailable || 0,
+              menuData: [], // Will be populated by the restaurant scraper if needed
+            },
+          ];
+
+          console.log('LanchDrap: Formatted availability data for detail page:', availabilityData);
+
+          // Use the same comprehensive stats display as day overview pages
+          await window.LanchDrapStatsDisplay.displaySelectedRestaurantStats(availabilityData);
+        } else {
+          console.log('LanchDrap: No delivery restaurant data found on detail page');
+          // Fallback to the original tracking info display
+          await window.LanchDrapStatsDisplay.displayRestaurantTrackingInfo();
+        }
+      } catch (error) {
+        console.log('LanchDrap: Error processing delivery detail page:', error);
+        // Fallback to the original tracking info display
+        await window.LanchDrapStatsDisplay.displayRestaurantTrackingInfo();
+      }
     }
 
     // Check for order confirmation and store order history

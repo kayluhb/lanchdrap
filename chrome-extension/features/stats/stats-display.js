@@ -197,11 +197,11 @@ window.LanchDrapStatsDisplay = (() => {
 
       // Last resort: insert at top of main content if available
       const main = document.querySelector('main');
-      if (main && main.firstChild) return { node: main.firstChild, mode: 'before' };
+      if (main?.firstChild) return { node: main.firstChild, mode: 'before' };
 
       // Absolute fallback: after #app container start
       const app = document.getElementById('app');
-      if (app && app.firstChild) return { node: app.firstChild, mode: 'before' };
+      if (app?.firstChild) return { node: app.firstChild, mode: 'before' };
     } catch (_e) {}
     return null;
   }
@@ -210,18 +210,11 @@ window.LanchDrapStatsDisplay = (() => {
   function clearRestaurantStats() {
     const existingStats = document.getElementById('lanchdrap-restaurant-stats');
     const existingSkeleton = document.getElementById('lanchdrap-restaurant-stats-skeleton');
-    console.log('LanchDrap: clearRestaurantStats called.');
-    console.log('LanchDrap: Found existing stats element:', existingStats);
-    console.log('LanchDrap: Found existing skeleton element:', existingSkeleton);
     if (existingStats) {
       existingStats.remove();
-      console.log('LanchDrap: Cleared existing restaurant stats (ID: lanchdrap-restaurant-stats)');
     }
     if (existingSkeleton) {
       existingSkeleton.remove();
-      console.log(
-        'LanchDrap: Cleared existing skeleton loading state (ID: lanchdrap-restaurant-stats-skeleton)'
-      );
     }
   }
 
@@ -239,8 +232,10 @@ window.LanchDrapStatsDisplay = (() => {
     }
 
     const anchor = findInsertionAnchor();
+
     if (anchor) {
       const skeleton = createSkeletonComponent();
+
       if (anchor.mode === 'after' && anchor.node.parentNode) {
         anchor.node.parentNode.insertBefore(skeleton, anchor.node.nextSibling);
       } else if (anchor.mode === 'before' && anchor.node.parentNode) {
@@ -253,11 +248,22 @@ window.LanchDrapStatsDisplay = (() => {
   function hideSkeletonLoading() {
     const skeleton = document.getElementById('lanchdrap-restaurant-stats-skeleton');
     if (skeleton) {
-      console.log('LanchDrap: Stats display - hideSkeletonLoading called, removing skeleton');
       skeleton.remove();
-      console.log('LanchDrap: Stats display - skeleton removed successfully');
-    } else {
-      console.log('LanchDrap: Stats display - hideSkeletonLoading called but no skeleton found');
+    }
+  }
+
+  // Helper function to format dates
+  function formatDateString(dateString) {
+    if (!dateString) return 'Never';
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+      });
+    } catch {
+      return 'Invalid Date';
     }
   }
 
@@ -554,7 +560,7 @@ window.LanchDrapStatsDisplay = (() => {
               border-radius: 6px;
               border: 1px solid rgba(0, 0, 0, 0.05);
               border: 1px solid rgba(0, 0, 0, 0.05);
-              ">${stats.lastAppearance ? window.LanchDrapDOMUtils.formatDateString(stats.lastAppearance) : 'Never'}</span>
+              ">${formatDateString(stats.lastAppearance)}</span>
             </div>
           </div>
           
@@ -741,7 +747,7 @@ window.LanchDrapStatsDisplay = (() => {
               border-radius: 6px;
               border: 1px solid rgba(0, 0, 0, 0.05);
               border: 1px solid rgba(0, 0, 0, 0.05);
-                ">${stats.userOrderHistory.lastOrderDate ? window.LanchDrapDOMUtils.formatDateString(stats.userOrderHistory.lastOrderDate) : 'Never'}</span>
+                ">${formatDateString(stats.userOrderHistory.lastOrderDate)}</span>
               </div>
             </div>
             ${
@@ -857,96 +863,37 @@ window.LanchDrapStatsDisplay = (() => {
   }
 
   // Function to display stats for selected restaurant on daily pages
-  async function displaySelectedRestaurantStats(availabilityData) {
+  async function displaySelectedRestaurantStats(selectedRestaurant) {
     try {
-      console.log(
-        'LanchDrap: displaySelectedRestaurantStats called with availabilityData:',
-        availabilityData
-      );
-
-      if (typeof LanchDrapApiClient === 'undefined' || typeof LanchDrapConfig === 'undefined') {
-        console.log('LanchDrap: Stats display - API client or config not available');
+      if (
+        typeof window.LanchDrapApiClient === 'undefined' ||
+        typeof window.LanchDrapConfig === 'undefined'
+      ) {
+        console.error('LanchDrap: Stats display - API client or config not available');
         return;
       }
 
-      // Validate that the availability data matches the current URL date
-      if (availabilityData && availabilityData.length > 0) {
-        const currentUrlDate = window.LanchDrapJsonDataLoader?.extractDateFromUrl();
-        const dataUrlDate = availabilityData[0]?.urlDate;
-
-        if (currentUrlDate && dataUrlDate && currentUrlDate !== dataUrlDate) {
-          console.log(
-            'LanchDrap: Stats display - date mismatch, currentUrlDate:',
-            currentUrlDate,
-            'dataUrlDate:',
-            dataUrlDate
-          );
-          return;
-        }
-      }
-
-      // Find the selected restaurant first
-      let selectedRestaurant = availabilityData.find((restaurant) => restaurant.isSelected);
-
-      // If no selected restaurant found and NOT on grid, try using restaurant context ID (detail pages)
-      if (!selectedRestaurant) {
-        const onGrid =
-          typeof window.LanchDrapDOMUtils?.isDayOverviewPage === 'function' &&
-          window.LanchDrapDOMUtils.isDayOverviewPage();
-        if (!onGrid) {
-          const restaurantContext =
-            await window.LanchDrapRestaurantContext.getCurrentRestaurantContext();
-          if (restaurantContext.id) {
-            selectedRestaurant = availabilityData.find(
-              (restaurant) => restaurant.id === restaurantContext.id
-            );
-          }
-        }
-      }
+      // Handle single restaurant object
 
       if (!selectedRestaurant) {
-        console.log(
-          'LanchDrap: Stats display - no selected restaurant found in availability data, returning'
-        );
         return;
       }
-
-      console.log(
-        'LanchDrap: Stats display - selected restaurant found, proceeding with stats display'
-      );
 
       // Get restaurant name and logo
       const restaurantName = selectedRestaurant.name || selectedRestaurant.id;
       const restaurantLogo = selectedRestaurant.logo;
 
-      console.log('LanchDrap: Stats display - got restaurant name and logo:', {
-        restaurantName,
-        restaurantLogo,
-      });
-
-      // Don't hide skeleton yet; we'll replace it seamlessly when stats are ready
+      // Show skeleton loading state
+      showSkeletonLoading();
 
       // Check if stats are already displayed for this restaurant
       const existingStats = document.getElementById('lanchdrap-restaurant-stats');
-      console.log('LanchDrap: Stats display - checking for existing stats:', existingStats);
       if (existingStats) {
         // Check if it's for the same restaurant
         const existingRestaurantId = existingStats.dataset.restaurantId;
-        console.log(
-          'LanchDrap: Stats display - existing restaurant ID:',
-          existingRestaurantId,
-          'current restaurant ID:',
-          selectedRestaurant.id
-        );
         if (existingRestaurantId === selectedRestaurant.id) {
-          console.log(
-            'LanchDrap: Stats display - already showing stats for this restaurant, returning'
-          );
           return; // Already showing stats for this restaurant
         } else {
-          console.log(
-            'LanchDrap: Stats display - removing existing stats for different restaurant'
-          );
           // Remove existing stats for different restaurant
           existingStats.remove();
         }
@@ -1008,7 +955,7 @@ window.LanchDrapStatsDisplay = (() => {
           console.log('LanchDrap: Stats display - stats object keys:', Object.keys(stats));
         }
 
-        if (!stats) {
+        if (!stats || (typeof stats === 'object' && Object.keys(stats).length === 0)) {
           console.log('LanchDrap: Stats display - no stats returned from API, using fallback');
           // Use fallback stats if API fails
           const fallbackStats = {

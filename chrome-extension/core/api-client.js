@@ -85,11 +85,11 @@ class ApiClient {
     return this.request(endpoint);
   }
 
-  // Track restaurant appearances from daily pages
-  async trackRestaurantAppearances(appearanceData, signal = null) {
+  // Track both restaurants and orders from daily pages
+  async trackRestaurantAppearances(trackingData, signal = null) {
     return this.request(this.getEndpoint('RESTAURANTS_APPEARANCES_TRACK'), {
       method: 'POST',
-      body: JSON.stringify(appearanceData),
+      body: JSON.stringify(trackingData),
       signal: signal,
     });
   }
@@ -110,17 +110,9 @@ class ApiClient {
     });
   }
 
-  // Store user order
-  async storeUserOrder(userId, restaurantId, orderData) {
-    return this.request(this.getEndpoint('ORDERS'), {
-      method: 'POST',
-      body: JSON.stringify({ userId, restaurantId, orderData }),
-    });
-  }
-
   // Update user order
   async updateUserOrder(userId, restaurantId, orderDate, items) {
-    const endpoint = `${this.getEndpoint('ORDERS')}/${orderDate}`;
+    const endpoint = `/api/orders/${orderDate}`;
     return this.request(endpoint, {
       method: 'PUT',
       body: JSON.stringify({ userId, restaurantId, items }),

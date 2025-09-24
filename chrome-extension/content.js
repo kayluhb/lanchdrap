@@ -4,6 +4,11 @@
 // Global state
 let isInitialized = false;
 let lastUrl = window.location.href;
+let lastRestaurantId = null;
+
+// Prevent infinite loops in stats display
+let isProcessingStats = false;
+let isProcessingTracking = false;
 
 // Initialize the extension
 async function initializeExtension() {
@@ -15,6 +20,9 @@ async function initializeExtension() {
       // Initialize the data layer
       await window.LanchDrapDataLayer.initialize();
       console.log('LanchDrap: Data layer initialized');
+
+      // Set up data layer event listeners
+      setupDataLayerListeners();
     } else {
       console.warn('LanchDrap: Data layer not available');
     }
@@ -23,6 +31,129 @@ async function initializeExtension() {
   }
 
   isInitialized = true;
+}
+
+// Set up data layer event listeners
+function setupDataLayerListeners() {
+  if (!window.LanchDrapDataLayer) {
+    console.warn('LanchDrap: Data layer not available for event listeners');
+    return;
+  }
+
+  // Listen for data changes from the data layer
+  window.LanchDrapDataLayer.on('dataChanged', async (eventData) => {
+    try {
+      console.log('LanchDrap: Data changed event received:', eventData);
+
+      // Check if we have restaurant data and if the restaurant has changed
+      if (eventData.data?.currentRestaurant) {
+        const currentRestaurantId = eventData.data.currentRestaurant.id;
+
+        // Only trigger stats display if restaurant actually changed
+        if (currentRestaurantId !== lastRestaurantId) {
+          console.log(
+            'LanchDrap: Restaurant changed from',
+            lastRestaurantId,
+            'to',
+            currentRestaurantId
+          );
+          lastRestaurantId = currentRestaurantId;
+
+          // Trigger stats display for the new restaurant
+          await displayRestaurantStats(eventData.data);
+        } else {
+          console.log('LanchDrap: Restaurant unchanged, skipping stats display');
+        }
+      }
+
+      // Track restaurant appearances when on day pages
+      const isDayPage = window.LanchDrapDataLayer?.getIsDayPage?.();
+      console.log(
+        'LanchDrap: isDayPage:',
+        isDayPage,
+        'hasDeliveries:',
+        !!eventData.data?.deliveries
+      );
+      if (isDayPage && eventData.data?.deliveries) {
+        console.log('LanchDrap: Calling trackRestaurantAppearances');
+        await trackRestaurantAppearances(eventData.data);
+      }
+    } catch (error) {
+      console.error('LanchDrap: Error handling data changed event:', error);
+    }
+  });
+}
+
+// Display restaurant stats when restaurant changes
+async function displayRestaurantStats(data) {
+  try {
+    // Prevent infinite loops
+    if (isProcessingStats) {
+      console.log('LanchDrap: Already processing stats, skipping to prevent infinite loop');
+      return;
+    }
+
+    if (!window.LanchDrapStatsDisplay) {
+      console.warn('LanchDrap: Stats display not available');
+      return;
+    }
+
+    const { currentRestaurant } = data;
+
+    if (!currentRestaurant) {
+      console.log('LanchDrap: No current restaurant to display stats for');
+      return;
+    }
+
+    // Check if stats are already displayed for this restaurant
+    const existingStats = document.getElementById('lanchdrap-restaurant-stats');
+    if (existingStats && existingStats.dataset.restaurantId === currentRestaurant.id) {
+      console.log('LanchDrap: Stats already displayed for restaurant:', currentRestaurant.name);
+      return;
+    }
+
+    isProcessingStats = true;
+
+    console.log('LanchDrap: Displaying stats for restaurant:', currentRestaurant.name);
+    console.log('LanchDrap: Current restaurant data:', currentRestaurant);
+
+    // Call the stats display function with the current restaurant object
+    await window.LanchDrapStatsDisplay.displaySelectedRestaurantStats(currentRestaurant);
+  } catch (error) {
+    console.error('LanchDrap: Error displaying restaurant stats:', error);
+  } finally {
+    isProcessingStats = false;
+  }
+}
+
+// Track restaurant appearances when on day pages
+async function trackRestaurantAppearances(data) {
+  try {
+    // Prevent infinite loops
+    if (isProcessingTracking) {
+      console.log('LanchDrap: Already processing tracking, skipping to prevent infinite loop');
+      return;
+    }
+
+    console.log('LanchDrap: trackRestaurantAppearances called with data:', data);
+
+    if (!window.LanchDrapRestaurantScraper) {
+      console.error('LanchDrap: Restaurant scraper not available');
+      return;
+    }
+
+    isProcessingTracking = true;
+
+    // Get current date from data layer
+    const currentDate = window.LanchDrapDataLayer?.getCurrentDate?.();
+
+    // Call the updated tracking function with the full data object and date
+    await window.LanchDrapRestaurantScraper.trackRestaurantAppearances(data, currentDate);
+  } catch (error) {
+    console.error('LanchDrap: Error tracking restaurant appearances:', error);
+  } finally {
+    isProcessingTracking = false;
+  }
 }
 
 // Main function to handle page changes
@@ -41,6 +172,25 @@ async function handlePageChange() {
     // (data layer handles initial load automatically)
     if (urlChanged && window.LanchDrapDataLayer?.handlePageChange) {
       await window.LanchDrapDataLayer.handlePageChange();
+    } else if (!urlChanged && window.LanchDrapDataLayer?.getData) {
+      // Handle initial load case - trigger stats display if we have data
+      const data = window.LanchDrapDataLayer.getData();
+      if (data?.currentRestaurant) {
+        await displayRestaurantStats(data);
+      }
+
+      // Track restaurant appearances on initial load if on day page
+      const isDayPage = window.LanchDrapDataLayer?.getIsDayPage?.();
+      console.log(
+        'LanchDrap: Initial load - isDayPage:',
+        isDayPage,
+        'hasDeliveries:',
+        !!data?.deliveries
+      );
+      if (isDayPage && data?.deliveries) {
+        console.log('LanchDrap: Initial load - calling trackRestaurantAppearances');
+        await trackRestaurantAppearances(data);
+      }
     }
   } catch (error) {
     console.error('🚀 LanchDrap: Error in handlePageChange:', error);

@@ -6,16 +6,19 @@ window.LanchDrapRestaurantScraper = (() => {
   // Use data layer instead of local state
   // restaurantAvailabilityData is now managed by the data layer
 
-  // Function to track restaurant appearances on daily pages
-  async function trackRestaurantAppearances(availabilityData) {
+  // Function to track both restaurants and orders on daily pages
+  async function trackRestaurantAppearances(data, date) {
     // Hoist variables used in catch/finally to avoid ReferenceError
-    let currentUrl = null;
-    let urlDate = null;
     try {
-      console.log('LanchDrap: trackRestaurantAppearances called with data:', availabilityData);
+      console.log(
+        'LanchDrap: trackRestaurantAppearances in scraper called with data:',
+        data,
+        'date:',
+        date
+      );
 
       if (typeof LanchDrapApiClient === 'undefined' || typeof LanchDrapConfig === 'undefined') {
-        console.log('LanchDrap: API client or config not available');
+        console.error('LanchDrap: API client or config not available');
         return;
       }
 
@@ -25,16 +28,18 @@ window.LanchDrapRestaurantScraper = (() => {
       }
       window.lanchDrapTrackingAbortController = new AbortController();
 
-      // Store current URL to validate against when response comes back
-      currentUrl = window.location.href;
-
-      urlDate = window.LanchDrapDOMUtils.extractDateFromUrl();
-      if (!urlDate) {
+      if (!date) {
+        console.error('LanchDrap: No date available for tracking');
         return;
       }
 
-      // Don't send empty restaurant arrays to the API
-      if (!availabilityData || availabilityData.length === 0) {
+      // Extract restaurants and orders from data
+      const restaurants = data?.restaurants || [];
+      const orders = data?.delivery?.orders || [];
+
+      // Don't send empty data to the API
+      if ((!restaurants || restaurants.length === 0) && (!orders || orders.length === 0)) {
+        console.log('LanchDrap: No restaurants or orders found in data');
         return;
       }
 
@@ -43,39 +48,32 @@ window.LanchDrapRestaurantScraper = (() => {
         LanchDrapConfig.CONFIG.API_BASE_URL,
         LanchDrapConfig.CONFIG.ENDPOINTS
       );
-      const timeSlot = availabilityData[0]?.timeSlot?.full || 'unknown';
 
       const trackingData = {
-        restaurants: availabilityData.map((restaurant) => ({
+        date: date,
+      };
+
+      // Add restaurants if available
+      if (restaurants && restaurants.length > 0) {
+        trackingData.restaurants = restaurants.map((restaurant) => ({
           id: restaurant.id,
           name: restaurant.name,
           status: restaurant.status,
-          href: restaurant.href,
           color: restaurant.color,
           logo: restaurant.logo,
-          isSelected: restaurant.isSelected,
           menu: restaurant.menu || [],
-        })),
-        date: urlDate,
-        timeSlot: timeSlot,
-      };
+        }));
+      }
 
-      console.log('LanchDrap: Sending tracking data to API:', trackingData);
-      console.log(
-        'LanchDrap: Menu data being sent:',
-        trackingData.restaurants.map((r) => ({
-          id: r.id,
-          name: r.name,
-          menuItems: r.menu?.length || 0,
-        }))
-      );
+      // Add orders if available
+      if (orders && orders.length > 0) {
+        trackingData.orders = orders;
+      }
 
       const result = await apiClient.trackRestaurantAppearances(
         trackingData,
         window.lanchDrapTrackingAbortController.signal
       );
-
-      console.log('LanchDrap: Tracking API response:', result);
 
       // Removed: order history storage from tracking to avoid duplicate order API calls.
 
@@ -84,35 +82,9 @@ window.LanchDrapRestaurantScraper = (() => {
         return null;
       }
 
-      // Validate that we're still on the same page and date
-      if (window.location.href !== currentUrl) {
-        return null;
-      }
-
-      // Double-check that the date in the current URL still matches what we're tracking
-      const currentUrlDate = window.LanchDrapDOMUtils.extractDateFromUrl();
-      if (currentUrlDate !== urlDate) {
-        return null;
-      }
-
-      // Log the result for debugging
-      if (result?.success) {
-      }
-
       return result; // Return the result so it can be used in the main flow
     } catch (_error) {
       if (_error.name === 'AbortError') {
-        return null;
-      }
-
-      // Also check if URL changed during the request
-      if (currentUrl && window.location.href !== currentUrl) {
-        return null;
-      }
-
-      // Also check if the date in the URL changed during the request
-      const currentUrlDate = window.LanchDrapDOMUtils.extractDateFromUrl();
-      if (urlDate && currentUrlDate !== urlDate) {
         return null;
       }
     } finally {

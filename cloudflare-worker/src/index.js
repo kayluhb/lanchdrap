@@ -9,7 +9,6 @@ import {
   getRestaurantById,
   getRestaurantStatsWithUserHistory,
   getUserRestaurantSummary,
-  storeUserOrder,
   trackAppearances,
   updateAppearances,
   updateUserOrder,
@@ -18,12 +17,11 @@ import { createCorsResponse } from './utils/response.js';
 
 // Route configuration - Tracking, admin, and order endpoints enabled
 const routes = {
-  // Tracking endpoint enabled
+  // Combined tracking endpoint for both restaurants and orders
   'POST /api/restaurants/appearances/track': trackAppearances,
 
   // Order endpoints enabled
   'GET /api/orders/summary': getUserRestaurantSummary,
-  'POST /api/orders': storeUserOrder,
 
   // Restaurant stats endpoints enabled
   'GET /api/restaurants/stats': getRestaurantStatsWithUserHistory,

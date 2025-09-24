@@ -124,30 +124,55 @@ window.LanchDrapDataLayer = (() => {
     }
   }
 
+  function combineDeliveryAndRestaurant(delivery) {
+    // Determine if restaurant is sold out based on slots AND time
+    const isSoldOut = delivery.numSlotsAvailable === 0 && isBeforeNoonOnDeliveryDay();
+
+    return {
+      ...delivery.restaurant,
+      numSlotsAvailable: delivery.numSlotsAvailable,
+      menu: extractMenuFromDelivery(delivery),
+      status: isSoldOut ? 'soldout' : 'available',
+    };
+  }
+
+  // Helper function to check if current time is before 12PM on the delivery day
+  function isBeforeNoonOnDeliveryDay() {
+    const currentDate = dataLayerState.currentDate;
+    if (!currentDate) {
+      return false; // If no date available, don't consider it sold out
+    }
+
+    const now = new Date();
+    const deliveryDate = new Date(currentDate);
+
+    // Set delivery date to 12:00 PM
+    deliveryDate.setHours(12, 0, 0, 0);
+
+    // Check if current time is before 12PM on the delivery day
+    return now < deliveryDate;
+  }
+
   function parseData({ data, deliveryId, isDayPage }) {
     const { delivery, lunchDay } = data;
     const { deliveries } = lunchDay;
-    let currentRestaurant = null;
+    let actualDelivery = null;
 
     console.log('LanchDrap Data Layer: Populating from data:', data);
 
     if (isDayPage) {
-      currentRestaurant = delivery
-        ? deliveries.find((deli) => deli.id === delivery?.id)?.restaurant
-        : deliveries[0]?.restaurant;
+      actualDelivery = delivery
+        ? deliveries.find((deli) => deli.id === delivery?.id)
+        : deliveries[0];
     } else {
-      currentRestaurant = deliveries.find((deli) => deli.id === deliveryId)?.restaurant;
+      actualDelivery = deliveries.find((deli) => deli.id === deliveryId);
     }
 
     return {
-      currentRestaurant,
+      currentRestaurant: combineDeliveryAndRestaurant(actualDelivery),
       delivery,
       deliveries,
-      restaurants: deliveries.map((deli) => ({
-        ...deli.restaurant,
-        status: deli.numSlotsAvailable === 0 ? 'soldout' : 'available',
-        menuData: extractMenuFromDelivery(deli),
-      })),
+      restaurants: deliveries.map((deli) => combineDeliveryAndRestaurant(deli)),
     };
   }
 
@@ -321,11 +346,11 @@ window.LanchDrapDataLayer = (() => {
       if (isDayPage || dataLayerState.currentDate !== date) {
         const apiData = await fetchData({ date });
         console.info('apiData', apiData);
-        const pageData = await parseData({ data: apiData.props, isDayPage, deliveryId });
+        const pageData = parseData({ data: apiData.props, isDayPage, deliveryId });
         dataLayerState.data = pageData;
       } else {
-        dataLayerState.data.currentRestaurant = currentRestaurant =
-          dataLayerState.data.deliveries.find((deli) => deli.id === deliveryId)?.restaurant;
+        const delivery = dataLayerState.data.deliveries.find((deli) => deli.id === deliveryId);
+        dataLayerState.data.currentRestaurant = combineDeliveryAndRestaurant(delivery);
       }
       // Load data from page on initial load
       dataLayerState.currentDate = date;
@@ -341,28 +366,30 @@ window.LanchDrapDataLayer = (() => {
     }
   }
 
-  // Wait for data layer to be ready
-  async function waitForReady(timeoutMs = 5000) {
-    const startTime = Date.now();
+  // Get current data
+  function getData() {
+    return dataLayerState.data;
+  }
 
-    while (!dataLayerState.isInitialized && Date.now() - startTime < timeoutMs) {
-      await new Promise((resolve) => setTimeout(resolve, 100));
-    }
+  // Get current date
+  function getCurrentDate() {
+    return dataLayerState.currentDate;
+  }
 
-    if (!dataLayerState.isInitialized) {
-      throw new Error('Data layer not ready within timeout');
-    }
-
-    return true;
+  // Get isDayPage flag
+  function getIsDayPage() {
+    return dataLayerState.isDayPage;
   }
 
   // Return public API
   return {
     emitEvent,
+    getCurrentDate,
+    getData,
+    getIsDayPage,
     handlePageChange,
     initialize,
     off,
     on,
-    waitForReady,
   };
 })();

@@ -70,17 +70,6 @@ function updateRestaurantTimestamp(restaurantData) {
   restaurantData.updatedAt = new Date().toISOString();
 }
 
-// Helper function to calculate sold out rate excluding today's date from sold out count
-function calculateSoldOutRate(appearances, soldOutDates) {
-  const totalAppearances = appearances.length;
-  const totalSoldOuts = soldOutDates.length;
-  return {
-    rate: totalAppearances > 0 ? (totalSoldOuts / totalAppearances).toFixed(3) : 0,
-    totalAppearances,
-    totalSoldOuts,
-  };
-}
-
 // Track restaurant appearances with proper KV structure
 async function trackRestaurantAppearances(env, restaurants, date) {
   const updatedRestaurants = [];
@@ -111,8 +100,6 @@ async function trackRestaurantAppearances(env, restaurants, date) {
         lastSeen: date,
         createdAt: new Date().toISOString(),
       };
-
-      // Name mapping no longer needed - we use restaurant IDs directly
     }
 
     // Ensure arrays exist if missing
@@ -133,7 +120,6 @@ async function trackRestaurantAppearances(env, restaurants, date) {
       if (date < finalRestaurantData.firstSeen) {
         finalRestaurantData.firstSeen = date;
       }
-    } else {
     }
 
     // Initialize soldOutDates array if it doesn't exist (for existing records)
@@ -153,8 +139,6 @@ async function trackRestaurantAppearances(env, restaurants, date) {
       dataChanged = true;
     }
 
-    // Menu data is now stored separately in restaurant_menu:<id> KV records
-
     // Track sold out status if restaurant is sold out
     if (restaurantInfo.status === 'soldout' && !finalRestaurantData.soldOutDates.includes(date)) {
       finalRestaurantData.soldOutDates.push(date);
@@ -171,8 +155,6 @@ async function trackRestaurantAppearances(env, restaurants, date) {
     ) {
       finalRestaurantData.name = restaurantName;
       dataChanged = true;
-
-      // Name mapping no longer needed - we use restaurant IDs directly
     } else if (restaurantName === restaurantId && finalRestaurantData.name === restaurantId) {
       // If both the incoming name and stored name are the ID, set stored name to null
       finalRestaurantData.name = null;
@@ -204,8 +186,6 @@ async function trackRestaurantAppearances(env, restaurants, date) {
     ) {
       menuChanged = await storeMenuData(env, restaurantId, restaurantInfo.menu);
     }
-
-    // Name mapping no longer needed - we use restaurant IDs directly
 
     // Only save to KV and invalidate cache if data actually changed
     if (dataChanged) {
@@ -243,21 +223,95 @@ async function trackRestaurantAppearances(env, restaurants, date) {
   };
 }
 
-// Track restaurant appearances
+// Helper function to calculate sold out rate excluding today's date from sold out count
+function calculateSoldOutRate(appearances, soldOutDates) {
+  const totalAppearances = appearances.length;
+  const totalSoldOuts = soldOutDates.length;
+  return {
+    rate: totalAppearances > 0 ? (totalSoldOuts / totalAppearances).toFixed(3) : 0,
+    totalAppearances,
+    totalSoldOuts,
+  };
+}
+
+// Track user orders
+async function trackUserOrders(env, orders, date) {
+  const processedOrders = [];
+
+  // Process each order
+  for (const order of orders) {
+    if (!order.id || !order.userId) {
+      console.warn('Skipping order without id or userId:', order);
+      continue;
+    }
+
+    try {
+      // Store the order data
+      const orderKey = `user_order:${order.userId}:${order.id}`;
+      const orderData = {
+        ...order,
+        trackedDate: date,
+        trackedAt: new Date().toISOString(),
+      };
+
+      await env.LANCHDRAP_RATINGS.put(orderKey, JSON.stringify(orderData));
+
+      // Also store in user's order history by date
+      const userHistoryKey = `user_restaurant_history:${order.userId}:${order.deliveryId || 'unknown'}`;
+      const existingHistory = await env.LANCHDRAP_RATINGS.get(userHistoryKey);
+
+      let historyData = {};
+      if (existingHistory) {
+        try {
+          historyData = JSON.parse(existingHistory);
+        } catch (e) {
+          console.warn('Failed to parse existing history data:', e);
+        }
+      }
+
+      // Add order to history by date
+      if (!historyData[date]) {
+        historyData[date] = { items: [] };
+      }
+
+      // Add order items to history
+      if (order.items && Array.isArray(order.items)) {
+        const orderItems = order.items.map((item) => ({
+          id: item.id,
+          itemId: item.itemId,
+          label: item.label,
+          description: item.description,
+          price: item.price,
+          quantity: item.quantity,
+          modifications: item.modifications,
+          specialRequest: item.specialRequest,
+        }));
+
+        historyData[date].items.push(...orderItems);
+      }
+
+      // Update the history
+      await env.LANCHDRAP_RATINGS.put(userHistoryKey, JSON.stringify(historyData));
+
+      processedOrders.push(order);
+    } catch (error) {
+      console.error('Error processing order:', order.id, error);
+    }
+  }
+
+  return {
+    processedOrders,
+  };
+}
+
+// Combined tracking for both restaurants and orders
 export async function trackAppearances(request, env) {
   try {
     const trackingData = await request.json();
-    const { restaurants, date } = trackingData;
+    const { restaurants, orders, date } = trackingData;
 
-    if (!restaurants || !Array.isArray(restaurants) || !date) {
-      return createErrorResponse(
-        'Invalid tracking data: restaurants array and date are required',
-        400
-      );
-    }
-
-    if (restaurants.length === 0) {
-      return createErrorResponse('Restaurants array cannot be empty', 400);
+    if (!date) {
+      return createErrorResponse('Date is required', 400);
     }
 
     const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
@@ -265,31 +319,65 @@ export async function trackAppearances(request, env) {
       return createErrorResponse('Date must be in YYYY-MM-DD format', 400);
     }
 
-    const result = await trackRestaurantAppearances(env, restaurants, date);
+    const results = {
+      restaurants: null,
+      orders: null,
+    };
 
-    return createApiResponse(
-      {
-        success: true,
-        message: `Tracked ${restaurants.length} restaurant appearances for ${date} (${result.restaurantsWithChanges} had changes, ${result.restaurantsWithMenuChanges} had menu changes)`,
-        data: {
-          date,
-          totalRestaurants: restaurants.length,
-          updatedRestaurants: result.totalRestaurants,
-          restaurantsWithChanges: result.restaurantsWithChanges,
-          restaurantsWithMenuChanges: result.restaurantsWithMenuChanges,
-          restaurants: result.updatedRestaurants.map((r) => ({
-            id: r.id,
-            name: r.name,
-            sellOutRate: r.sellOutRate,
-            dataChanged: r.dataChanged,
-            menuChanged: r.menuChanged,
-          })),
-        },
+    // Track restaurants if provided
+    if (restaurants && Array.isArray(restaurants) && restaurants.length > 0) {
+      results.restaurants = await trackRestaurantAppearances(env, restaurants, date);
+    }
+
+    // Track orders if provided
+    if (orders && Array.isArray(orders) && orders.length > 0) {
+      results.orders = await trackUserOrders(env, orders, date);
+    }
+
+    // If neither restaurants nor orders provided, return error
+    if (!results.restaurants && !results.orders) {
+      return createErrorResponse('Either restaurants array or orders array is required', 400);
+    }
+
+    const responseData = {
+      success: true,
+      message: `Tracked data for ${date}`,
+      data: {
+        date,
       },
-      200
-    );
+    };
+
+    if (results.restaurants) {
+      responseData.data.restaurants = {
+        totalRestaurants: results.restaurants.totalRestaurants,
+        restaurantsWithChanges: results.restaurants.restaurantsWithChanges,
+        restaurantsWithMenuChanges: results.restaurants.restaurantsWithMenuChanges,
+        restaurants: results.restaurants.updatedRestaurants.map((r) => ({
+          id: r.id,
+          name: r.name,
+          sellOutRate: r.sellOutRate,
+          dataChanged: r.dataChanged,
+          menuChanged: r.menuChanged,
+        })),
+      };
+    }
+
+    if (results.orders) {
+      responseData.data.orders = {
+        totalOrders: results.orders.processedOrders.length,
+        processedOrders: results.orders.processedOrders.map((order) => ({
+          id: order.id,
+          userId: order.userId,
+          deliveryId: order.deliveryId,
+          isPaid: order.isPaid,
+          itemsCount: order.items?.length || 0,
+        })),
+      };
+    }
+
+    return createApiResponse(responseData, 200);
   } catch (error) {
-    return createErrorResponse('Failed to track restaurant appearances', 500, {
+    return createErrorResponse('Failed to track data', 500, {
       error: error.message,
     });
   }
@@ -893,22 +981,6 @@ export async function submitAvailabilitySummary(request, _env) {
   }
 }
 
-// Helper function to update restaurant-level user tracking for recommendations
-async function updateRestaurantUserTracking(env, restaurantId, userId) {
-  try {
-    const restaurantUserKey = `restaurant_users:${restaurantId}:${userId}`;
-
-    // Check if this user-restaurant combination already exists
-    const existingData = await env.LANCHDRAP_RATINGS.get(restaurantUserKey);
-
-    if (!existingData) {
-      // Create new user-restaurant tracking record - just store the user ID
-      await env.LANCHDRAP_RATINGS.put(restaurantUserKey, userId);
-    }
-    // If it already exists, no need to update - it's just a relationship marker
-  } catch (_error) {}
-}
-
 // Update user order for specific date
 export async function updateUserOrder(request, env) {
   try {
@@ -972,136 +1044,6 @@ export async function updateUserOrder(request, env) {
     );
   } catch (error) {
     return createErrorResponse('Failed to update order', 500, { error: error.message });
-  }
-}
-
-// Store user order history
-export async function storeUserOrder(request, env) {
-  try {
-    const { userId, restaurantId, orderData } = await request.json();
-
-    if (!userId || !restaurantId || !orderData) {
-      return createErrorResponse('Missing required fields: userId, restaurantId, orderData', 400);
-    }
-
-    // Create individual user-restaurant history record key
-    const userRestaurantKey = `user_restaurant_history:${userId}:${restaurantId}`;
-    const existingHistoryData = await env.LANCHDRAP_RATINGS.get(userRestaurantKey);
-
-    let historyData = {};
-    if (existingHistoryData) {
-      const parsedData = JSON.parse(existingHistoryData);
-
-      // Handle migration from old structure to new structure
-      if (parsedData.orders && Array.isArray(parsedData.orders)) {
-        // Convert old array-based structure to new date-keyed structure
-        historyData = {};
-        for (const order of parsedData.orders) {
-          historyData[order.date] = {
-            items: order.items || [],
-          };
-        }
-      } else if (
-        parsedData.orders &&
-        typeof parsedData.orders === 'object' &&
-        !Array.isArray(parsedData.orders)
-      ) {
-        // Handle malformed data where orders is an object but should be the root structure
-        // This happens when old and new formats get mixed up
-        historyData = parsedData.orders;
-      } else {
-        // Already in new structure (date-keyed at root level)
-        historyData = parsedData;
-      }
-    }
-
-    // Add new order to the history
-    const orderDate = orderData.date || new Date().toISOString().split('T')[0];
-    const newOrderItems = orderData.items || [];
-
-    // Check for duplicate orders (same date and same items)
-    let isDuplicate = false;
-    if (historyData[orderDate]) {
-      const existingItems = historyData[orderDate].items || [];
-
-      // Compare items arrays
-      if (existingItems.length === newOrderItems.length) {
-        isDuplicate = existingItems.every((existingItem, index) => {
-          const newItem = newOrderItems[index];
-          return (
-            existingItem.name === newItem.name &&
-            existingItem.quantity === newItem.quantity &&
-            existingItem.fullDescription === newItem.fullDescription
-          );
-        });
-      }
-    }
-
-    // Only add if it's not a duplicate
-    let orderAdded = false;
-    let dataChanged = false;
-
-    if (!isDuplicate) {
-      // Check if the data is actually different from what's already stored
-      const existingOrderData = historyData[orderDate];
-      const newOrderData = {
-        items: newOrderItems,
-      };
-
-      // Compare the new order data with existing data
-      const isDataDifferent =
-        !existingOrderData ||
-        JSON.stringify(existingOrderData.items) !== JSON.stringify(newOrderData.items);
-
-      if (isDataDifferent) {
-        historyData[orderDate] = newOrderData;
-        orderAdded = true;
-        dataChanged = true;
-      }
-    }
-
-    // Keep only last 50 order dates to prevent unlimited growth
-    const orderDates = Object.keys(historyData).sort();
-    if (orderDates.length > 50) {
-      const datesToRemove = orderDates.slice(0, orderDates.length - 50);
-      for (const date of datesToRemove) {
-        delete historyData[date];
-        dataChanged = true;
-      }
-    }
-
-    // Only save to KV if data actually changed
-    if (dataChanged) {
-      await env.LANCHDRAP_RATINGS.put(userRestaurantKey, JSON.stringify(historyData));
-
-      // Invalidate user history cache
-      await invalidateUserHistoryCache(userId, restaurantId);
-
-      // Also update restaurant-level tracking for recommendations
-      if (orderAdded) {
-        await updateRestaurantUserTracking(env, restaurantId, userId);
-      }
-    }
-
-    return createApiResponse({
-      success: true,
-      message: orderAdded
-        ? 'Order stored successfully'
-        : isDuplicate
-          ? 'Order already exists (duplicate prevented)'
-          : 'Order data unchanged (no KV write)',
-      data: {
-        userId,
-        restaurantId,
-        orderDate,
-        totalOrders: Object.keys(historyData).length,
-        orderAdded,
-        isDuplicate,
-        dataChanged,
-      },
-    });
-  } catch (_error) {
-    return createErrorResponse('Failed to store order', 500);
   }
 }
 

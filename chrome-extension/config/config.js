@@ -12,6 +12,7 @@ const CONFIG = {
     CLEAR_RESTAURANT_NAMES: '/api/admin/clear-restaurant-names',
 
     // Order endpoints enabled for order history functionality
+    ORDERS: '/api/orders',
     ORDERS_SUMMARY: '/api/orders/summary',
 
     // Restaurant stats endpoints enabled

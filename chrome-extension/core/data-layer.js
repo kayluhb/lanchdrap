@@ -160,22 +160,15 @@ window.LanchDrapDataLayer = (() => {
     }
 
     return items.map((item) => ({
-      id: item.id || item.itemId || `item_${Math.random().toString(36).substr(2, 9)}`,
-      orderId: item.orderId,
       itemId: item.itemId,
       quantity: item.quantity || 1,
-      label: item.label,
-      name: item.label || item.name || 'Unknown Item', // Normalize: ensure name field exists
+      name: item.label || item.name || 'Unknown Item', // Use label as primary name source
       description: item.description || '',
-      fullDescription: item.description || item.label || item.name || 'Unknown Item', // For fallback display
-      options: item.description || '', // Use description as options for display
+      fullDescription: item.label || item.name || 'Unknown Item', // Use label for full description
+      options: '', // Empty options field as requested
       price: item.price || 0,
       specialRequest: item.specialRequest,
-      specialRequestRequired: item.specialRequestRequired,
-      labelFor: item.labelFor,
-      guestToken: item.guestToken,
-      paymentMethod: item.paymentMethod,
-      // Explicitly exclude modifications field
+      // Explicitly exclude: id, orderId, modifications, specialRequestRequired, labelFor, guestToken, paymentMethod
     }));
   }
 
@@ -188,7 +181,7 @@ window.LanchDrapDataLayer = (() => {
     return {
       ...delivery,
       order: {
-        ...delivery.order,
+        id: delivery.order.id || delivery.id, // Include order ID
         items: normalizeOrderItems(delivery.order.items || []),
       },
     };

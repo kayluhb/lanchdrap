@@ -1,5 +1,56 @@
 // Background service worker for LanchDrap Rating Extension
 
+// Import API client and config for tracking
+let LanchDrapApiClient, LanchDrapConfig;
+
+// Load API client and config dynamically
+async function loadDependencies() {
+  try {
+    // Get the config from storage or use default
+    const result = await chrome.storage.local.get(['lanchdrapConfig']);
+    if (result.lanchdrapConfig) {
+      LanchDrapConfig = result.lanchdrapConfig;
+    } else {
+      // Fallback config
+      LanchDrapConfig = {
+        CONFIG: {
+          API_BASE_URL: 'https://lunchdrop-ratings.caleb-brown.workers.dev',
+          ENDPOINTS: {
+            RESTAURANTS_APPEARANCES_TRACK: '/api/restaurants/appearances/track',
+          },
+        },
+      };
+    }
+
+    // Create a simple API client for the service worker
+    LanchDrapApiClient = {
+      async trackRestaurantAppearances(trackingData) {
+        const response = await fetch(
+          `${LanchDrapConfig.CONFIG.API_BASE_URL}${LanchDrapConfig.CONFIG.ENDPOINTS.RESTAURANTS_APPEARANCES_TRACK}`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(trackingData),
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error(`API request failed: ${response.status}`);
+        }
+
+        return await response.json();
+      },
+    };
+  } catch (error) {
+    console.error('LanchDrap: Failed to load dependencies in service worker:', error);
+  }
+}
+
+// Initialize dependencies on startup
+loadDependencies();
+
 // Handle extension installation
 chrome.runtime.onInstalled.addListener((details) => {
   if (details.reason === 'install') {
@@ -13,8 +64,56 @@ chrome.runtime.onInstalled.addListener((details) => {
 // Handle extension icon click
 chrome.action.onClicked.addListener((_tab) => {});
 
+// Background tracking function
+async function trackRestaurantAppearancesInBackground(trackingData, date) {
+  try {
+    if (!LanchDrapApiClient || !LanchDrapConfig) {
+      await loadDependencies();
+    }
+
+    if (!LanchDrapApiClient) {
+      console.error('LanchDrap: API client not available in service worker');
+      return { success: false, error: 'API client not available' };
+    }
+
+    if (!date) {
+      console.error('LanchDrap: No date available for tracking');
+      return { success: false, error: 'No date provided' };
+    }
+
+    // Extract restaurants and orders from data
+    const restaurants = trackingData?.restaurants || [];
+    const orders = trackingData?.delivery?.orders || [];
+
+    // Don't send empty data to the API
+    if ((!restaurants || restaurants.length === 0) && (!orders || orders.length === 0)) {
+      return { success: true, message: 'No data to track' };
+    }
+
+    const dataToSend = {
+      date: date,
+    };
+
+    // Add restaurants if available
+    if (restaurants && restaurants.length > 0) {
+      dataToSend.restaurants = restaurants;
+    }
+
+    // Add orders if available
+    if (orders && orders.length > 0) {
+      dataToSend.orders = orders;
+    }
+
+    const result = await LanchDrapApiClient.trackRestaurantAppearances(dataToSend);
+    return { success: true, result };
+  } catch (error) {
+    console.error('LanchDrap: Error in background tracking:', error);
+    return { success: false, error: error.message };
+  }
+}
+
 // Listen for messages from content scripts or popup
-chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === 'getTabInfo') {
     // Get information about the current tab
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
@@ -35,46 +134,32 @@ chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
       url: chrome.runtime.getURL('popup.html'),
     });
   }
+
+  if (request.action === 'trackRestaurantAppearances') {
+    console.log('LanchDrap: Background received tracking request:', {
+      data: request.data,
+      date: request.date,
+    });
+    // Handle tracking in background
+    trackRestaurantAppearancesInBackground(request.data, request.date)
+      .then((result) => {
+        console.log('LanchDrap: Background tracking completed:', result);
+        sendResponse(result);
+      })
+      .catch((error) => {
+        console.error('LanchDrap: Background tracking error:', error);
+        sendResponse({ success: false, error: error.message });
+      });
+    return true; // Keep message channel open for async response
+  }
 });
 
 // Handle storage changes
 chrome.storage.onChanged.addListener((changes, namespace) => {
   if (namespace === 'local' && changes.ratingHistory) {
-    // You could sync with server here if needed
-    // syncRatingsToServer();
+    // Rating history changed - no server sync needed
   }
 });
-
-// Optional: Sync ratings to server periodically
-function syncRatingsToServer() {
-  chrome.storage.local.get(['ratingHistory', 'lastSync'], (result) => {
-    const { ratingHistory, lastSync } = result;
-    const now = Date.now();
-
-    // Only sync if we haven't synced in the last hour
-    if (!lastSync || now - lastSync > 3600000) {
-      if (ratingHistory && ratingHistory.length > 0) {
-        // Send ratings to server
-        fetch(LunchDropConfig.getApiUrl(LunchDropConfig.CONFIG.ENDPOINTS.SYNC), {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ ratings: ratingHistory }),
-        })
-          .then((response) => {
-            if (response.ok) {
-              chrome.storage.local.set({ lastSync: now });
-            }
-          })
-          .catch((_error) => {});
-      }
-    }
-  });
-}
-
-// Set up periodic sync (every 6 hours)
-setInterval(syncRatingsToServer, 21600000);
 
 // Handle context menu (optional)
 chrome.runtime.onInstalled.addListener(() => {

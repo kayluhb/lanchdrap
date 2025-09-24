@@ -49,122 +49,28 @@ window.LanchDrapStatsDisplay = (() => {
     return `${name}'s`;
   }
 
-  // Local Konami/visibility logic removed in favor of centralized KeyManager
-
   // Function to create skeleton loading component
   function createSkeletonComponent() {
     const skeletonHTML = `
-      <div id="lanchdrap-restaurant-stats-skeleton" class="ld-tracking-container" style="
-        background: linear-gradient(135deg, #f0f0f0 0%, #e0e0e0 100%);
-        border: 1px solid rgba(0, 0, 0, 0.1);
-        border-radius: 16px;
-        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.08);
-        margin: 16px 0;
-        overflow: hidden;
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-        backdrop-filter: blur(10px);
-        position: relative;
-        animation: skeleton-pulse 1.5s ease-in-out infinite alternate;
-      ">
-        <div class="ld-tracking-header" style="
-          background: rgba(255, 255, 255, 0.1);
-          padding: 16px 20px;
-          border-bottom: 1px solid rgba(0, 0, 0, 0.1);
-          backdrop-filter: blur(5px);
-        ">
-          <div style="
-            background: #d0d0d0;
-            height: 24px;
-            width: 200px;
-            border-radius: 12px;
-            animation: skeleton-pulse 1.5s ease-in-out infinite alternate;
-          "></div>
+      <div id="lanchdrap-restaurant-stats-skeleton" class="ld-tracking-container">
+        <div class="ld-tracking-header ld-skeleton-header">
+          <div class="ld-skeleton-bar" style="height:24px; width:200px; border-radius:12px;"></div>
         </div>
-        <div class="ld-tracking-stats" style="padding: 20px;">
-          <!-- Skeleton stat items -->
-          <div style="
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 12px 16px;
-            margin: 8px 0;
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 12px;
-            border: 1px solid rgba(0, 0, 0, 0.05);
-          ">
-            <div style="
-              background: #d0d0d0;
-              height: 16px;
-              width: 120px;
-              border-radius: 8px;
-              animation: skeleton-pulse 1.5s ease-in-out infinite alternate;
-            "></div>
-            <div style="
-              background: #d0d0d0;
-              height: 16px;
-              width: 60px;
-              border-radius: 8px;
-              animation: skeleton-pulse 1.5s ease-in-out infinite alternate;
-            "></div>
+        <div class="ld-tracking-stats">
+          <div class="ld-skeleton-row">
+            <div class="ld-skeleton-bar" style="width:120px;"></div>
+            <div class="ld-skeleton-bar" style="width:60px;"></div>
           </div>
-          <div style="
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 12px 16px;
-            margin: 8px 0;
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 12px;
-            border: 1px solid rgba(0, 0, 0, 0.05);
-          ">
-            <div style="
-              background: #d0d0d0;
-              height: 16px;
-              width: 100px;
-              border-radius: 8px;
-              animation: skeleton-pulse 1.5s ease-in-out infinite alternate;
-            "></div>
-            <div style="
-              background: #d0d0d0;
-              height: 16px;
-              width: 80px;
-              border-radius: 8px;
-              animation: skeleton-pulse 1.5s ease-in-out infinite alternate;
-            "></div>
+          <div class="ld-skeleton-row">
+            <div class="ld-skeleton-bar" style="width:100px;"></div>
+            <div class="ld-skeleton-bar" style="width:80px;"></div>
           </div>
-          <div style="
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 12px 16px;
-            margin: 8px 0;
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 12px;
-            border: 1px solid rgba(0, 0, 0, 0.05);
-          ">
-            <div style="
-              background: #d0d0d0;
-              height: 16px;
-              width: 140px;
-              border-radius: 8px;
-              animation: skeleton-pulse 1.5s ease-in-out infinite alternate;
-            "></div>
-            <div style="
-              background: #d0d0d0;
-              height: 16px;
-              width: 40px;
-              border-radius: 8px;
-              animation: skeleton-pulse 1.5s ease-in-out infinite alternate;
-            "></div>
+          <div class="ld-skeleton-row">
+            <div class="ld-skeleton-bar" style="width:140px;"></div>
+            <div class="ld-skeleton-bar" style="width:40px;"></div>
           </div>
         </div>
       </div>
-      <style>
-        @keyframes skeleton-pulse {
-          0% { opacity: 0.6; }
-          100% { opacity: 1; }
-        }
-      </style>
     `;
 
     const container = document.createElement('div');
@@ -188,7 +94,7 @@ window.LanchDrapStatsDisplay = (() => {
       // If on grid page, insert before the restaurant grid
       if (window.LanchDrapDOMUtils?.getCachedRestaurantGrid) {
         const grid = window.LanchDrapDOMUtils.getCachedRestaurantGrid();
-        if (grid && grid.parentNode) return { node: grid, mode: 'before' };
+        if (grid?.parentNode) return { node: grid, mode: 'before' };
       }
 
       // Fallback: insert after the first heading on the page
@@ -361,18 +267,10 @@ window.LanchDrapStatsDisplay = (() => {
       return { h: h * 360, s: s * 100, l: l * 100 };
     }
 
-    // Create gradient colors from restaurant color - make them more subtle
+    // Create gradient colors from restaurant color; also expose via CSS vars
     const hsl = colorToHsl(restaurantColor);
     const gradientStart = `hsl(${hsl.h}, ${Math.min(hsl.s + 10, 80)}%, ${Math.min(hsl.l + 25, 90)}%)`;
     const gradientEnd = `hsl(${hsl.h}, ${Math.max(hsl.s - 5, 20)}%, ${Math.max(hsl.l + 10, 85)}%)`;
-    const accentColor = `hsl(${hsl.h}, ${Math.min(hsl.s + 20, 90)}%, ${Math.max(hsl.l - 15, 25)}%)`;
-
-    // Determine text color based on background lightness
-    const textColor = '#1a1a1a'; // Always use dark text for better readability
-    const secondaryTextColor = '#4a4a4a';
-    const borderColor = 'rgba(0, 0, 0, 0.1)';
-    const textBackgroundColor = 'rgba(255, 255, 255, 0.95)'; // Very high opacity white background for text
-    const cardBackgroundColor = 'rgba(255, 255, 255, 0.15)'; // Slightly more opaque card backgrounds
 
     const restaurantName = stats.name || stats.id;
     const displayTitle = `📊 ${createPossessive(restaurantName)} Stats`;
@@ -401,231 +299,50 @@ window.LanchDrapStatsDisplay = (() => {
         : 'No items recorded';
 
     const statsHTML = `
-      <div class="ld-tracking-container" style="
-        background: linear-gradient(135deg, ${gradientStart} 0%, ${gradientEnd} 100%);
-        border: 1px solid ${borderColor};
-        border-radius: 20px;
-        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.08);
-        margin: 24px 0;
-        overflow: hidden;
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-        backdrop-filter: blur(10px);
-        position: relative;
-      ">
-        <div class="ld-tracking-header" style="
-          background: rgba(255, 255, 255, 0.1);
-          padding: 20px 24px;
-          border-bottom: 1px solid ${borderColor};
-          backdrop-filter: blur(5px);
-        ">
-          <span class="ld-tracking-title ld-edit-stats-trigger" style="
-            color: ${textColor};
-            font-size: 20px;
-            font-weight: 700;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            background: ${textBackgroundColor};
-            padding: 10px 18px;
-            border-radius: 12px;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-            border: 1px solid rgba(0, 0, 0, 0.05);
-            cursor: ${getEditTriggerProps(stats.id, stats.name).cursor};
-            transition: all 0.2s ease;
-          " data-restaurant-id="${stats.id || 'unknown'}" data-restaurant-name="${(stats.name || '').replace(/"/g, '&quot;')}" title="${getEditTriggerProps(stats.id, stats.name).title}">${displayTitle}             ${createKeyElement(`restaurant:${stats.id || 'unknown'}`, 'Click to select restaurant key')}</span>
+      <div class="ld-tracking-container">
+        <div class="ld-tracking-header">
+          <span class="ld-tracking-title ld-edit-stats-trigger" data-restaurant-id="${stats.id || 'unknown'}" data-restaurant-name="${(stats.name || '').replace(/"/g, '&quot;')}" title="${getEditTriggerProps(stats.id, stats.name).title}">${displayTitle} ${createKeyElement(`restaurant:${stats.id || 'unknown'}`, 'Click to select restaurant key')}</span>
           ${apiErrorIndicator}
         </div>
-        <div class="ld-tracking-stats" style="padding: 24px;">
+        <div class="ld-tracking-stats">
           ${
             stats.ratingSynopsis
               ? `
           <!-- Rating Synopsis Row -->
-          <div class="ld-stat-item" style="
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 16px;
-            flex-wrap: wrap;
-            padding: 14px 20px;
-            margin: 16px 0;
-            background: ${cardBackgroundColor};
-            border-radius: 12px;
-            border: 1px solid ${borderColor};
-            backdrop-filter: blur(5px);
-            transition: all 0.2s ease;
-          ">
+          <div class="ld-stat-item">
             <div style="display: flex; align-items: center; gap: 14px;">
-              <span class="ld-stat-label" style="
-                color: ${secondaryTextColor};
-                font-weight: 500;
-                font-size: 14px;
-                background: ${textBackgroundColor};
-                padding: 6px 10px;
-                border-radius: 6px;
-                border: 1px solid rgba(0, 0, 0, 0.05);
-              ">Rating</span>
-              <span class="ld-stat-value" style="
-                color: ${textColor};
-                font-weight: 700;
-                font-size: 16px;
-                background: ${textBackgroundColor};
-                padding: 6px 14px;
-                border-radius: 20px;
-                min-width: 72px;
-                text-align: center;
-                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-                border: 1px solid rgba(0, 0, 0, 0.05);
-              ">${stats.ratingSynopsis.summary}</span>
+              <span class="ld-stat-label">Rating</span>
+              <span class="ld-stat-value">${stats.ratingSynopsis.summary}</span>
             </div>
             <div style="display: flex; align-items: center; gap: 14px;">
-              <span class="ld-stat-label" style="
-                color: ${secondaryTextColor};
-                font-weight: 500;
-                font-size: 14px;
-                background: ${textBackgroundColor};
-                padding: 6px 10px;
-                border-radius: 6px;
-                border: 1px solid rgba(0, 0, 0, 0.05);
-              ">Distribution</span>
-              <span class="ld-stat-value" style="
-                color: ${textColor};
-                font-weight: 600;
-                font-size: 14px;
-                background: ${textBackgroundColor};
-                padding: 6px 10px;
-                border-radius: 6px;
-                border: 1px solid rgba(0, 0, 0, 0.05);
-              ">${stats.ratingSynopsis.distribution}</span>
+              <span class="ld-stat-label">Distribution</span>
+              <span class="ld-stat-value" style="font-weight:600; font-size:14px;">${stats.ratingSynopsis.distribution}</span>
             </div>
           </div>
           `
               : ''
           }
           <!-- Appearances and Last Seen Row -->
-          <div class="ld-stat-item" style="
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 16px;
-            flex-wrap: wrap;
-            padding: 14px 20px;
-            margin: 16px 0;
-            background: ${cardBackgroundColor};
-            border-radius: 12px;
-            border: 1px solid ${borderColor};
-            backdrop-filter: blur(5px);
-            transition: all 0.2s ease;
-          ">
+          <div class="ld-stat-item">
             <div style="display: flex; align-items: center; gap: 14px;">
-              <span class="ld-stat-label" style="
-                color: ${secondaryTextColor};
-                font-weight: 500;
-                font-size: 14px;
-              background: ${textBackgroundColor};
-              padding: 6px 10px;
-              border-radius: 6px;
-              border: 1px solid rgba(0, 0, 0, 0.05);
-              border: 1px solid rgba(0, 0, 0, 0.05);
-              ">Total Appearances</span>
-              <span class="ld-stat-value" style="
-                color: ${textColor};
-                font-weight: 700;
-                font-size: 16px;
-              background: ${textBackgroundColor};
-              padding: 6px 14px;
-              border-radius: 20px;
-              min-width: 72px;
-              text-align: center;
-              box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-              border: 1px solid rgba(0, 0, 0, 0.05);
-              ">${stats.totalAppearances || 0}</span>
+              <span class="ld-stat-label">Total Appearances</span>
+              <span class="ld-stat-value">${stats.totalAppearances || 0}</span>
             </div>
             <div style="display: flex; align-items: center; gap: 14px;">
-              <span class="ld-stat-label" style="
-                color: ${secondaryTextColor};
-                font-weight: 500;
-                font-size: 14px;
-              background: ${textBackgroundColor};
-              padding: 6px 10px;
-              border-radius: 6px;
-              border: 1px solid rgba(0, 0, 0, 0.05);
-              border: 1px solid rgba(0, 0, 0, 0.05);
-              ">Last Seen</span>
-              <span class="ld-stat-value" style="
-                color: ${textColor};
-                font-weight: 600;
-                font-size: 14px;
-              background: ${textBackgroundColor};
-              padding: 6px 10px;
-              border-radius: 6px;
-              border: 1px solid rgba(0, 0, 0, 0.05);
-              border: 1px solid rgba(0, 0, 0, 0.05);
-              ">${formatDateString(stats.lastAppearance)}</span>
+              <span class="ld-stat-label">Last Seen</span>
+              <span class="ld-stat-value" style="font-weight:600; font-size:14px;">${formatDateString(stats.lastAppearance)}</span>
             </div>
           </div>
           
           <!-- Sold Out Stats Row -->
-          <div class="ld-stat-item" style="
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 16px;
-            flex-wrap: wrap;
-            padding: 14px 20px;
-            margin: 16px 0;
-            background: ${cardBackgroundColor};
-            border-radius: 12px;
-            border: 1px solid ${borderColor};
-            backdrop-filter: blur(5px);
-            transition: all 0.2s ease;
-          ">
+          <div class="ld-stat-item">
             <div style="display: flex; align-items: center; gap: 14px;">
-              <span class="ld-stat-label" style="
-                color: ${secondaryTextColor};
-                font-weight: 500;
-                font-size: 14px;
-              background: ${textBackgroundColor};
-              padding: 6px 10px;
-              border-radius: 6px;
-              border: 1px solid rgba(0, 0, 0, 0.05);
-              border: 1px solid rgba(0, 0, 0, 0.05);
-              ">Times Sold Out</span>
-              <span class="ld-stat-value" style="
-                color: ${textColor};
-                font-weight: 700;
-                font-size: 16px;
-              background: ${textBackgroundColor};
-              padding: 6px 14px;
-              border-radius: 20px;
-              min-width: 72px;
-              text-align: center;
-              box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-              border: 1px solid rgba(0, 0, 0, 0.05);
-              ">${stats.totalSoldOuts || 0}</span>
+              <span class="ld-stat-label">Times Sold Out</span>
+              <span class="ld-stat-value">${stats.totalSoldOuts || 0}</span>
             </div>
             <div style="display: flex; align-items: center; gap: 14px;">
-              <span class="ld-stat-label" style="
-                color: ${secondaryTextColor};
-                font-weight: 500;
-                font-size: 14px;
-              background: ${textBackgroundColor};
-              padding: 6px 10px;
-              border-radius: 6px;
-              border: 1px solid rgba(0, 0, 0, 0.05);
-              border: 1px solid rgba(0, 0, 0, 0.05);
-              ">Sold Out Rate</span>
-              <span class="ld-stat-value" style="
-                color: white;
-                font-weight: 700;
-                font-size: 16px;
-                background: linear-gradient(45deg, ${accentColor}, ${restaurantColor});
-                padding: 6px 14px;
-                border-radius: 20px;
-                min-width: 80px;
-                text-align: center;
-                text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
-                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-              ">${stats.soldOutRate ? `${(stats.soldOutRate * 100).toFixed(1)}%` : '0%'}</span>
+              <span class="ld-stat-label">Sold Out Rate</span>
+              <span class="ld-pill">${stats.soldOutRate ? `${(stats.soldOutRate * 100).toFixed(1)}%` : '0%'}</span>
             </div>
             ${
               stats.numSlotsAvailable !== undefined
@@ -637,27 +354,8 @@ window.LanchDrapStatsDisplay = (() => {
               margin-bottom: 12px;
               gap: 14px;
             ">
-              <span style="
-                color: ${textColor};
-                font-weight: 600;
-                font-size: 14px;
-                background: ${textBackgroundColor};
-                padding: 6px 10px;
-                border-radius: 6px;
-                border: 1px solid rgba(0, 0, 0, 0.05);
-              ">Slots Available</span>
-              <span class="ld-stat-value" style="
-                color: white;
-                font-weight: 700;
-                font-size: 16px;
-                background: linear-gradient(45deg, ${accentColor}, ${restaurantColor});
-                padding: 6px 14px;
-                border-radius: 20px;
-                min-width: 72px;
-                text-align: center;
-                text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
-                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-              ">${stats.numSlotsAvailable}</span>
+              <span class="ld-stat-label" style="font-weight:600;">Slots Available</span>
+              <span class="ld-pill">${stats.numSlotsAvailable}</span>
             </div>
             `
                 : ''
@@ -669,17 +367,17 @@ window.LanchDrapStatsDisplay = (() => {
           <div style="
             margin-top: 16px;
             padding-top: 16px;
-            border-top: 2px solid ${borderColor};
+            border-top: 2px solid var(--ld-border);
           ">
             <div style="
-              color: ${textColor};
+              color: var(--ld-text);
               font-weight: 600;
               font-size: 16px;
               margin-bottom: 12px;
               display: flex;
               flex-direction: column;
               gap: 8px;
-              background: ${textBackgroundColor};
+              background: var(--ld-text-bg);
               padding: 8px 12px;
               border-radius: 8px;
               box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
@@ -691,102 +389,22 @@ window.LanchDrapStatsDisplay = (() => {
               </div>
             </div>
             <!-- User Order History Row -->
-            <div class="ld-stat-item" style="
-              display: flex;
-              justify-content: space-between;
-              align-items: center;
-              padding: 14px 20px;
-              margin: 12px 0;
-              background: ${cardBackgroundColor};
-              border-radius: 12px;
-              border: 1px solid ${borderColor};
-              backdrop-filter: blur(5px);
-              transition: all 0.2s ease;
-            ">
+            <div class="ld-stat-item" style="margin:12px 0;">
               <div style="display: flex; align-items: center; gap: 12px;">
-                <span class="ld-stat-label" style="
-                  color: ${secondaryTextColor};
-                  font-weight: 500;
-                  font-size: 14px;
-              background: ${textBackgroundColor};
-              padding: 6px 10px;
-              border-radius: 6px;
-              border: 1px solid rgba(0, 0, 0, 0.05);
-              border: 1px solid rgba(0, 0, 0, 0.05);
-                ">Total Orders</span>
-                <span class="ld-stat-value" style="
-                  color: ${textColor};
-                  font-weight: 700;
-                  font-size: 16px;
-              background: ${textBackgroundColor};
-              padding: 6px 14px;
-              border-radius: 20px;
-                  min-width: 56px;
-              text-align: center;
-              box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-              border: 1px solid rgba(0, 0, 0, 0.05);
-                ">${stats.userOrderHistory.totalOrders}</span>
+                <span class="ld-stat-label">Total Orders</span>
+                <span class="ld-stat-value" style="min-width:56px;">${stats.userOrderHistory.totalOrders}</span>
               </div>
               <div style="display: flex; align-items: center; gap: 12px;">
-                <span class="ld-stat-label" style="
-                  color: ${secondaryTextColor};
-                  font-weight: 500;
-                  font-size: 14px;
-              background: ${textBackgroundColor};
-              padding: 6px 10px;
-              border-radius: 6px;
-              border: 1px solid rgba(0, 0, 0, 0.05);
-              border: 1px solid rgba(0, 0, 0, 0.05);
-                ">Last Order</span>
-                <span class="ld-stat-value" style="
-                  color: ${textColor};
-                  font-weight: 600;
-                  font-size: 14px;
-              background: ${textBackgroundColor};
-              padding: 6px 10px;
-              border-radius: 6px;
-              border: 1px solid rgba(0, 0, 0, 0.05);
-              border: 1px solid rgba(0, 0, 0, 0.05);
-                ">${formatDateString(stats.userOrderHistory.lastOrderDate)}</span>
+                <span class="ld-stat-label">Last Order</span>
+                <span class="ld-stat-value" style="font-weight:600; font-size:14px;">${formatDateString(stats.userOrderHistory.lastOrderDate)}</span>
               </div>
             </div>
             ${
               lastItems && lastItems.length > 0
                 ? `
-            <div class="ld-stat-item" style="
-              display: flex;
-              flex-direction: column;
-              padding: 14px 20px;
-              margin: 12px 0;
-              background: ${cardBackgroundColor};
-              border-radius: 12px;
-              border: 1px solid ${borderColor};
-              backdrop-filter: blur(5px);
-              transition: all 0.2s ease;
-            ">
-              <span class="ld-stat-label" style="
-                color: ${secondaryTextColor};
-                font-weight: 500;
-                font-size: 14px;
-                margin-bottom: 10px;
-              background: ${textBackgroundColor};
-              padding: 6px 10px;
-              border-radius: 6px;
-              border: 1px solid rgba(0, 0, 0, 0.05);
-              border: 1px solid rgba(0, 0, 0, 0.05);
-                display: inline-block;
-              "><strong>Last Order Items</strong></span>
-              <div class="ld-stat-value" style="
-                color: ${textColor};
-                font-weight: 500;
-                font-size: 13px;
-                line-height: 1.4;
-                background: ${textBackgroundColor};
-                padding: 10px 14px;
-                border-radius: 8px;
-                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-                border: 1px solid rgba(0, 0, 0, 0.05);
-              ">
+            <div class="ld-stat-item" style="flex-direction:column;">
+              <span class="ld-stat-label" style="display:inline-block; margin-bottom:10px;"><strong>Last Order Items</strong></span>
+              <div class="ld-stat-value" style="font-weight:500; font-size:13px; line-height:1.4; border-radius:8px;">
                 ${lastItemsHtml}
               </div>
             </div>
@@ -859,6 +477,19 @@ window.LanchDrapStatsDisplay = (() => {
       document.head.appendChild(styleLink);
     }
 
+    // Wire dynamic color variables and inline gradient background on the stats container
+    if (hsl && container) {
+      const root = container;
+      root.style.setProperty('--ld-restaurant-h', String(Math.round(hsl.h)));
+      root.style.setProperty('--ld-restaurant-s', `${Math.round(hsl.s)}%`);
+      root.style.setProperty('--ld-restaurant-l', `${Math.round(hsl.l)}%`);
+
+      const trackingContainer = container.querySelector('.ld-tracking-container');
+      if (trackingContainer) {
+        trackingContainer.style.background = `linear-gradient(135deg, ${gradientStart} 0%, ${gradientEnd} 100%)`;
+      }
+    }
+
     return container;
   }
 
@@ -914,49 +545,14 @@ window.LanchDrapStatsDisplay = (() => {
         const restaurantId = selectedRestaurant.id;
 
         // API call enabled - restaurant stats endpoint is now available
-        console.log(
-          'LanchDrap: Stats display - calling API with restaurantId:',
-          restaurantId,
-          'userId:',
-          userId
-        );
-        console.log('LanchDrap: Stats display - about to call API...');
         // Ensure API client is initialized (was missing before)
         const apiClient = new LanchDrapApiClient.ApiClient(
           LanchDrapConfig.CONFIG.API_BASE_URL,
           LanchDrapConfig.CONFIG.ENDPOINTS
         );
         const stats = await apiClient.getRestaurantStatsWithUserHistory(restaurantId, userId);
-        console.log('LanchDrap: Stats display - API call completed, response:', stats);
-        console.log('LanchDrap: Stats display - API response type:', typeof stats);
-        console.log('LanchDrap: Stats display - API response is null check:', stats === null);
-        console.log(
-          'LanchDrap: Stats display - API response is undefined check:',
-          stats === undefined
-        );
-        console.log(
-          'LanchDrap: Stats display - API response keys:',
-          stats ? Object.keys(stats) : 'null'
-        );
-        console.log('LanchDrap: Stats display - API response success check:', !!stats);
-        console.log(
-          'LanchDrap: Stats display - API response truthy check:',
-          stats ? 'truthy' : 'falsy'
-        );
-        console.log('LanchDrap: Stats display - About to check if (!stats), stats value:', stats);
-        console.log('LanchDrap: Stats display - !stats evaluation:', !stats);
-
-        // Check if stats is an empty object
-        if (stats && typeof stats === 'object') {
-          console.log(
-            'LanchDrap: Stats display - stats is object, checking if empty:',
-            Object.keys(stats).length === 0
-          );
-          console.log('LanchDrap: Stats display - stats object keys:', Object.keys(stats));
-        }
 
         if (!stats || (typeof stats === 'object' && Object.keys(stats).length === 0)) {
-          console.log('LanchDrap: Stats display - no stats returned from API, using fallback');
           // Use fallback stats if API fails
           const fallbackStats = {
             name: restaurantName,
@@ -978,70 +574,43 @@ window.LanchDrapStatsDisplay = (() => {
             numSlotsAvailable: selectedRestaurant.numSlotsAvailable,
           };
 
-          console.log(
-            'LanchDrap: Stats display - rendering fallback stats component with data:',
-            fallbackStats
-          );
           statsContainer = renderStatsComponent(
             fallbackStats,
             'lanchdrap-restaurant-stats',
             'Selected Restaurant Stats'
           );
-          console.log(
-            'LanchDrap: Stats display - fallback stats container created:',
-            statsContainer
-          );
         } else {
-          console.log(
-            'LanchDrap: Stats display - API response is truthy, proceeding with stats rendering'
-          );
           // Check if this is still the current request
           if (requestId !== currentStatsRequestId) {
-            console.log('LanchDrap: Stats display - request ID mismatch, returning');
             return;
           }
 
           // Validate that we're still on the same page and restaurant
           if (window.location.href !== currentUrl) {
-            console.log('LanchDrap: Stats display - URL changed during request, returning');
-            console.log('LanchDrap: Stats display - current URL:', window.location.href);
-            console.log('LanchDrap: Stats display - original URL:', currentUrl);
             return;
           }
 
           // Use the color from the selected restaurant if the API doesn't have it yet
           if (!stats.color && selectedRestaurant.color) {
-            console.log(
-              'LanchDrap: Stats display - using restaurant color from selected restaurant:',
-              selectedRestaurant.color
-            );
             stats.color = selectedRestaurant.color;
           }
 
           // Add slots available information from the current delivery data
           if (selectedRestaurant.numSlotsAvailable !== undefined) {
-            console.log(
-              'LanchDrap: Stats display - adding slots available:',
-              selectedRestaurant.numSlotsAvailable
-            );
             stats.numSlotsAvailable = selectedRestaurant.numSlotsAvailable;
           }
 
           // Add userId to stats for display
           stats.userId = userId;
 
-          console.log('LanchDrap: Stats display - rendering stats component with data:', stats);
           statsContainer = renderStatsComponent(
             stats,
             'lanchdrap-restaurant-stats',
             'Selected Restaurant Stats'
           );
-          console.log('LanchDrap: Stats display - stats container created:', statsContainer);
         }
       } catch (error) {
-        console.log('LanchDrap: Stats display - API error:', error);
-        console.log('LanchDrap: Stats display - API error message:', error.message);
-        console.log('LanchDrap: Stats display - API error stack:', error.stack);
+        console.error('LanchDrap: Stats display - API error:', error);
         // Use fallback stats on error
         const fallbackStats = {
           name: restaurantName,
@@ -1063,55 +632,32 @@ window.LanchDrapStatsDisplay = (() => {
           numSlotsAvailable: selectedRestaurant.numSlotsAvailable,
         };
 
-        console.log(
-          'LanchDrap: Stats display - rendering error fallback stats component with data:',
-          fallbackStats
-        );
         statsContainer = renderStatsComponent(
           fallbackStats,
           'lanchdrap-restaurant-stats',
           'Selected Restaurant Stats'
-        );
-        console.log(
-          'LanchDrap: Stats display - error fallback stats container created:',
-          statsContainer
         );
       } finally {
         // Processing flag removed
       }
 
       if (statsContainer) {
-        console.log(
-          'LanchDrap: Stats display - attempting to replace skeleton with stats container'
-        );
         const existingSkeleton = document.getElementById('lanchdrap-restaurant-stats-skeleton');
-        console.log('LanchDrap: Stats display - existing skeleton found:', !!existingSkeleton);
-        if (existingSkeleton && existingSkeleton.parentNode) {
-          console.log('LanchDrap: Stats display - replacing skeleton with stats container');
+        if (existingSkeleton?.parentNode) {
           existingSkeleton.replaceWith(statsContainer);
-          console.log('LanchDrap: Stats display - skeleton replaced successfully');
         } else {
-          console.log(
-            'LanchDrap: Stats display - no skeleton to replace, inserting stats container'
-          );
           const anchor = findInsertionAnchor();
-          if (anchor && anchor.node.parentNode) {
+          if (anchor?.node?.parentNode) {
             if (anchor.mode === 'after') {
               anchor.node.parentNode.insertBefore(statsContainer, anchor.node.nextSibling);
             } else {
               anchor.node.parentNode.insertBefore(statsContainer, anchor.node);
             }
-          } else {
-            console.log(
-              'LanchDrap: Stats display - no insertion anchor found, cannot insert stats'
-            );
           }
         }
         if (window.LanchDrapKeyManager?.forceUpdateKeyVisibility) {
           window.LanchDrapKeyManager.forceUpdateKeyVisibility();
         }
-      } else if (!statsContainer) {
-        console.log('LanchDrap: Stats display - no stats container created, cannot insert');
       }
     } catch (_error) {
       // Clear the processing flag on error
@@ -1162,10 +708,7 @@ window.LanchDrapStatsDisplay = (() => {
       const restaurantLogo = restaurantContext.logo;
       let stats = null;
 
-      console.log('LanchDrap: Stats display - restaurant context:', restaurantContext);
-
       if (!restaurantId) {
-        console.log('LanchDrap: Stats display - no restaurant ID available, returning');
         return; // No restaurant ID available
       }
 
@@ -1183,17 +726,9 @@ window.LanchDrapStatsDisplay = (() => {
         const _currentRestaurantId = restaurantId;
 
         // API call enabled - restaurant stats endpoint is now available
-        console.log(
-          'LanchDrap: Stats display - calling API with restaurantId:',
-          restaurantId,
-          'userId:',
-          userId
-        );
         stats = await apiClient.getRestaurantStatsWithUserHistory(restaurantId, userId);
-        console.log('LanchDrap: Stats display - API response:', stats);
 
         if (!stats) {
-          console.log('LanchDrap: Stats display - no stats returned from API, returning');
           return;
         }
 
@@ -1292,7 +827,7 @@ window.LanchDrapStatsDisplay = (() => {
 
       // Insert or replace skeleton in-place
       const existingSkeleton = document.getElementById('lanchdrap-restaurant-stats-skeleton');
-      if (existingSkeleton && existingSkeleton.parentNode) {
+      if (existingSkeleton?.parentNode) {
         existingSkeleton.replaceWith(trackingInfo);
       } else {
         // Try to find a good insertion point near the restaurant name
@@ -1322,33 +857,10 @@ window.LanchDrapStatsDisplay = (() => {
     // Create dialog overlay
     const dialogOverlay = document.createElement('div');
     dialogOverlay.id = 'lanchdrap-edit-dialog';
-    dialogOverlay.style.cssText = `
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: rgba(0, 0, 0, 0.5);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      z-index: 10000;
-      backdrop-filter: blur(5px);
-    `;
 
     // Create dialog content
     const dialogContent = document.createElement('div');
-    dialogContent.style.cssText = `
-      background: white;
-      border-radius: 16px;
-      padding: 24px;
-      max-width: 500px;
-      width: 90%;
-      max-height: 80vh;
-      overflow-y: auto;
-      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    `;
+    dialogContent.className = 'ld-edit-content';
 
     dialogContent.innerHTML = `
       <div style="margin-bottom: 20px;">
@@ -1368,16 +880,6 @@ window.LanchDrapStatsDisplay = (() => {
           <textarea 
             id="appearance-dates" 
             rows="6" 
-            style="
-              width: 100%;
-              padding: 12px;
-              border: 2px solid #e1e5e9;
-              border-radius: 8px;
-              font-family: monospace;
-              font-size: 14px;
-              resize: vertical;
-              box-sizing: border-box;
-            "
             placeholder="2024-01-15&#10;2024-01-16&#10;2024-01-17"
           ></textarea>
           <div style="margin-top: 4px; font-size: 12px; color: #666;">
@@ -1392,16 +894,6 @@ window.LanchDrapStatsDisplay = (() => {
           <textarea 
             id="soldout-dates" 
             rows="4" 
-            style="
-              width: 100%;
-              padding: 12px;
-              border: 2px solid #e1e5e9;
-              border-radius: 8px;
-              font-family: monospace;
-              font-size: 14px;
-              resize: vertical;
-              box-sizing: border-box;
-            "
             placeholder="2024-01-15&#10;2024-01-20"
           ></textarea>
           <div style="margin-top: 4px; font-size: 12px; color: #666;">
@@ -1411,36 +903,18 @@ window.LanchDrapStatsDisplay = (() => {
 
         
 
-        <div style="display: flex; gap: 12px; justify-content: flex-end;">
+        <div class="ld-edit-actions">
           <button 
             type="button" 
             id="cancel-edit" 
-            style="
-              padding: 10px 20px;
-              border: 2px solid #e1e5e9;
-              background: white;
-              color: #666;
-              border-radius: 8px;
-              font-weight: 600;
-              cursor: pointer;
-              transition: all 0.2s ease;
-            "
+            class="ld-btn ld-btn-secondary"
           >
             Cancel
           </button>
           <button 
             type="submit" 
             id="save-edit" 
-            style="
-              padding: 10px 20px;
-              border: none;
-              background: #007AFF;
-              color: white;
-              border-radius: 8px;
-              font-weight: 600;
-              cursor: pointer;
-              transition: all 0.2s ease;
-            "
+            class="ld-btn ld-btn-primary"
           >
             Save Changes
           </button>
@@ -1639,7 +1113,7 @@ window.LanchDrapStatsDisplay = (() => {
           }
         }
       } catch (error) {
-        const message = error && error.message ? error.message : 'Unknown error';
+        const message = error?.message || 'Unknown error';
         alert(`Error saving changes: ${message}`);
       } finally {
         saveButton.disabled = false;

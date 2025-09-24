@@ -7,92 +7,12 @@ window.LanchDrapRestaurantScraper = (() => {
   // restaurantAvailabilityData is now managed by the data layer
 
   // Function to track both restaurants and orders on daily pages
+  // Note: This function is now deprecated as tracking is handled in the background service worker
+  // Keeping for backward compatibility but the actual tracking happens via chrome.runtime.sendMessage
   async function trackRestaurantAppearances(data, date) {
-    // Hoist variables used in catch/finally to avoid ReferenceError
-    try {
-      console.log(
-        'LanchDrap: trackRestaurantAppearances in scraper called with data:',
-        data,
-        'date:',
-        date
-      );
-
-      if (typeof LanchDrapApiClient === 'undefined' || typeof LanchDrapConfig === 'undefined') {
-        console.error('LanchDrap: API client or config not available');
-        return;
-      }
-
-      // Use a single global abort controller for tracking (like stats display)
-      if (window.lanchDrapTrackingAbortController) {
-        window.lanchDrapTrackingAbortController.abort();
-      }
-      window.lanchDrapTrackingAbortController = new AbortController();
-
-      if (!date) {
-        console.error('LanchDrap: No date available for tracking');
-        return;
-      }
-
-      // Extract restaurants and orders from data
-      const restaurants = data?.restaurants || [];
-      const orders = data?.delivery?.orders || [];
-
-      // Don't send empty data to the API
-      if ((!restaurants || restaurants.length === 0) && (!orders || orders.length === 0)) {
-        console.log('LanchDrap: No restaurants or orders found in data');
-        return;
-      }
-
-      // API calls to LanchDrap backend should continue to be used for tracking
-      const apiClient = new LanchDrapApiClient.ApiClient(
-        LanchDrapConfig.CONFIG.API_BASE_URL,
-        LanchDrapConfig.CONFIG.ENDPOINTS
-      );
-
-      const trackingData = {
-        date: date,
-      };
-
-      // Add restaurants if available
-      if (restaurants && restaurants.length > 0) {
-        trackingData.restaurants = restaurants.map((restaurant) => ({
-          id: restaurant.id,
-          name: restaurant.name,
-          status: restaurant.status,
-          color: restaurant.color,
-          logo: restaurant.logo,
-          menu: restaurant.menu || [],
-        }));
-      }
-
-      // Add orders if available
-      if (orders && orders.length > 0) {
-        trackingData.orders = orders;
-      }
-
-      const result = await apiClient.trackRestaurantAppearances(
-        trackingData,
-        window.lanchDrapTrackingAbortController.signal
-      );
-
-      // Removed: order history storage from tracking to avoid duplicate order API calls.
-
-      // Check if the request was aborted
-      if (window.lanchDrapTrackingAbortController.signal.aborted) {
-        return null;
-      }
-
-      return result; // Return the result so it can be used in the main flow
-    } catch (_error) {
-      if (_error.name === 'AbortError') {
-        return null;
-      }
-    } finally {
-      // Clear the abort controller
-      if (window.lanchDrapTrackingAbortController) {
-        window.lanchDrapTrackingAbortController = null;
-      }
-    }
+    // This function is now a no-op as tracking is handled in the background service worker
+    // The content script calls this but the actual API calls happen in background.js
+    return;
   }
 
   // Function to add sell out indicators to restaurant cards

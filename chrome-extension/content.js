@@ -131,14 +131,7 @@ async function trackRestaurantAppearances(data) {
   try {
     // Prevent infinite loops
     if (isProcessingTracking) {
-      console.log('LanchDrap: Already processing tracking, skipping to prevent infinite loop');
-      return;
-    }
-
-    console.log('LanchDrap: trackRestaurantAppearances called with data:', data);
-
-    if (!window.LanchDrapRestaurantScraper) {
-      console.error('LanchDrap: Restaurant scraper not available');
+      console.log('LanchDrap: Already processing tracking, skipping to prevent duplicate calls');
       return;
     }
 
@@ -147,10 +140,40 @@ async function trackRestaurantAppearances(data) {
     // Get current date from data layer
     const currentDate = window.LanchDrapDataLayer?.getCurrentDate?.();
 
-    // Call the updated tracking function with the full data object and date
-    await window.LanchDrapRestaurantScraper.trackRestaurantAppearances(data, currentDate);
+    if (!currentDate) {
+      console.error('LanchDrap: No date available for tracking');
+      return;
+    }
+
+    // Create a unique key for this tracking request to prevent duplicates
+    const trackingKey = `${currentDate}-${JSON.stringify(data?.restaurants?.map((r) => r.id) || [])}`;
+
+    // Check if we've already tracked this data today
+    if (window.lanchDrapTrackedKeys && window.lanchDrapTrackedKeys.has(trackingKey)) {
+      console.log('LanchDrap: Already tracked this data today, skipping:', trackingKey);
+      return;
+    }
+
+    // Mark this tracking key as processed
+    if (!window.lanchDrapTrackedKeys) {
+      window.lanchDrapTrackedKeys = new Set();
+    }
+    window.lanchDrapTrackedKeys.add(trackingKey);
+
+    // Send tracking request to background service worker
+    console.log('LanchDrap: Sending tracking request to background:', { data, date: currentDate });
+    const response = await chrome.runtime.sendMessage({
+      action: 'trackRestaurantAppearances',
+      data: data,
+      date: currentDate,
+    });
+
+    console.log('LanchDrap: Received tracking response from background:', response);
+    if (response && !response.success) {
+      console.error('LanchDrap: Background tracking failed:', response.error);
+    }
   } catch (error) {
-    console.error('LanchDrap: Error tracking restaurant appearances:', error);
+    console.error('LanchDrap: Error sending tracking request to background:', error);
   } finally {
     isProcessingTracking = false;
   }
@@ -164,6 +187,11 @@ async function handlePageChange() {
 
     // Update last URL
     lastUrl = currentUrl;
+
+    // Clear tracking keys when URL changes (new day/page)
+    if (urlChanged && window.lanchDrapTrackedKeys) {
+      window.lanchDrapTrackedKeys.clear();
+    }
 
     // Initialize if not already done
     await initializeExtension();

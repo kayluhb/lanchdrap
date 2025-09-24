@@ -144,7 +144,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 .join(', ')
             : 'No items recorded';
 
-        // Use restaurant name directly from the data
+        // Use restaurant name directly from the data; fallback to ID until lookup completes
         const restaurantName = restaurant.restaurantName || restaurant.restaurantId;
 
         // Check if the order date is in the past OR it's today but after 12:30 PM
@@ -206,6 +206,74 @@ document.addEventListener('DOMContentLoaded', () => {
       <h3>Recent Orders</h3>
       ${restaurantsHTML}
     `;
+
+    // After initial render, resolve and replace any restaurant IDs with names
+    try {
+      // Prepare API client once
+      const apiClient = new LanchDrapApiClient.ApiClient(
+        LanchDrapConfig.CONFIG.API_BASE_URL,
+        LanchDrapConfig.CONFIG.ENDPOINTS
+      );
+
+      // Helper: get cached name
+      async function getCachedName(restaurantId) {
+        try {
+          const { restaurantNameCache } = await chrome.storage.local.get(['restaurantNameCache']);
+          return restaurantNameCache ? restaurantNameCache[restaurantId] : undefined;
+        } catch {
+          return undefined;
+        }
+      }
+
+      // Helper: set cached name
+      async function setCachedName(restaurantId, name) {
+        try {
+          const { restaurantNameCache } = await chrome.storage.local.get(['restaurantNameCache']);
+          const cache = restaurantNameCache || {};
+          cache[restaurantId] = name;
+          await chrome.storage.local.set({ restaurantNameCache: cache });
+        } catch {}
+      }
+
+      // Helper: lookup name via API by ID
+      async function fetchRestaurantNameById(restaurantId) {
+        try {
+          const endpoint = `${apiClient.getEndpoint('RESTAURANTS_GET_BY_ID')}/${restaurantId}`;
+          const resp = await apiClient.request(endpoint);
+          return resp?.name || resp?.restaurant?.name || resp?.data?.name || undefined;
+        } catch {
+          return undefined;
+        }
+      }
+
+      const items = document.querySelectorAll('.restaurant-item');
+      for (const el of items) {
+        const id = el.getAttribute('data-restaurant-id');
+        const nameSpan = el.querySelector('.restaurant-name');
+        if (!id || !nameSpan) continue;
+
+        // Skip if already a human-friendly name (heuristic: contains a space or non-alnum)
+        const currentText = (nameSpan.textContent || '').trim();
+        if (currentText && currentText !== id && /[^a-zA-Z0-9_-]/.test(currentText)) {
+          continue;
+        }
+
+        let name = await getCachedName(id);
+        if (!name) {
+          name = await fetchRestaurantNameById(id);
+          if (name) await setCachedName(id, name);
+        }
+
+        if (name) {
+          nameSpan.textContent = name;
+          el.setAttribute('data-restaurant-name', name);
+          const rateBtn = el.querySelector('.rate-button');
+          const deleteBtn = el.querySelector('.delete-order-button');
+          if (rateBtn) rateBtn.setAttribute('data-restaurant-name', name);
+          if (deleteBtn) deleteBtn.setAttribute('data-restaurant-name', name);
+        }
+      }
+    } catch {}
 
     // Add event listeners for rate buttons
     addRateButtonListeners();

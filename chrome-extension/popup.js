@@ -25,9 +25,9 @@ document.addEventListener('DOMContentLoaded', () => {
   async function loadLast10Restaurants() {
     try {
       // Get user ID
-      const userIdentification = await lanchDrapUserIdManager.getUserIdentification();
+      const userId = await lanchDrapUserIdManager.getUserId();
 
-      if (!userIdentification || !userIdentification.userId) {
+      if (!userId) {
         // DON'T OVERWRITE - just add to debug
         orderHistoryDiv.innerHTML +=
           '<div style="background: #f8d7da; padding: 5px; margin: 5px 0;">ERROR: Unable to get user ID</div>';
@@ -40,7 +40,7 @@ document.addEventListener('DOMContentLoaded', () => {
         LanchDrapConfig.CONFIG.ENDPOINTS
       );
 
-      const restaurantSummary = await apiClient.getUserRestaurantSummary(userIdentification.userId);
+      const restaurantSummary = await apiClient.getUserRestaurantSummary(userId);
 
       // Check if the API call was successful
       if (!restaurantSummary) {
@@ -252,8 +252,8 @@ document.addEventListener('DOMContentLoaded', () => {
   // Populate rating badges next to orders if they have been rated already
   async function populateOrderRatingBadges() {
     try {
-      const userIdentification = await lanchDrapUserIdManager.getUserIdentification();
-      if (!userIdentification || !userIdentification.userId) return;
+      const userId = await lanchDrapUserIdManager.getUserId();
+      if (!userId) return;
 
       const items = document.querySelectorAll('.restaurant-item');
       for (const item of items) {
@@ -332,9 +332,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
         try {
           // Get user identification
-          const userIdentification = await lanchDrapUserIdManager.getUserIdentification();
+          const userId = await lanchDrapUserIdManager.getUserId();
 
-          if (!userIdentification?.userId) {
+          if (!userId) {
             alert('Unable to get user ID. Please try again.');
             return;
           }
@@ -345,11 +345,7 @@ document.addEventListener('DOMContentLoaded', () => {
             LanchDrapConfig.CONFIG.ENDPOINTS
           );
 
-          await apiClient.deleteUserRestaurantHistory(
-            userIdentification.userId,
-            restaurantId,
-            orderDate
-          );
+          await apiClient.deleteUserRestaurantHistory(userId, restaurantId, orderDate);
 
           // Remove the item from the UI
           restaurantItem.remove();
@@ -510,11 +506,11 @@ document.addEventListener('DOMContentLoaded', () => {
       );
 
       // Get user ID for the request
-      const userIdentification = await lanchDrapUserIdManager.getUserIdentification();
+      const userId = await lanchDrapUserIdManager.getUserId();
 
       // Make a single request to get restaurant data with user's order for the specific date
       const params = new URLSearchParams();
-      params.append('userId', userIdentification?.userId || '');
+      params.append('userId', userId || '');
       params.append('orderDate', orderDate || '');
       const endpoint = `${apiClient.getEndpoint('RESTAURANTS_GET_BY_ID')}/${restaurantId}?${params.toString()}`;
 
@@ -792,17 +788,12 @@ document.addEventListener('DOMContentLoaded', () => {
           );
 
           // Get user identification
-          const userIdentification = await lanchDrapUserIdManager.getUserIdentification();
+          const userId = await lanchDrapUserIdManager.getUserId();
 
           // Update the user's order with the new items for the specific date
           const items = selectedMenuItems.map((item) => item.toJSON());
 
-          await apiClient.updateUserOrder(
-            userIdentification.userId,
-            restaurantId,
-            orderDate,
-            items
-          );
+          await apiClient.updateUserOrder(userId, restaurantId, orderDate, items);
         }
 
         // Update the UI
@@ -1029,9 +1020,9 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       // Get user identification
-      const userIdentification = await lanchDrapUserIdManager.getUserIdentification();
+      const userId = await lanchDrapUserIdManager.getUserId();
 
-      if (!userIdentification || !userIdentification.userId) {
+      if (!userId) {
         alert('Unable to get user ID. Please try again.');
         return;
       }
@@ -1046,7 +1037,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       try {
         const ratingData = {
-          userId: userIdentification.userId,
+          userId: userId,
           restaurant: restaurantId,
           orderDate: orderDate,
           items:
@@ -1119,9 +1110,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
       try {
         // Get user identification
-        const userIdentification = await lanchDrapUserIdManager.getUserIdentification();
+        const userId = await lanchDrapUserIdManager.getUserId();
 
-        if (!userIdentification || !userIdentification.userId) {
+        if (!userId) {
           alert('Unable to get user ID. Please try again.');
           return;
         }
@@ -1129,7 +1120,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // First submit the rating
         const comment = commentInput.value.trim();
         const ratingData = {
-          userId: userIdentification.userId,
+          userId: userId,
           restaurant: restaurantId,
           orderDate: orderDate,
           items:

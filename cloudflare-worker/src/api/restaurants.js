@@ -246,17 +246,7 @@ async function trackUserOrders(env, orders, date) {
     }
 
     try {
-      // Store the order data
-      const orderKey = `user_order:${order.userId}:${order.id}`;
-      const orderData = {
-        ...order,
-        trackedDate: date,
-        trackedAt: new Date().toISOString(),
-      };
-
-      await env.LANCHDRAP_RATINGS.put(orderKey, JSON.stringify(orderData));
-
-      // Also store in user's order history by date
+      // Store in user's order history by date
       const userHistoryKey = `user_restaurant_history:${order.userId}:${order.deliveryId || 'unknown'}`;
       const existingHistory = await env.LANCHDRAP_RATINGS.get(userHistoryKey);
 
@@ -1275,66 +1265,61 @@ export async function getUserRestaurantSummary(request, env) {
       if (keyParts.length >= 3) {
         const restaurantId = keyParts.slice(2).join(':'); // Handle restaurant IDs with colons
 
-        const historyDataRaw = await env.LANCHDRAP_RATINGS.get(key.name);
+        const historyData = await getCachedUserHistoryData(env, userId, restaurantId);
 
-        if (historyDataRaw) {
+        if (historyData) {
+          // Handle both old and new data structures
+          let orders = [];
+          if (historyData.orders && Array.isArray(historyData.orders)) {
+            // Old structure - already in array format
+            orders = historyData.orders.sort((a, b) => new Date(b.date) - new Date(a.date));
+          } else if (
+            historyData.orders &&
+            typeof historyData.orders === 'object' &&
+            !Array.isArray(historyData.orders)
+          ) {
+            // Handle malformed data where orders is an object but should be the root structure
+            orders = Object.keys(historyData.orders)
+              .map((date) => ({
+                date,
+                items: historyData.orders[date].items || [],
+              }))
+              .sort((a, b) => new Date(b.date) - new Date(a.date)); // Sort by date, newest first
+          } else {
+            // New structure - convert date-keyed structure to array format
+            orders = Object.keys(historyData)
+              .map((date) => ({
+                date,
+                items: historyData[date].items || [],
+              }))
+              .sort((a, b) => new Date(b.date) - new Date(a.date)); // Sort by date, newest first
+          }
+          const lastOrderDate = orders.length > 0 ? orders[0].date : null; // First item is newest
+
+          // Look up restaurant record to include display name (and optional color/logo)
+          let restaurantName = restaurantId;
+          let color = null;
+          let logo = null;
           try {
-            const historyData = JSON.parse(historyDataRaw);
-
-            // Handle both old and new data structures
-            let orders = [];
-            if (historyData.orders && Array.isArray(historyData.orders)) {
-              // Old structure - already in array format
-              orders = historyData.orders.sort((a, b) => new Date(b.date) - new Date(a.date));
-            } else if (
-              historyData.orders &&
-              typeof historyData.orders === 'object' &&
-              !Array.isArray(historyData.orders)
-            ) {
-              // Handle malformed data where orders is an object but should be the root structure
-              orders = Object.keys(historyData.orders)
-                .map((date) => ({
-                  date,
-                  items: historyData.orders[date].items || [],
-                }))
-                .sort((a, b) => new Date(b.date) - new Date(a.date)); // Sort by date, newest first
-            } else {
-              // New structure - convert date-keyed structure to array format
-              orders = Object.keys(historyData)
-                .map((date) => ({
-                  date,
-                  items: historyData[date].items || [],
-                }))
-                .sort((a, b) => new Date(b.date) - new Date(a.date)); // Sort by date, newest first
+            const restaurantKey = `restaurant:${restaurantId}`;
+            const restaurantDataRaw = await env.LANCHDRAP_RATINGS.get(restaurantKey);
+            if (restaurantDataRaw) {
+              const restaurantData = JSON.parse(restaurantDataRaw);
+              restaurantName = restaurantData.name || restaurantId;
+              color = restaurantData.color || null;
+              logo = restaurantData.logo || null;
             }
-            const lastOrderDate = orders.length > 0 ? orders[0].date : null; // First item is newest
+          } catch (_e) {}
 
-            // Look up restaurant record to include display name (and optional color/logo)
-            let restaurantName = restaurantId;
-            let color = null;
-            let logo = null;
-            try {
-              const restaurantKey = `restaurant:${restaurantId}`;
-              const restaurantDataRaw = await env.LANCHDRAP_RATINGS.get(restaurantKey);
-              if (restaurantDataRaw) {
-                const restaurantData = JSON.parse(restaurantDataRaw);
-                restaurantName = restaurantData.name || restaurantId;
-                color = restaurantData.color || null;
-                logo = restaurantData.logo || null;
-              }
-            } catch (_e) {}
-
-            restaurants.push({
-              restaurantId,
-              restaurantName,
-              color,
-              logo,
-              totalOrders: orders.length,
-              lastOrderDate,
-              recentOrders: orders.slice(0, 5), // First 5 orders (newest)
-            });
-          } catch (_parseError) {}
-        } else {
+          restaurants.push({
+            restaurantId,
+            restaurantName,
+            color,
+            logo,
+            totalOrders: orders.length,
+            lastOrderDate,
+            recentOrders: orders.slice(0, 5), // First 5 orders (newest)
+          });
         }
       } else {
       }

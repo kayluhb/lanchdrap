@@ -153,6 +153,47 @@ window.LanchDrapDataLayer = (() => {
     return now < deliveryDate;
   }
 
+  // Normalize order items to ensure consistent field names and remove modifications
+  function normalizeOrderItems(items) {
+    if (!Array.isArray(items)) {
+      return [];
+    }
+
+    return items.map((item) => ({
+      id: item.id || item.itemId || `item_${Math.random().toString(36).substr(2, 9)}`,
+      orderId: item.orderId,
+      itemId: item.itemId,
+      quantity: item.quantity || 1,
+      label: item.label,
+      name: item.label || item.name || 'Unknown Item', // Normalize: ensure name field exists
+      description: item.description || '',
+      fullDescription: item.description || item.label || item.name || 'Unknown Item', // For fallback display
+      options: item.description || '', // Use description as options for display
+      price: item.price || 0,
+      specialRequest: item.specialRequest,
+      specialRequestRequired: item.specialRequestRequired,
+      labelFor: item.labelFor,
+      guestToken: item.guestToken,
+      paymentMethod: item.paymentMethod,
+      // Explicitly exclude modifications field
+    }));
+  }
+
+  // Normalize delivery order data
+  function normalizeDeliveryOrder(delivery) {
+    if (!delivery || !delivery.order) {
+      return delivery;
+    }
+
+    return {
+      ...delivery,
+      order: {
+        ...delivery.order,
+        items: normalizeOrderItems(delivery.order.items || []),
+      },
+    };
+  }
+
   function parseData({ data, deliveryId, isDayPage }) {
     const { delivery, lunchDay } = data;
     const { deliveries } = lunchDay;
@@ -168,11 +209,15 @@ window.LanchDrapDataLayer = (() => {
       actualDelivery = deliveries.find((deli) => deli.id === deliveryId);
     }
 
+    // Normalize delivery order data
+    const normalizedDelivery = normalizeDeliveryOrder(delivery);
+    const normalizedDeliveries = deliveries.map(normalizeDeliveryOrder);
+
     return {
       currentRestaurant: combineDeliveryAndRestaurant(actualDelivery),
-      delivery,
-      deliveries,
-      restaurants: deliveries.map((deli) => combineDeliveryAndRestaurant(deli)),
+      delivery: normalizedDelivery,
+      deliveries: normalizedDeliveries,
+      restaurants: normalizedDeliveries.map((deli) => combineDeliveryAndRestaurant(deli)),
     };
   }
 

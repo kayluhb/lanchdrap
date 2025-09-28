@@ -114,19 +114,20 @@ export async function submitRating(request, env) {
 
     // Ensure the order date exists in history
     if (!historyData[rating.orderDate]) {
+      // If no order exists for this date, create a minimal record
       historyData[rating.orderDate] = {
-        items: rating.items || [],
+        items: [], // Will be populated from existing order data if available
         updatedAt: new Date().toISOString(),
       };
     }
 
-    // Add rating to the order
+    // Add rating to the order (don't overwrite existing items)
     const ratingRecord = {
       rating: rating.rating,
       comment: rating.comment,
       timestamp: rating.timestamp,
-      items: rating.items || [],
       id: rating.id, // Include the rating ID
+      // Note: items are not included here to avoid duplication with order history items
     };
 
     historyData[rating.orderDate].rating = ratingRecord;

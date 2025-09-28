@@ -293,6 +293,7 @@ window.LanchDrapStatsDisplay = (() => {
             .map(
               (item) =>
                 `<strong>${item.label || 'Unknown Item'}</strong> (${item.quantity || 1})` +
+                `${item.description ? `<br><em>${item.description}</em>` : ''}` +
                 `${item.options ? `<br>(${item.options})` : ''}`
             )
             .join(', ')
@@ -322,8 +323,8 @@ window.LanchDrapStatsDisplay = (() => {
           `
               : ''
           }
-          <!-- Appearances and Last Seen Row -->
-          <div class="ld-stat-item">
+          <!-- Appearances and Sold Out Stats Grid -->
+          <div class="ld-stat-item" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
             <div style="display: flex; align-items: center; gap: 14px;">
               <span class="ld-stat-label">Total Appearances</span>
               <span class="ld-stat-value">${stats.totalAppearances || 0}</span>
@@ -332,10 +333,6 @@ window.LanchDrapStatsDisplay = (() => {
               <span class="ld-stat-label">Last Seen</span>
               <span class="ld-stat-value" style="font-weight:600; font-size:14px;">${formatDateString(stats.lastAppearance)}</span>
             </div>
-          </div>
-          
-          <!-- Sold Out Stats Row -->
-          <div class="ld-stat-item">
             <div style="display: flex; align-items: center; gap: 14px;">
               <span class="ld-stat-label">Times Sold Out</span>
               <span class="ld-stat-value">${stats.totalSoldOuts || 0}</span>
@@ -347,14 +344,8 @@ window.LanchDrapStatsDisplay = (() => {
             ${
               stats.numSlotsAvailable !== undefined
                 ? `
-            <div style="
-              display: flex;
-              justify-content: space-between;
-              align-items: center;
-              margin-bottom: 12px;
-              gap: 14px;
-            ">
-              <span class="ld-stat-label" style="font-weight:600;">Slots Available</span>
+            <div style="display: flex; align-items: center; gap: 14px;">
+              <span class="ld-stat-label">Slots Available</span>
               <span class="ld-pill">${stats.numSlotsAvailable}</span>
             </div>
             `
@@ -364,21 +355,15 @@ window.LanchDrapStatsDisplay = (() => {
           ${
             stats.userOrderHistory
               ? `
-          <div style="
-            margin-top: 16px;
-            padding-top: 16px;
-            border-top: 2px solid var(--ld-border);
-          ">
             <div style="
               color: var(--ld-text);
               font-weight: 600;
               font-size: 16px;
-              margin-bottom: 12px;
               display: flex;
               flex-direction: column;
               gap: 8px;
               background: var(--ld-text-bg);
-              padding: 8px 12px;
+              padding: 8px 12px 0;
               border-radius: 8px;
               box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
               border: 1px solid rgba(0, 0, 0, 0.05);
@@ -389,8 +374,8 @@ window.LanchDrapStatsDisplay = (() => {
               </div>
             </div>
             <!-- User Order History Row -->
-            <div class="ld-stat-item" style="margin:12px 0;">
-              <div style="display: flex; align-items: center; gap: 12px;">
+            <div class="ld-stat-item">
+              <div style="display: flex; align-items: flex-start; gap: 12px;">
                 <span class="ld-stat-label">Total Orders</span>
                 <span class="ld-stat-value" style="min-width:56px;">${stats.userOrderHistory.totalOrders}</span>
               </div>
@@ -398,25 +383,21 @@ window.LanchDrapStatsDisplay = (() => {
                 <span class="ld-stat-label">Last Order</span>
                 <span class="ld-stat-value" style="font-weight:600; font-size:14px;">${formatDateString(stats.userOrderHistory.lastOrderDate)}</span>
               </div>
-            </div>
-            ${
-              lastItems && lastItems.length > 0
-                ? `
-            <div class="ld-stat-item" style="flex-direction:column;">
-              <span class="ld-stat-label" style="display:inline-block; margin-bottom:10px;"><strong>Last Order Items</strong></span>
-              <div class="ld-stat-value" style="font-weight:500; font-size:13px; line-height:1.4; border-radius:8px;">
-                ${lastItemsHtml}
+              ${
+                lastItems && lastItems.length > 0
+                  ? `
+              <div style="display: flex; align-items: center; gap: 12px;">
+                <span class="ld-stat-value" style="font-weight:600; font-size:14px; text-align: left;">${lastItemsHtml}</span>
               </div>
+              `
+                  : ''
+              }
             </div>
-            `
-                : ''
-            }
           </div>
           `
               : ''
           }
         </div>
-      </div>
     `;
 
     // Create container

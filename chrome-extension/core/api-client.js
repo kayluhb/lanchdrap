@@ -85,6 +85,12 @@ class ApiClient {
     return this.request(endpoint);
   }
 
+  // Get restaurant menu by ID
+  async getRestaurantMenu(restaurantId) {
+    const endpoint = `${this.getEndpoint('RESTAURANTS_GET_MENU')}/${restaurantId}`;
+    return this.request(endpoint);
+  }
+
   // Track both restaurants and orders from daily pages
   async trackRestaurantAppearances(trackingData, signal = null) {
     return this.request(this.getEndpoint('RESTAURANTS_APPEARANCES_TRACK'), {

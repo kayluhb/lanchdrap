@@ -860,6 +860,52 @@ export async function getAllRestaurants(_request, env) {
   }
 }
 
+// Get restaurant menu by ID
+export async function getRestaurantMenu(request, env) {
+  try {
+    const url = new URL(request.url);
+    const pathParts = url.pathname.split('/');
+    const restaurantId = pathParts[pathParts.length - 1]; // Get the restaurant ID from the URL
+
+    if (!restaurantId) {
+      return createErrorResponse('Restaurant ID is required', 400);
+    }
+
+    // Get menu data from KV using the restaurant_menu key
+    const menuKey = `restaurant_menu:${restaurantId}`;
+    const menuData = await env.LANCHDRAP_RATINGS.get(menuKey);
+
+    if (!menuData) {
+      return createErrorResponse('Menu not found for this restaurant', 404);
+    }
+
+    const parsedMenuData = JSON.parse(menuData);
+
+    // Extract just the item labels for autocomplete
+    const menuItems = parsedMenuData.items?.map((item) => item.label) || [];
+
+    return new Response(
+      JSON.stringify({
+        success: true,
+        data: {
+          restaurantId,
+          items: menuItems,
+          lastUpdated: parsedMenuData.lastUpdated,
+        },
+      }),
+      {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+        },
+      }
+    );
+  } catch (error) {
+    return createErrorResponse('Failed to get restaurant menu', 500, { error: error.message });
+  }
+}
+
 // Get restaurant by ID or name
 export async function getRestaurantById(request, env) {
   try {
@@ -915,17 +961,22 @@ export async function getRestaurantById(request, env) {
           }
 
           if (orderData) {
-            // Extract items and normalize the format
+            // Return items in their original format from KV storage
             const items = (orderData.items || []).map((item) => {
               // Handle different item formats
               if (typeof item === 'string') {
-                return { name: item, quantity: 1 };
+                return { label: item, quantity: 1 };
               }
+              // Return the item as-is from KV storage (preserves label field)
               return {
-                name: item.label || 'Unknown Item',
+                id: item.id,
+                itemId: item.itemId,
+                label: item.label || 'Unknown Item',
+                description: item.description || '',
+                price: item.price || 0,
                 quantity: item.quantity || 1,
-                options: item.options || '',
-                fullDescription: item.label || 'Unknown Item',
+                specialRequest: item.specialRequest,
+                orderId: item.orderId,
               };
             });
 
@@ -1065,8 +1116,10 @@ export async function updateUserOrder(request, env) {
       specialRequest: item.specialRequest,
     }));
 
-    // Update the order for the specific date
+    // Update the order for the specific date, preserving existing data like ratings
+    const existingOrderData = historyData[orderDate] || {};
     historyData[orderDate] = {
+      ...existingOrderData, // Preserve existing data (rating, etc.)
       items: normalizedItems,
       updatedAt: new Date().toISOString(),
     };

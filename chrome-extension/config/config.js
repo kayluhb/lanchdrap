@@ -26,6 +26,7 @@ const CONFIG = {
 
     // Lookup endpoints for edit dialog
     RESTAURANTS_GET_BY_ID: '/api/restaurant',
+    RESTAURANTS_GET_MENU: '/api/restaurant-menu',
     RESTAURANTS_SEARCH: '/api/restaurants/search',
 
     // All other endpoints disabled

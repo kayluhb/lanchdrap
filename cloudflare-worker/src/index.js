@@ -7,6 +7,7 @@ import { getOrderRating, getRatingStats, submitRating } from './api/ratings.js';
 import {
   deleteUserRestaurantHistory,
   getRestaurantById,
+  getRestaurantMenu,
   getRestaurantStatsWithUserHistory,
   getUserRestaurantSummary,
   trackAppearances,
@@ -69,10 +70,13 @@ export default {
       // Find matching route
       const handler = routes[routeKey];
 
-      // Enable dynamic route for restaurant by ID and orders by date
+      // Enable dynamic route for restaurant by ID, restaurant menu, and orders by date
       let dynamicHandler = handler;
       if (!dynamicHandler && method === 'GET' && path.startsWith('/api/restaurant/')) {
         dynamicHandler = getRestaurantById;
+      }
+      if (!dynamicHandler && method === 'GET' && path.startsWith('/api/restaurant-menu/')) {
+        dynamicHandler = getRestaurantMenu;
       }
       if (!dynamicHandler && method === 'PUT' && path.startsWith('/api/orders/')) {
         dynamicHandler = updateUserOrder;

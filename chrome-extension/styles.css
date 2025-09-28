@@ -213,6 +213,46 @@
   margin-bottom: 6px;
 }
 
+.lunchdrop-extension-popup .restaurant-logo-container {
+  width: 48px;
+  height: 30px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  overflow: hidden;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  padding: 0 4px;
+}
+
+.lunchdrop-extension-popup .restaurant-logo {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 6px;
+}
+
+.lunchdrop-extension-popup .restaurant-logo-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 14px;
+  color: white;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+.lunchdrop-extension-popup .restaurant-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
 .lunchdrop-extension-popup .order-rated-badge {
   font-size: 18px;
   line-height: 1;

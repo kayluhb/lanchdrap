@@ -337,7 +337,7 @@ export class Rating {
     this.orderDate = data.orderDate || '';
     this.rating = data.rating || null; // 1-4 scale
     this.comment = data.comment || '';
-    this.items = data.items || []; // Array of MenuItem objects
+    this.items = data.items || []; // Array of MenuItem objects (optional, pulled from existing order data)
     this.timestamp = data.timestamp || new Date().toISOString();
     this.userAgent = data.userAgent || '';
     this.ip = data.ip || '';

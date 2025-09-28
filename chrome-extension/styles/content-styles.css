@@ -444,6 +444,9 @@
 
 .ld-tracking-stats {
   padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 
 .ld-stat-item {
@@ -453,7 +456,6 @@
   gap: 16px;
   flex-wrap: wrap;
   padding: 14px 20px;
-  margin: 16px 0;
   background: var(--ld-card-bg);
   border-radius: 12px;
   border: 1px solid var(--ld-border);
@@ -479,9 +481,9 @@
   padding: 6px 14px;
   border-radius: 20px;
   min-width: 72px;
-  text-align: center;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   border: 1px solid rgba(0, 0, 0, 0.05);
+  text-align: center;
 }
 
 .ld-pill {

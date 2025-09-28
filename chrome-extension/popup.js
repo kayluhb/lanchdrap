@@ -171,9 +171,14 @@ document.addEventListener('DOMContentLoaded', () => {
             <button class="restaurant-item-trash" title="Delete this order">🗑️</button>
             <div class="restaurant-item-content">
               <div class="restaurant-header">
-                <span class="restaurant-name">${restaurantName}</span>
-                <span class="last-order-date">${lastOrderDate}</span>
-                <span class="order-rated-badge" data-restaurant-id="${restaurant.restaurantId}" data-order-date="${restaurant.lastOrderDate}" style="display:none;">Rated ⭐</span>
+                <div class="restaurant-logo-container" style="background-color: ${restaurant.color || '#f0f0f0'};">
+                  ${restaurant.logo ? `<img src="${restaurant.logo}" alt="${restaurantName}" class="restaurant-logo" />` : `<div class="restaurant-logo-placeholder">${restaurantName.charAt(0).toUpperCase()}</div>`}
+                </div>
+                <div class="restaurant-info">
+                  <span class="restaurant-name">${restaurantName}</span>
+                  <span class="last-order-date">${lastOrderDate}</span>
+                  <span class="order-rated-badge" data-restaurant-id="${restaurant.restaurantId}" data-order-date="${restaurant.lastOrderDate}" style="display:none;">Rated ⭐</span>
+                </div>
               </div>
               <div class="restaurant-stats">
                 <div class="stat-items">${recentItems}</div>
@@ -494,40 +499,6 @@ document.addEventListener('DOMContentLoaded', () => {
           
           <textarea class="rating-comment" placeholder="Add a comment about your order..."></textarea>
           
-          <!-- Rating Overview Loading Skeleton -->
-          <div class="rating-overview-skeleton" id="rating-overview-skeleton" style="
-            background: #f8f9fa;
-            border: 1px solid #e9ecef;
-            border-radius: 8px;
-            padding: 12px;
-            margin: 10px 0;
-            animation: pulse 1.5s ease-in-out infinite;
-          ">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-              <div style="
-                background: #e9ecef;
-                height: 16px;
-                width: 120px;
-                border-radius: 4px;
-                animation: shimmer 1.5s ease-in-out infinite;
-              "></div>
-              <div style="
-                background: #e9ecef;
-                height: 14px;
-                width: 60px;
-                border-radius: 4px;
-                animation: shimmer 1.5s ease-in-out infinite;
-              "></div>
-            </div>
-            <div style="
-              background: #e9ecef;
-              height: 12px;
-              width: 200px;
-              border-radius: 4px;
-              animation: shimmer 1.5s ease-in-out infinite;
-            "></div>
-          </div>
-          
           <div class="rating-actions">
             <button class="hide-forever" id="hide-forever" disabled>Submit & Hide Forever</button>
             <button class="rating-submit" id="rating-submit" disabled>Submit</button>
@@ -584,45 +555,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
       const restaurantData = await apiClient.request(endpoint);
 
-      // Get the full restaurant menu for autocomplete
-      // Support both array menus and date-keyed object menus
-      const allMenuItems = new Set();
-      // Prefer top-level menu, then nested restaurant.menu
-      const rawMenu = Array.isArray(restaurantData?.menu)
-        ? restaurantData.menu
-        : restaurantData?.restaurant?.menu;
-      if (Array.isArray(rawMenu)) {
-        for (const entry of rawMenu) {
-          if (typeof entry === 'string') {
-            allMenuItems.add(entry);
-          } else if (entry && typeof entry === 'object' && entry.name) {
-            allMenuItems.add(entry.name);
-          }
+      // Get the full restaurant menu for autocomplete from separate KV record
+      try {
+        const menuResponse = await apiClient.getRestaurantMenu(restaurantId);
+        if (menuResponse?.success && menuResponse?.data?.items) {
+          menuItems = menuResponse.data.items;
         }
-      } else if (rawMenu && typeof rawMenu === 'object') {
-        for (const dateKey of Object.keys(rawMenu)) {
-          const dateMenuItems = Array.isArray(rawMenu[dateKey]) ? rawMenu[dateKey] : [];
-          for (const item of dateMenuItems) {
-            if (typeof item === 'string') {
-              allMenuItems.add(item);
-            } else if (item?.name) {
-              allMenuItems.add(item.name);
-            }
-          }
-        }
-      }
-      menuItems = Array.from(allMenuItems);
-
-      // Fallback: if no menu found, try searching by restaurant name
-      if ((!menuItems || menuItems.length === 0) && restaurantName) {
-        try {
-          const searchResult = await apiClient.searchRestaurantByName(restaurantName);
-          if (Array.isArray(searchResult?.menu)) {
-            menuItems = [...new Set(searchResult.menu)];
-          }
-        } catch (_e) {
-          // ignore fallback errors
-        }
+      } catch (_e) {
+        // If menu fetch fails, continue with empty array
+        menuItems = [];
       }
 
       // Extract user's order for the specific date if available
@@ -631,9 +572,9 @@ document.addEventListener('DOMContentLoaded', () => {
           if (typeof item === 'string') {
             return LanchDrapModels.MenuItem.fromString(item);
           }
-          // Ensure the item has a name field, using label only
+          // Use label field as that's what's stored in KV and returned by API
           const normalizedItem = {
-            name: item.label || 'Unknown Item',
+            label: item.label || 'Unknown Item',
             quantity: item.quantity || 1,
             options: item.options || '',
             fullDescription: item.label || 'Unknown Item',
@@ -656,11 +597,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
       // Check for existing rating for this order
       await checkExistingRating(restaurantId, orderDate, userIdentification.userId);
-
-      // Load restaurant rating statistics
-      await loadRestaurantRatingStats(restaurantId);
-
-      // Update restaurant info section
     } catch (_error) {
       // Could not load restaurant data, continue with empty arrays
     }
@@ -723,89 +659,6 @@ document.addEventListener('DOMContentLoaded', () => {
       return emojis[rating] || '⭐';
     }
 
-    // Function to load restaurant rating statistics
-    async function loadRestaurantRatingStats(restaurantId) {
-      try {
-        const response = await fetch(
-          `${LanchDrapConfig.getApiUrl(LanchDrapConfig.CONFIG.ENDPOINTS.RATINGS)}/stats?restaurant=${encodeURIComponent(restaurantId)}`
-        );
-
-        if (response.ok) {
-          const result = await response.json();
-          if (result.success) {
-            displayRestaurantRatingStats(result.data);
-          } else {
-            // Hide skeleton even if API returns unsuccessful response
-            hideRatingOverviewSkeleton();
-          }
-        } else {
-          // Hide skeleton on HTTP error
-          hideRatingOverviewSkeleton();
-        }
-      } catch (_error) {
-        // Hide skeleton on network error
-        hideRatingOverviewSkeleton();
-      }
-    }
-
-    // Helper function to hide the rating overview skeleton
-    function hideRatingOverviewSkeleton() {
-      const skeleton = document.getElementById('rating-overview-skeleton');
-      if (skeleton) {
-        skeleton.style.display = 'none';
-      }
-    }
-
-    // Function to display restaurant rating statistics
-    function displayRestaurantRatingStats(stats) {
-      // Hide the loading skeleton
-      hideRatingOverviewSkeleton();
-
-      // Find or create rating stats section
-      let statsSection = document.querySelector('.restaurant-rating-stats');
-      if (!statsSection) {
-        statsSection = document.createElement('div');
-        statsSection.className = 'restaurant-rating-stats';
-        statsSection.style.cssText = `
-          background: #f8f9fa;
-          border: 1px solid #e9ecef;
-          border-radius: 8px;
-          padding: 12px;
-          margin: 10px 0;
-          font-size: 0.9em;
-        `;
-
-        // Insert after the rating comment
-        const ratingComment = document.querySelector('.rating-comment');
-        if (ratingComment) {
-          ratingComment.insertAdjacentElement('afterend', statsSection);
-        }
-      }
-
-      if (stats.totalRatings > 0) {
-        const averageEmoji = getRatingEmoji(Math.round(stats.averageRating));
-        const distribution = stats.ratingDistribution
-          .map((dist) => `${getRatingEmoji(dist.stars)} ${dist.count}`)
-          .join(' • ');
-
-        statsSection.innerHTML = `
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-            <strong>Restaurant Rating: ${averageEmoji} ${stats.averageRating.toFixed(1)}</strong>
-            <span style="color: #666;">${stats.totalRatings} rating${stats.totalRatings !== 1 ? 's' : ''}</span>
-          </div>
-          <div style="color: #666; font-size: 0.85em;">
-            ${distribution}
-          </div>
-        `;
-      } else {
-        statsSection.innerHTML = `
-          <div style="color: #666; text-align: center;">
-            No ratings yet - be the first to rate this restaurant!
-          </div>
-        `;
-      }
-    }
-
     // Order display functionality
     function renderOrderItems(items) {
       const orderItemsDiv = document.getElementById('order-items');
@@ -820,7 +673,7 @@ document.addEventListener('DOMContentLoaded', () => {
         .map(
           (item) => `
         <div class="order-item">
-          <span class="order-item-name">${item.name}</span>
+          <span class="order-item-name">${item.label}</span>
         </div>
       `
         )
@@ -911,9 +764,9 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       for (const item of items) {
-        // Check if this item is already selected by comparing names
+        // Check if this item is already selected by comparing labels
         const isAlreadySelected = selectedMenuItems.some(
-          (selected) => selected.name.toLowerCase() === item.toLowerCase()
+          (selected) => selected.label.toLowerCase() === item.toLowerCase()
         );
         if (isAlreadySelected) continue;
 
@@ -954,8 +807,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const tag = document.createElement('div');
         tag.className = 'selected-item';
         tag.innerHTML = `
-          <span>${item.name}</span>
-          <button class="remove-item" data-item="${item.name}">×</button>
+          <span>${item.label}</span>
+          <button class="remove-item" data-item="${item.label}">×</button>
         `;
         selectedItems.appendChild(tag);
       }
@@ -1115,17 +968,6 @@ document.addEventListener('DOMContentLoaded', () => {
           userId: userId,
           restaurant: restaurantId,
           orderDate: orderDate,
-          items:
-            selectedMenuItems.length > 0
-              ? selectedMenuItems.map((item) => item.toJSON())
-              : [
-                  {
-                    name: 'Unknown Items',
-                    quantity: 1,
-                    options: '',
-                    fullDescription: 'Unknown Items',
-                  },
-                ],
           rating: currentRating,
           comment: comment,
           timestamp: new Date().toISOString(),

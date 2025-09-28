@@ -14,10 +14,10 @@ window.LanchDrapModels = window.LanchDrapModels || {};
  */
 class MenuItem {
   constructor(data = {}) {
-    this.name = data.name || '';
+    this.label = data.label || data.name || '';
     this.quantity = data.quantity || 1;
     this.options = data.options || '';
-    this.fullDescription = data.fullDescription || '';
+    this.fullDescription = data.fullDescription || this.label;
   }
 
   /**
@@ -25,7 +25,7 @@ class MenuItem {
    */
   static fromString(itemName) {
     return new MenuItem({
-      name: itemName,
+      label: itemName,
       quantity: 1,
       options: '',
       fullDescription: itemName,
@@ -36,22 +36,22 @@ class MenuItem {
    * Convert MenuItem to a simple string representation
    */
   toString() {
-    return this.fullDescription || this.name;
+    return this.fullDescription || this.label;
   }
 
   /**
-   * Check if two MenuItems are the same (by name)
+   * Check if two MenuItems are the same (by label)
    */
   equals(other) {
     if (!other || !(other instanceof MenuItem)) return false;
-    return this.name.toLowerCase().trim() === other.name.toLowerCase().trim();
+    return this.label.toLowerCase().trim() === other.label.toLowerCase().trim();
   }
 
   /**
-   * Get a normalized name for comparison
+   * Get a normalized label for comparison
    */
-  getNormalizedName() {
-    return this.name.toLowerCase().trim();
+  getNormalizedLabel() {
+    return this.label.toLowerCase().trim();
   }
 
   /**
@@ -59,7 +59,7 @@ class MenuItem {
    */
   toJSON() {
     return {
-      name: this.name,
+      label: this.label,
       quantity: this.quantity,
       options: this.options,
       fullDescription: this.fullDescription,
@@ -213,10 +213,10 @@ class UserOrder {
   }
 
   /**
-   * Get items as simple names (for backward compatibility)
+   * Get items as simple labels (for backward compatibility)
    */
-  getItemNames() {
-    return this.items.map((item) => item.name);
+  getItemLabels() {
+    return this.items.map((item) => item.label);
   }
 
   /**
@@ -310,7 +310,7 @@ class Rating {
     this.orderDate = data.orderDate || '';
     this.rating = data.rating || null; // 1-4 scale
     this.comment = data.comment || '';
-    this.items = data.items || []; // Array of MenuItem objects
+    this.items = data.items || []; // Array of MenuItem objects (optional, pulled from existing order data)
     this.timestamp = data.timestamp || new Date().toISOString();
     this.userAgent = data.userAgent || '';
     this.ip = data.ip || '';
@@ -579,24 +579,24 @@ const ModelUtils = {
   },
 
   /**
-   * Find matching menu items by name
+   * Find matching menu items by label
    */
-  findMatchingMenuItems(items, targetName) {
-    const normalizedTarget = targetName.toLowerCase().trim();
-    return items.filter((item) => item.getNormalizedName() === normalizedTarget);
+  findMatchingMenuItems(items, targetLabel) {
+    const normalizedTarget = targetLabel.toLowerCase().trim();
+    return items.filter((item) => item.getNormalizedLabel() === normalizedTarget);
   },
 
   /**
-   * Merge two arrays of menu items, keeping unique items by name
+   * Merge two arrays of menu items, keeping unique items by label
    */
   mergeMenuItems(existingItems, newItems) {
     const result = [...existingItems];
-    const existingNames = new Set(existingItems.map((item) => item.getNormalizedName()));
+    const existingLabels = new Set(existingItems.map((item) => item.getNormalizedLabel()));
 
     for (const newItem of newItems) {
-      if (!existingNames.has(newItem.getNormalizedName())) {
+      if (!existingLabels.has(newItem.getNormalizedLabel())) {
         result.push(newItem);
-        existingNames.add(newItem.getNormalizedName());
+        existingLabels.add(newItem.getNormalizedLabel());
       }
     }
 
@@ -610,20 +610,20 @@ const ModelUtils = {
     if (!Array.isArray(existingItems)) existingItems = [];
     if (!Array.isArray(newItems)) return existingItems;
 
-    // Create a set of new item names for quick lookup
-    const newItemNames = new Set(newItems.map((item) => item.getNormalizedName()));
+    // Create a set of new item labels for quick lookup
+    const newItemLabels = new Set(newItems.map((item) => item.getNormalizedLabel()));
 
     // Start with items that exist in both old and new menus
     const updatedItems = existingItems.filter((existingItem) => {
-      return newItemNames.has(existingItem.getNormalizedName());
+      return newItemLabels.has(existingItem.getNormalizedLabel());
     });
 
     // Add new items that don't already exist (avoid duplicates)
-    const existingNames = new Set(updatedItems.map((item) => item.getNormalizedName()));
+    const existingLabels = new Set(updatedItems.map((item) => item.getNormalizedLabel()));
     for (const newItem of newItems) {
-      if (!existingNames.has(newItem.getNormalizedName())) {
+      if (!existingLabels.has(newItem.getNormalizedLabel())) {
         updatedItems.push(newItem);
-        existingNames.add(newItem.getNormalizedName());
+        existingLabels.add(newItem.getNormalizedLabel());
       }
     }
 

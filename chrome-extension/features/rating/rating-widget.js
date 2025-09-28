@@ -321,17 +321,33 @@ window.LanchDrapRatingWidget = (() => {
       const comment = commentInput.value.trim();
 
       try {
+        // Get user ID for proper duplicate detection
+        let userId = null;
+        if (typeof LanchDrapUserId !== 'undefined') {
+          userId = LanchDrapUserId.getUserId();
+        }
+
+        if (!userId) {
+          alert('Unable to get user ID. Please try again.');
+
+          // Re-enable the button on error
+          submitButton.disabled = false;
+          submitButton.textContent = 'Submit Rating';
+          submitButton.style.opacity = '1';
+          submitButton.style.cursor = 'pointer';
+          return;
+        }
+
+        // Generate order date from current date or use today
+        const orderDate = new Date().toISOString().split('T')[0];
+
         const ratingData = {
-          orderId: orderData?.orderId || window.LanchDrapDOMUtils.generateOrderId(),
+          userId: userId,
           restaurant: orderData?.restaurant || 'Unknown Restaurant',
-          items:
-            selectedMenuItems.length > 0
-              ? selectedMenuItems
-              : orderData?.items || ['Unknown Items'],
+          orderDate: orderDate,
           rating: currentRating,
           comment: comment,
           timestamp: new Date().toISOString(),
-          orderTotal: orderData?.total || '$0.00',
         };
 
         // Send to Cloudflare Worker

@@ -292,7 +292,7 @@ window.LanchDrapStatsDisplay = (() => {
         ? lastItems
             .map(
               (item) =>
-                `<strong>${item.name || item.fullDescription || 'Unknown Item'}</strong> (${item.quantity || 1})` +
+                `<strong>${item.label || 'Unknown Item'}</strong> (${item.quantity || 1})` +
                 `${item.options ? `<br>(${item.options})` : ''}`
             )
             .join(', ')

@@ -246,8 +246,8 @@ async function trackUserOrders(env, orders, date) {
     }
 
     try {
-      // Store in user's order history by date
-      const userHistoryKey = `user_restaurant_history:${order.userId}:${order.deliveryId || 'unknown'}`;
+      // Store in user's order history by date using restaurant ID
+      const userHistoryKey = `user_restaurant_history:${order.userId}:${order.restaurantId || order.deliveryId || 'unknown'}`;
       const existingHistory = await env.LANCHDRAP_RATINGS.get(userHistoryKey);
 
       let historyData = {};
@@ -261,7 +261,13 @@ async function trackUserOrders(env, orders, date) {
 
       // Add order to history by date
       if (!historyData[date]) {
-        historyData[date] = { items: [] };
+        historyData[date] = { items: [], processedOrders: [] };
+      }
+
+      // Check if this order has already been processed for this date
+      if (historyData[date].processedOrders?.includes(order.id)) {
+        console.log('Order already processed for this date, skipping:', order.id);
+        continue;
       }
 
       // Add order items to history
@@ -273,11 +279,37 @@ async function trackUserOrders(env, orders, date) {
           description: item.description,
           price: item.price,
           quantity: item.quantity,
-          modifications: item.modifications,
           specialRequest: item.specialRequest,
+          orderId: order.id, // Add order ID to track which order this item came from
         }));
 
-        historyData[date].items.push(...orderItems);
+        // Check for duplicate items and only add new ones
+        // Use item ID for deduplication since the same item shouldn't appear twice
+        const existingItemIds = new Set(historyData[date].items.map((item) => item.id));
+        const newItems = orderItems.filter((item) => !existingItemIds.has(item.id));
+
+        if (newItems.length > 0) {
+          historyData[date].items.push(...newItems);
+          console.log(
+            `Added ${newItems.length} new items for order ${order.id}, skipped ${orderItems.length - newItems.length} duplicates`
+          );
+        } else {
+          console.log(`All items for order ${order.id} already exist, skipping`);
+        }
+      }
+
+      // Mark this order as processed for this date
+      if (!historyData[date].processedOrders) {
+        historyData[date].processedOrders = [];
+      }
+      historyData[date].processedOrders.push(order.id);
+
+      // Store restaurant ID in the order data for proper mapping
+      if (order.restaurantId) {
+        historyData[date].restaurantId = order.restaurantId;
+        console.log(`Storing restaurant ID ${order.restaurantId} for order ${order.id}`);
+      } else {
+        console.log(`No restaurant ID found for order ${order.id}`);
       }
 
       // Update the history
@@ -299,6 +331,22 @@ export async function trackAppearances(request, env) {
   try {
     const trackingData = await request.json();
     const { restaurants, orders, date } = trackingData;
+
+    console.log('LanchDrap: Tracking data received:', {
+      date,
+      restaurantsCount: restaurants?.length || 0,
+      ordersCount: orders?.length || 0,
+      restaurants:
+        restaurants?.map((r) => ({ id: r.id, name: r.name, restaurant: r.restaurant })) || [],
+      orders:
+        orders?.map((o) => ({
+          id: o.id,
+          restaurantId: o.restaurantId,
+          deliveryId: o.deliveryId,
+          itemsCount: o.items?.length || 0,
+          itemIds: o.items?.map((item) => item.id) || [],
+        })) || [],
+    });
 
     if (!date) {
       return createErrorResponse('Date is required', 400);
@@ -874,10 +922,10 @@ export async function getRestaurantById(request, env) {
                 return { name: item, quantity: 1 };
               }
               return {
-                name: item.name || item.fullDescription || 'Unknown Item',
+                name: item.label || 'Unknown Item',
                 quantity: item.quantity || 1,
                 options: item.options || '',
-                fullDescription: item.fullDescription || item.name || 'Unknown Item',
+                fullDescription: item.label || 'Unknown Item',
               };
             });
 
@@ -1006,9 +1054,20 @@ export async function updateUserOrder(request, env) {
       }
     }
 
+    // Normalize items to exclude modifications (consistent with data-layer.js)
+    const normalizedItems = (items || []).map((item) => ({
+      id: item.id,
+      itemId: item.itemId,
+      label: item.label,
+      description: item.description,
+      price: item.price,
+      quantity: item.quantity,
+      specialRequest: item.specialRequest,
+    }));
+
     // Update the order for the specific date
     historyData[orderDate] = {
-      items: items || [],
+      items: normalizedItems,
       updatedAt: new Date().toISOString(),
     };
 
@@ -1296,6 +1355,8 @@ export async function getUserRestaurantSummary(request, env) {
           }
           const lastOrderDate = orders.length > 0 ? orders[0].date : null; // First item is newest
 
+          // Restaurant ID is already extracted from the key
+
           // Look up restaurant record to include display name (and optional color/logo)
           let restaurantName = restaurantId;
           let color = null;
@@ -1308,8 +1369,17 @@ export async function getUserRestaurantSummary(request, env) {
               restaurantName = restaurantData.name || restaurantId;
               color = restaurantData.color || null;
               logo = restaurantData.logo || null;
+              console.log(`Found restaurant data for ${restaurantId}:`, {
+                name: restaurantName,
+                color,
+                logo,
+              });
+            } else {
+              console.log(`No restaurant data found for ${restaurantId}`);
             }
-          } catch (_e) {}
+          } catch (_e) {
+            console.log(`Error looking up restaurant data for ${restaurantId}:`, _e);
+          }
 
           restaurants.push({
             restaurantId,

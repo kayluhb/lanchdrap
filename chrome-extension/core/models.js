@@ -411,7 +411,6 @@ class OrderHistoryItem {
       specialRequestRequired: this.specialRequestRequired,
       labelFor: this.labelFor,
       guestToken: this.guestToken,
-      modifications: this.modifications,
       paymentMethod: this.paymentMethod,
       fullDescription: this.fullDescription,
     };

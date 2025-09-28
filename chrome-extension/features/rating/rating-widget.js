@@ -57,9 +57,7 @@ window.LanchDrapRatingWidget = (() => {
               const lastOrder = restaurantOrders[0];
               if (lastOrder?.items && lastOrder.items.length > 0) {
                 // Extract item names from the last order
-                lastOrderItems = lastOrder.items
-                  .map((item) => item.name || item.fullDescription || item)
-                  .filter(Boolean);
+                lastOrderItems = lastOrder.items.map((item) => item.label || item).filter(Boolean);
               }
             }
           }

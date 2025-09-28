@@ -146,10 +146,13 @@ async function trackRestaurantAppearances(data) {
     }
 
     // Create a unique key for this tracking request to prevent duplicates
-    const trackingKey = `${currentDate}-${JSON.stringify(data?.restaurants?.map((r) => r.id) || [])}`;
+    // Include both restaurants and orders in the key to prevent duplicate tracking
+    const restaurantIds = data?.restaurants?.map((r) => r.id) || [];
+    const orderIds = data?.delivery?.orders?.map((o) => o.id) || [];
+    const trackingKey = `${currentDate}-${JSON.stringify(restaurantIds)}-${JSON.stringify(orderIds)}`;
 
     // Check if we've already tracked this data today
-    if (window.lanchDrapTrackedKeys && window.lanchDrapTrackedKeys.has(trackingKey)) {
+    if (window.lanchDrapTrackedKeys?.has(trackingKey)) {
       console.log('LanchDrap: Already tracked this data today, skipping:', trackingKey);
       return;
     }

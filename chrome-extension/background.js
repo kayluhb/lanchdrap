@@ -84,6 +84,8 @@ async function trackRestaurantAppearancesInBackground(trackingData, date) {
     // Extract restaurants and orders from data
     const restaurants = trackingData?.restaurants || [];
     const orders = trackingData?.delivery?.orders || [];
+    const restaurantId =
+      trackingData?.delivery?.restaurant?.id || trackingData?.currentRestaurant?.id;
 
     // Don't send empty data to the API
     if ((!restaurants || restaurants.length === 0) && (!orders || orders.length === 0)) {
@@ -99,9 +101,18 @@ async function trackRestaurantAppearancesInBackground(trackingData, date) {
       dataToSend.restaurants = restaurants;
     }
 
-    // Add orders if available
+    // Add orders if available, ensuring each order has the restaurant ID
     if (orders && orders.length > 0) {
-      dataToSend.orders = orders;
+      const ordersWithRestaurantId = orders.map((order) => ({
+        ...order,
+        restaurantId: restaurantId || order.restaurantId || order.deliveryId || 'unknown',
+      }));
+      dataToSend.orders = ordersWithRestaurantId;
+      console.log('LanchDrap: Added restaurant ID to orders:', {
+        restaurantId,
+        ordersCount: ordersWithRestaurantId.length,
+        sampleOrder: ordersWithRestaurantId[0],
+      });
     }
 
     const result = await LanchDrapApiClient.trackRestaurantAppearances(dataToSend);

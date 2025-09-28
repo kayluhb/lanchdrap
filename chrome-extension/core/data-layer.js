@@ -130,6 +130,8 @@ window.LanchDrapDataLayer = (() => {
 
     return {
       ...delivery.restaurant,
+      // Map brandColor to color for consistency with API data structure
+      color: delivery.restaurant?.brandColor || delivery.restaurant?.color || null,
       numSlotsAvailable: delivery.numSlotsAvailable,
       menu: extractMenuFromDelivery(delivery),
       status: isSoldOut ? 'soldout' : 'available',
@@ -162,9 +164,9 @@ window.LanchDrapDataLayer = (() => {
     return items.map((item) => ({
       itemId: item.itemId,
       quantity: item.quantity || 1,
-      name: item.label || item.name || 'Unknown Item', // Use label as primary name source
+      name: item.label || 'Unknown Item', // Use label only
       description: item.description || '',
-      fullDescription: item.label || item.name || 'Unknown Item', // Use label for full description
+      fullDescription: item.label || 'Unknown Item', // Use label only
       options: '', // Empty options field as requested
       price: item.price || 0,
       specialRequest: item.specialRequest,

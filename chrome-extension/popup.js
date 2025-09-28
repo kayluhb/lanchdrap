@@ -139,9 +139,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Get the most recent order items for display
         const recentItems =
           recentOrders.length > 0 && recentOrders[0].items
-            ? recentOrders[0].items
-                .map((item) => item.name || item.fullDescription || 'Unknown Item')
-                .join(', ')
+            ? recentOrders[0].items.map((item) => item.label || 'Unknown Item').join(', ')
             : 'No items recorded';
 
         // Use restaurant name directly from the data; fallback to ID until lookup completes
@@ -370,7 +368,9 @@ document.addEventListener('DOMContentLoaded', () => {
         e.stopPropagation();
 
         const restaurantItem = trashButton.closest('.restaurant-item');
-        restaurantItem.classList.toggle('swiped');
+        if (restaurantItem) {
+          restaurantItem.classList.toggle('swiped');
+        }
       });
     }
 
@@ -631,7 +631,14 @@ document.addEventListener('DOMContentLoaded', () => {
           if (typeof item === 'string') {
             return LanchDrapModels.MenuItem.fromString(item);
           }
-          return LanchDrapModels.MenuItem.fromJSON(item);
+          // Ensure the item has a name field, using label only
+          const normalizedItem = {
+            name: item.label || 'Unknown Item',
+            quantity: item.quantity || 1,
+            options: item.options || '',
+            fullDescription: item.label || 'Unknown Item',
+          };
+          return LanchDrapModels.MenuItem.fromJSON(normalizedItem);
         });
 
         // Display the user's order items

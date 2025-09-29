@@ -719,7 +719,16 @@ document.addEventListener('DOMContentLoaded', () => {
           const userId = await lanchDrapUserIdManager.getUserId();
 
           // Update the user's order with the new items for the specific date
-          const items = selectedMenuItems.map((item) => item.toJSON());
+          // Convert MenuItem objects to the format expected by the backend
+          const items = selectedMenuItems.map((item) => ({
+            id: Date.now() + Math.random(), // Generate a unique ID
+            itemId: `item_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`, // Generate itemId
+            label: item.label,
+            description: item.fullDescription || item.label,
+            price: 0, // Default price since we don't have pricing info in edit mode
+            quantity: item.quantity,
+            specialRequest: null,
+          }));
 
           await apiClient.updateUserOrder(userId, restaurantId, orderDate, items);
         }
@@ -1042,13 +1051,24 @@ document.addEventListener('DOMContentLoaded', () => {
           orderDate: orderDate,
           items:
             selectedMenuItems.length > 0
-              ? selectedMenuItems.map((item) => item.toJSON())
+              ? selectedMenuItems.map((item) => ({
+                  id: Date.now() + Math.random(), // Generate a unique ID
+                  itemId: `item_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`, // Generate itemId
+                  label: item.label,
+                  description: item.fullDescription || item.label,
+                  price: 0, // Default price since we don't have pricing info in edit mode
+                  quantity: item.quantity,
+                  specialRequest: null,
+                }))
               : [
                   {
-                    name: 'Unknown Items',
+                    id: Date.now() + Math.random(),
+                    itemId: `item_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`,
+                    label: 'Unknown Items',
+                    description: 'Unknown Items',
+                    price: 0,
                     quantity: 1,
-                    options: '',
-                    fullDescription: 'Unknown Items',
+                    specialRequest: null,
                   },
                 ],
           rating: currentRating,

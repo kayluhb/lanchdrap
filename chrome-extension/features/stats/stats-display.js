@@ -57,17 +57,35 @@ window.LanchDrapStatsDisplay = (() => {
           <div class="ld-skeleton-bar" style="height:24px; width:200px; border-radius:12px;"></div>
         </div>
         <div class="ld-tracking-stats">
-          <div class="ld-skeleton-row">
-            <div class="ld-skeleton-bar" style="width:120px;"></div>
-            <div class="ld-skeleton-bar" style="width:60px;"></div>
+          <!-- Rating Synopsis Row Skeleton -->
+          <div class="ld-stat-item">
+            <div style="display: flex; align-items: center; gap: 14px;">
+              <div class="ld-skeleton-bar" style="width:60px; height:20px; border-radius:6px;"></div>
+              <div class="ld-skeleton-bar" style="width:80px; height:20px; border-radius:20px;"></div>
+            </div>
+            <div style="display: flex; align-items: center; gap: 14px;">
+              <div class="ld-skeleton-bar" style="width:80px; height:20px; border-radius:6px;"></div>
+              <div class="ld-skeleton-bar" style="width:120px; height:20px; border-radius:20px;"></div>
+            </div>
           </div>
-          <div class="ld-skeleton-row">
-            <div class="ld-skeleton-bar" style="width:100px;"></div>
-            <div class="ld-skeleton-bar" style="width:80px;"></div>
-          </div>
-          <div class="ld-skeleton-row">
-            <div class="ld-skeleton-bar" style="width:140px;"></div>
-            <div class="ld-skeleton-bar" style="width:40px;"></div>
+          <!-- Appearances and Sold Out Stats Grid Skeleton -->
+          <div class="ld-stat-item" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+            <div style="display: flex; align-items: center; gap: 14px;">
+              <div class="ld-skeleton-bar" style="width:120px; height:20px; border-radius:6px;"></div>
+              <div class="ld-skeleton-bar" style="width:40px; height:20px; border-radius:20px;"></div>
+            </div>
+            <div style="display: flex; align-items: center; gap: 14px;">
+              <div class="ld-skeleton-bar" style="width:80px; height:20px; border-radius:6px;"></div>
+              <div class="ld-skeleton-bar" style="width:100px; height:20px; border-radius:20px;"></div>
+            </div>
+            <div style="display: flex; align-items: center; gap: 14px;">
+              <div class="ld-skeleton-bar" style="width:100px; height:20px; border-radius:6px;"></div>
+              <div class="ld-skeleton-bar" style="width:40px; height:20px; border-radius:20px;"></div>
+            </div>
+            <div style="display: flex; align-items: center; gap: 14px;">
+              <div class="ld-skeleton-bar" style="width:90px; height:20px; border-radius:6px;"></div>
+              <div class="ld-skeleton-bar" style="width:60px; height:20px; border-radius:20px;"></div>
+            </div>
           </div>
         </div>
       </div>
@@ -806,14 +824,35 @@ window.LanchDrapStatsDisplay = (() => {
         'Restaurant Stats'
       );
 
-      // Insert or replace skeleton in-place
+      // Insert or replace skeleton in-place with smooth transition
       const existingSkeleton = document.getElementById('lanchdrap-restaurant-stats-skeleton');
       if (existingSkeleton?.parentNode) {
-        existingSkeleton.replaceWith(trackingInfo);
+        // Add smooth transition by fading out skeleton and fading in content
+        existingSkeleton.style.transition = 'opacity 0.3s ease';
+        existingSkeleton.style.opacity = '0';
+
+        // Wait for fade out, then replace and fade in
+        setTimeout(() => {
+          trackingInfo.style.opacity = '0';
+          trackingInfo.style.transition = 'opacity 0.3s ease';
+          existingSkeleton.replaceWith(trackingInfo);
+
+          // Trigger fade in
+          requestAnimationFrame(() => {
+            trackingInfo.style.opacity = '1';
+          });
+        }, 300);
       } else {
         // Try to find a good insertion point near the restaurant name
         const insertionPoint = restaurantNameElement.parentNode || restaurantNameElement;
+        trackingInfo.style.opacity = '0';
+        trackingInfo.style.transition = 'opacity 0.3s ease';
         insertionPoint.insertBefore(trackingInfo, restaurantNameElement.nextSibling);
+
+        // Trigger fade in
+        requestAnimationFrame(() => {
+          trackingInfo.style.opacity = '1';
+        });
       }
       if (window.LanchDrapKeyManager?.forceUpdateKeyVisibility) {
         window.LanchDrapKeyManager.forceUpdateKeyVisibility();

@@ -402,6 +402,16 @@ window.LanchDrapStatsDisplay = (() => {
                 <span class="ld-stat-value" style="font-weight:600; font-size:14px;">${formatDateString(stats.userOrderHistory.lastOrderDate)}</span>
               </div>
               ${
+                stats.userOrderHistory.lastRating
+                  ? `
+              <div style="display: flex; align-items: center; gap: 12px;">
+                <span class="ld-stat-label">Last Rating</span>
+                <span class="ld-stat-value" style="font-size: 20px;">${stats.userOrderHistory.lastRating.emoji}</span>
+              </div>
+              `
+                  : ''
+              }
+              ${
                 lastItems && lastItems.length > 0
                   ? `
               <div style="display: flex; align-items: center; gap: 12px;">
@@ -499,7 +509,6 @@ window.LanchDrapStatsDisplay = (() => {
         typeof window.LanchDrapApiClient === 'undefined' ||
         typeof window.LanchDrapConfig === 'undefined'
       ) {
-        console.error('LanchDrap: Stats display - API client or config not available');
         return;
       }
 
@@ -608,8 +617,7 @@ window.LanchDrapStatsDisplay = (() => {
             'Selected Restaurant Stats'
           );
         }
-      } catch (error) {
-        console.error('LanchDrap: Stats display - API error:', error);
+      } catch (_error) {
         // Use fallback stats on error
         const fallbackStats = {
           name: restaurantName,

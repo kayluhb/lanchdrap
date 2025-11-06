@@ -9,126 +9,181 @@ window.LanchDrapRestaurantScraper = (() => {
   // Function to track both restaurants and orders on daily pages
   // Note: This function is now deprecated as tracking is handled in the background service worker
   // Keeping for backward compatibility but the actual tracking happens via chrome.runtime.sendMessage
-  async function trackRestaurantAppearances(data, date) {
+  async function trackRestaurantAppearances() {
     // This function is now a no-op as tracking is handled in the background service worker
     // The content script calls this but the actual API calls happen in background.js
     return;
   }
 
-  // Function to add sell out indicators to restaurant cards
-  function addSellOutIndicators(restaurantsWithRates) {
+  // Helper function to check if a date is today
+  function isToday(dateString) {
+    if (!dateString) return false;
+    const date = new Date(dateString);
+    const today = new Date();
+    return (
+      date.getFullYear() === today.getFullYear() &&
+      date.getMonth() === today.getMonth() &&
+      date.getDate() === today.getDate()
+    );
+  }
+
+  // Helper function to check if restaurant sold out last time
+  function checkSoldOutLastTime(appearances, soldOutDates) {
+    if (!appearances || !appearances.length || !soldOutDates || !soldOutDates.length) {
+      return false;
+    }
+
+    // Filter out today's date from soldOutDates (we don't want to show badge for today)
+    const filteredSoldOutDates = soldOutDates.filter((date) => !isToday(date));
+
+    if (filteredSoldOutDates.length === 0) {
+      return false;
+    }
+
+    // Get today's date for comparison
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    // Filter appearances to only include past dates (not future, not today)
+    const pastAppearances = appearances.filter((date) => {
+      const appearanceDate = new Date(date);
+      appearanceDate.setHours(0, 0, 0, 0);
+      return appearanceDate < today;
+    });
+
+    if (pastAppearances.length === 0) {
+      return false;
+    }
+
+    // Sort past appearances to get the most recent one
+    const sortedPastAppearances = [...pastAppearances].sort((a, b) => new Date(b) - new Date(a));
+    const mostRecentPastAppearance = sortedPastAppearances[0];
+
+    // Check if most recent past appearance is in filtered soldOutDates
+    return filteredSoldOutDates.includes(mostRecentPastAppearance);
+  }
+
+  // Function to add badges to restaurant cards (slots available and sold out last time)
+  function addSellOutIndicators(restaurantsData) {
     try {
+      console.log('LanchDrap: addSellOutIndicators called with data:', restaurantsData);
+
       // Check if indicators have already been added to prevent duplicate processing
-      if (document.querySelector('.ld-sellout-indicator')) {
+      const existingBadges = document.querySelectorAll(
+        '.ld-slots-badge, .ld-soldout-last-time-badge'
+      );
+      if (existingBadges.length > 0) {
+        console.log('LanchDrap: Badges already exist, skipping');
         return;
       }
 
-      // Try multiple selectors to find restaurant cards
-      let restaurantCards = [];
+      // Find the restaurant grid container using a reliable class-based selector
+      let restaurantGrid = document.querySelector('.mx-4.my-8');
 
-      // Try different selectors
-      const selectors = [
-        'a[href*="/app/"]',
-        'a[href*="/restaurant/"]',
-        'div[class*="restaurant"] a',
-        'div[class*="card"] a',
-        'a[class*="restaurant"]',
-      ];
-
-      for (const selector of selectors) {
-        const cards = document.querySelectorAll(selector);
-        if (cards.length > 0) {
-          restaurantCards = cards;
-          break;
-        }
+      // Try fallback approach if selector doesn't work
+      if (!restaurantGrid && window.LanchDrapDOMUtils?.getCachedRestaurantGrid) {
+        restaurantGrid = window.LanchDrapDOMUtils.getCachedRestaurantGrid();
+        console.log('LanchDrap: Found restaurant grid via cached approach');
       }
 
-      // If still no cards found, try the cached grid approach
-      if (restaurantCards.length === 0) {
-        const restaurantGrid = window.LanchDrapDOMUtils.getCachedRestaurantGrid();
-        if (restaurantGrid) {
-          restaurantCards = restaurantGrid.querySelectorAll('a[href*="/app/"]');
-        }
+      if (!restaurantGrid) {
+        console.warn('LanchDrap: Restaurant grid container not found');
+        return;
       }
 
-      // Find the restaurant with the highest sell out rate
-      const restaurantsWithValidRates = restaurantsWithRates.filter((r) => r.sellOutRate > 0);
+      console.log('LanchDrap: Found restaurant grid container');
 
-      if (restaurantsWithValidRates.length === 0) {
-        return; // No restaurants with sell out data
+      // Now find restaurant cards within the grid only
+      const restaurantCards = restaurantGrid.querySelectorAll('a[href*="/app/"]');
+
+      if (!restaurantCards || restaurantCards.length === 0) {
+        console.warn('LanchDrap: No restaurant cards found in grid');
+        return;
       }
 
-      // Sort by sell out rate (highest first)
-      const sortedBySellOutRate = restaurantsWithValidRates.sort(
-        (a, b) => b.sellOutRate - a.sellOutRate
+      console.log(`LanchDrap: Found ${restaurantCards.length} restaurant cards in grid`);
+
+      console.log(
+        `LanchDrap: Processing ${restaurantsData.length} restaurants against ${restaurantCards.length} cards`
       );
 
-      // Only show indicator on the restaurant with the highest sell out rate
-      // AND only if it's significantly high and significantly higher than others
-      const highestSellOutRestaurant = sortedBySellOutRate[0];
-      const secondHighestRate =
-        sortedBySellOutRate.length > 1 ? sortedBySellOutRate[1].sellOutRate : 0;
+      // Match by index since the order is the same
+      const restaurantCardsArray = Array.from(restaurantCards);
 
-      // Get configuration values
-      const sellOutThreshold = window.LanchDrapConfig?.CONFIG?.SETTINGS?.SELL_OUT_THRESHOLD || 0.8;
-      const minDifference =
-        window.LanchDrapConfig?.CONFIG?.SETTINGS?.SELL_OUT_MIN_DIFFERENCE || 0.2;
+      // Process each restaurant by matching index
+      let badgesAdded = 0;
+      for (let i = 0; i < restaurantsData.length; i++) {
+        const restaurantData = restaurantsData[i];
+        const restaurantCard = restaurantCardsArray[i];
 
-      // Only show indicator if:
-      // 1. The highest rate is >= threshold
-      // 2. The highest rate is at least minDifference higher than the second highest
-      // 3. OR if there's only one restaurant with data and it's >= threshold
-      const shouldShowIndicator =
-        (highestSellOutRestaurant.sellOutRate >= sellOutThreshold &&
-          highestSellOutRestaurant.sellOutRate - secondHighestRate >= minDifference) ||
-        (restaurantsWithValidRates.length === 1 &&
-          highestSellOutRestaurant.sellOutRate >= sellOutThreshold);
+        console.log(
+          `LanchDrap: Processing restaurant ${i}: ${restaurantData.name}`,
+          restaurantData
+        );
 
-      if (shouldShowIndicator) {
-        // Find the card for this restaurant
-        const restaurantCard = Array.from(restaurantCards).find((card) => {
-          const href = card.getAttribute('href');
-          return href?.includes(highestSellOutRestaurant.id);
-        });
+        if (!restaurantCard) {
+          console.warn(
+            `LanchDrap: No card found at index ${i} for restaurant ${restaurantData.name}`
+          );
+          continue;
+        }
 
-        if (restaurantCard) {
-          // Check if indicator already exists
-          const existingIndicator = restaurantCard.querySelector('.ld-sellout-indicator');
+        // Make sure the card has relative positioning
+        const cardDiv = restaurantCard.querySelector('div');
+        if (!cardDiv) {
+          console.warn(`LanchDrap: No div found inside card for restaurant ${restaurantData.name}`);
+          continue;
+        }
+        cardDiv.style.position = 'relative';
 
-          if (!existingIndicator) {
-            // Create the indicator element
-            const indicator = document.createElement('div');
-            indicator.className = 'ld-sellout-indicator';
-            indicator.style.cssText = `
-              position: absolute;
-              bottom: 8px;
-              left: 50%;
-              transform: translateX(-50%);
-              background: linear-gradient(135deg, #ff6b6b, #ee5a52);
-              color: white;
-              padding: 4px 8px;
-              border-radius: 12px;
-              font-size: 11px;
-              font-weight: 600;
-              z-index: 10;
-              box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-              text-transform: uppercase;
-              letter-spacing: 0.5px;
-              white-space: nowrap;
-            `;
-            indicator.textContent = `Likely to Sell Out`;
+        // Add slots available badge (top)
+        if (
+          restaurantData.numSlotsAvailable !== undefined &&
+          restaurantData.numSlotsAvailable !== null
+        ) {
+          const existingSlotsBadge = cardDiv.querySelector('.ld-slots-badge');
+          if (!existingSlotsBadge) {
+            const slotsBadge = document.createElement('div');
+            slotsBadge.className = 'ld-slots-badge';
+            const slotsText =
+              restaurantData.numSlotsAvailable === 1
+                ? '1 slot left'
+                : `${restaurantData.numSlotsAvailable} slots left`;
+            slotsBadge.textContent = slotsText;
+            cardDiv.appendChild(slotsBadge);
+            badgesAdded++;
+            console.log(`LanchDrap: Added slots badge to ${restaurantData.name}: ${slotsText}`);
+          }
+        } else {
+          console.log(`LanchDrap: No slots data for ${restaurantData.name}`);
+        }
 
-            // Make sure the card has relative positioning
-            const cardDiv = restaurantCard.querySelector('div');
-
-            if (cardDiv) {
-              cardDiv.style.position = 'relative';
-              cardDiv.appendChild(indicator);
-            }
+        // Add sold out last time badge (bottom)
+        const soldOutLastTime = checkSoldOutLastTime(
+          restaurantData.appearances,
+          restaurantData.soldOutDates
+        );
+        console.log(
+          `LanchDrap: Sold out last time check for ${restaurantData.name}:`,
+          soldOutLastTime
+        );
+        if (soldOutLastTime) {
+          const existingSoldOutBadge = cardDiv.querySelector('.ld-soldout-last-time-badge');
+          if (!existingSoldOutBadge) {
+            const soldOutBadge = document.createElement('div');
+            soldOutBadge.className = 'ld-soldout-last-time-badge';
+            soldOutBadge.textContent = 'Sold Out Last Time';
+            cardDiv.appendChild(soldOutBadge);
+            badgesAdded++;
+            console.log(`LanchDrap: Added sold out badge to ${restaurantData.name}`);
           }
         }
       }
-    } catch (_error) {}
+
+      console.log(`LanchDrap: Added ${badgesAdded} total badges`);
+    } catch (error) {
+      console.error('LanchDrap: Error adding indicators:', error);
+    }
   }
 
   // Return public API

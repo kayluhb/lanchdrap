@@ -114,59 +114,134 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Restaurant names are now available directly from the data
 
-    const restaurantsHTML = restaurants
-      .map((restaurant) => {
-        // Format the last order date, handling timezone issues
-        let lastOrderDate;
-        if (window.LanchDrapDOMUtils?.formatDateString) {
-          lastOrderDate = window.LanchDrapDOMUtils.formatDateString(restaurant.lastOrderDate);
-        } else {
-          // Fallback: handle YYYY-MM-DD format properly to avoid timezone issues
-          if (
-            typeof restaurant.lastOrderDate === 'string' &&
-            /^\d{4}-\d{2}-\d{2}$/.test(restaurant.lastOrderDate)
-          ) {
-            const [year, month, day] = restaurant.lastOrderDate.split('-');
-            const date = new Date(parseInt(year, 10), parseInt(month, 10) - 1, parseInt(day, 10));
-            lastOrderDate = date.toLocaleDateString();
-          } else {
-            lastOrderDate = new Date(restaurant.lastOrderDate).toLocaleDateString();
+    // Get userId for rating checks
+    const userId = await lanchDrapUserIdManager.getUserId();
+
+    // Check rating status for each restaurant
+    const restaurantsWithRatingStatus = await Promise.all(
+      restaurants.map(async (restaurant) => {
+        let hasRating = false;
+        let ratingData = null;
+
+        if (userId) {
+          try {
+            const params = new URLSearchParams();
+            params.append('userId', userId);
+            params.append('restaurantId', restaurant.restaurantId);
+            params.append('orderDate', restaurant.lastOrderDate);
+
+            const response = await fetch(
+              `${LanchDrapConfig.getApiUrl(LanchDrapConfig.CONFIG.ENDPOINTS.RATINGS)}/order?${params.toString()}`
+            );
+            if (response.ok) {
+              const result = await response.json();
+              if (result.success && result.data && result.data.hasRating && result.data.rating) {
+                hasRating = true;
+                ratingData = result.data.rating;
+              }
+            }
+          } catch (_e) {
+            // Ignore errors
           }
         }
-        const _totalOrders = restaurant.totalOrders || 0;
-        const recentOrders = restaurant.recentOrders || [];
 
-        // Get the most recent order items for display
-        const recentItems =
-          recentOrders.length > 0 && recentOrders[0].items
-            ? recentOrders[0].items.map((item) => item.label || 'Unknown Item').join(', ')
-            : 'No items recorded';
+        return { ...restaurant, hasRating, ratingData };
+      })
+    );
 
-        // Use restaurant name directly from the data; fallback to ID until lookup completes
-        const restaurantName = restaurant.restaurantName || restaurant.restaurantId;
+    // Categorize restaurants
+    const today = new Date();
+    const todayString = today.toISOString().split('T')[0];
+    const currentTime = today.getHours() * 60 + today.getMinutes();
+    const cutoffTime = 12 * 60; // 12:00 PM
 
-        // Check if the order date is in the past OR it's today but after 12:30 PM
-        // Handle timezone issues by comparing date strings directly
-        const orderDateString = restaurant.lastOrderDate; // Should be in YYYY-MM-DD format
-        const today = new Date();
-        const todayString = today.toISOString().split('T')[0]; // Get YYYY-MM-DD format for today
+    const upcomingOrders = [];
+    const needsRating = [];
+    const ratedOrders = [];
 
-        // Check if it's the same day
-        const isSameDay = orderDateString === todayString;
+    for (const restaurant of restaurantsWithRatingStatus) {
+      const orderDateString = restaurant.lastOrderDate;
+      const isUpcoming =
+        orderDateString > todayString ||
+        (orderDateString === todayString && currentTime < cutoffTime);
 
-        // Check if it's in the past (before today)
-        const isPastDate = orderDateString < todayString;
+      if (isUpcoming) {
+        upcomingOrders.push(restaurant);
+      } else if (restaurant.hasRating) {
+        ratedOrders.push(restaurant);
+      } else {
+        needsRating.push(restaurant);
+      }
+    }
 
-        // Check if it's after 12:30 PM today
-        const currentTime = today.getHours() * 60 + today.getMinutes();
-        const cutoffTime = 12 * 60 + 30; // 12:30 PM in minutes
+    // Sort within categories
+    // Upcoming: newest first
+    upcomingOrders.sort((a, b) => new Date(b.lastOrderDate) - new Date(a.lastOrderDate));
+    // Needs rating: oldest first
+    needsRating.sort((a, b) => new Date(a.lastOrderDate) - new Date(b.lastOrderDate));
+    // Rated: oldest first
+    ratedOrders.sort((a, b) => new Date(a.lastOrderDate) - new Date(b.lastOrderDate));
 
-        // Can rate if: order is in the past OR (it's today AND after 12:30 PM)
-        // Temporary override via config flag
-        const forceRatings = !!window.LanchDrapConfig?.CONFIG?.SETTINGS?.TEMP_ENABLE_POPUP_RATINGS;
-        const canRate = forceRatings || isPastDate || (isSameDay && currentTime >= cutoffTime);
+    // Render function for a single restaurant
+    const renderRestaurant = (restaurant) => {
+      // Format the last order date, handling timezone issues
+      let lastOrderDate;
+      if (window.LanchDrapDOMUtils?.formatDateString) {
+        lastOrderDate = window.LanchDrapDOMUtils.formatDateString(restaurant.lastOrderDate);
+      } else {
+        // Fallback: handle YYYY-MM-DD format properly to avoid timezone issues
+        if (
+          typeof restaurant.lastOrderDate === 'string' &&
+          /^\d{4}-\d{2}-\d{2}$/.test(restaurant.lastOrderDate)
+        ) {
+          const [year, month, day] = restaurant.lastOrderDate.split('-');
+          const date = new Date(parseInt(year, 10), parseInt(month, 10) - 1, parseInt(day, 10));
+          lastOrderDate = date.toLocaleDateString();
+        } else {
+          lastOrderDate = new Date(restaurant.lastOrderDate).toLocaleDateString();
+        }
+      }
+      const _totalOrders = restaurant.totalOrders || 0;
+      const recentOrders = restaurant.recentOrders || [];
 
-        return `
+      // Get the most recent order items for display
+      const recentItems =
+        recentOrders.length > 0 && recentOrders[0].items
+          ? recentOrders[0].items.map((item) => item.label || 'Unknown Item').join(', ')
+          : 'No items recorded';
+
+      // Use restaurant name directly from the data; fallback to ID until lookup completes
+      const restaurantName = restaurant.restaurantName || restaurant.restaurantId;
+
+      // Check if the order date is in the past OR it's today but after 12:00 PM
+      // Handle timezone issues by comparing date strings directly
+      const orderDateString = restaurant.lastOrderDate; // Should be in YYYY-MM-DD format
+      const today = new Date();
+      const todayString = today.toISOString().split('T')[0]; // Get YYYY-MM-DD format for today
+
+      // Check if it's the same day
+      const isSameDay = orderDateString === todayString;
+
+      // Check if it's in the past (before today)
+      const isPastDate = orderDateString < todayString;
+
+      // Check if it's after 12:00 PM today
+      const currentTime = today.getHours() * 60 + today.getMinutes();
+      const cutoffTime = 12 * 60; // 12:00 PM in minutes
+
+      // Can rate if: order is in the past OR (it's today AND after 12:00 PM)
+      // Temporary override via config flag
+      const forceRatings = !!window.LanchDrapConfig?.CONFIG?.SETTINGS?.TEMP_ENABLE_POPUP_RATINGS;
+      const canRate = forceRatings || isPastDate || (isSameDay && currentTime >= cutoffTime);
+
+      // Get rating emoji if rated
+      let ratingEmoji = '';
+      if (restaurant.hasRating && restaurant.ratingData) {
+        const emojiMap = { 1: '🤮', 2: '😐', 3: '🤤', 4: '🤯' };
+        ratingEmoji = emojiMap[restaurant.ratingData.rating] || '⭐';
+      }
+
+      return `
           <div class="restaurant-item" data-restaurant-id="${restaurant.restaurantId}" data-restaurant-name="${restaurantName}" data-order-date="${restaurant.lastOrderDate}">
             <button class="restaurant-item-trash" title="Delete this order">🗑️</button>
             <div class="restaurant-item-content">
@@ -177,14 +252,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 <div class="restaurant-info">
                   <span class="restaurant-name">${restaurantName}</span>
                   <span class="last-order-date">${lastOrderDate}</span>
-                  <span class="order-rated-badge" data-restaurant-id="${restaurant.restaurantId}" data-order-date="${restaurant.lastOrderDate}" style="display:none;">Rated ⭐</span>
                 </div>
+                ${ratingEmoji ? `<a href="#" class="edit-rating-link" data-restaurant-id="${restaurant.restaurantId}" data-restaurant-name="${restaurantName}" data-order-date="${restaurant.lastOrderDate}" style="display:flex;align-items:center;gap:6px;margin-left:auto;margin-right:32px;text-decoration:none;font-size:13px;color:#1976d2;flex-shrink:0;align-self:flex-start;padding-top:2px;" title="Edit your rating"><span style="font-size:20px;line-height:1;">${ratingEmoji}</span><span style="white-space:nowrap;">Edit</span></a>` : ''}
               </div>
               <div class="restaurant-stats">
                 <div class="stat-items">${recentItems}</div>
               </div>
               ${
-                canRate
+                canRate && !restaurant.hasRating
                   ? `
                 <div class="restaurant-actions">
                   <button class="rate-button" data-restaurant-id="${restaurant.restaurantId}" data-restaurant-name="${restaurantName}" data-order-date="${restaurant.lastOrderDate}">
@@ -202,13 +277,33 @@ document.addEventListener('DOMContentLoaded', () => {
             </div>
           </div>
         `;
-      })
-      .join('');
+    };
 
-    orderHistoryDiv.innerHTML = `
-      <h3>Recent Orders</h3>
-      ${restaurantsHTML}
-    `;
+    // Build HTML with categorized sections
+    const htmlSections = [];
+
+    if (upcomingOrders.length > 0) {
+      htmlSections.push(`
+        <h3 class="order-section-header">📅 Upcoming Orders</h3>
+        ${upcomingOrders.map(renderRestaurant).join('')}
+      `);
+    }
+
+    if (needsRating.length > 0) {
+      htmlSections.push(`
+        <h3 class="order-section-header">⭐ Orders That Need Rating</h3>
+        ${needsRating.map(renderRestaurant).join('')}
+      `);
+    }
+
+    if (ratedOrders.length > 0) {
+      htmlSections.push(`
+        <h3 class="order-section-header">✅ Past Orders - Rated</h3>
+        ${ratedOrders.map(renderRestaurant).join('')}
+      `);
+    }
+
+    orderHistoryDiv.innerHTML = htmlSections.join('');
 
     // After initial render, resolve and replace any restaurant IDs with names
     try {
@@ -284,12 +379,12 @@ document.addEventListener('DOMContentLoaded', () => {
     // Add event listeners for delete functionality
     addDeleteButtonListeners();
 
-    // Populate rating badges next to orders if they are already rated
-    populateOrderRatingBadges();
+    // Note: Rating badges are now populated inline during categorization
   }
 
-  // Add event listeners for rate buttons
+  // Add event listeners for rate buttons and edit rating links
   function addRateButtonListeners() {
+    // Handle rate buttons
     const rateButtons = document.querySelectorAll('.rate-button');
     for (const button of rateButtons) {
       button.addEventListener('click', (e) => {
@@ -318,46 +413,36 @@ document.addEventListener('DOMContentLoaded', () => {
         }, 10);
       });
     }
-  }
 
-  // Populate rating badges next to orders if they have been rated already
-  async function populateOrderRatingBadges() {
-    try {
-      const userId = await lanchDrapUserIdManager.getUserId();
-      if (!userId) return;
+    // Handle edit rating links
+    const editRatingLinks = document.querySelectorAll('.edit-rating-link');
+    for (const link of editRatingLinks) {
+      link.addEventListener('click', (e) => {
+        e.preventDefault();
+        const restaurantId = link.dataset.restaurantId;
+        const restaurantName = link.dataset.restaurantName;
+        const orderDate = link.dataset.orderDate;
+        showRatingView(restaurantId, restaurantName, orderDate);
 
-      const items = document.querySelectorAll('.restaurant-item');
-      for (const item of items) {
-        const restaurantId = item.getAttribute('data-restaurant-id');
-        const orderDate = item.getAttribute('data-order-date');
-        const badge = item.querySelector('.order-rated-badge');
-        if (!restaurantId || !orderDate || !badge) continue;
+        // Scroll to top of popup after DOM update
+        setTimeout(() => {
+          // Try multiple scroll targets
+          window.scrollTo({ top: 0, behavior: 'smooth' });
 
-        const params = new URLSearchParams();
-        params.append('userId', userIdentification.userId);
-        params.append('restaurantId', restaurantId);
-        params.append('orderDate', orderDate);
-
-        try {
-          const response = await fetch(
-            `${LanchDrapConfig.getApiUrl(LanchDrapConfig.CONFIG.ENDPOINTS.RATINGS)}/order?${params.toString()}`
-          );
-          if (!response.ok) continue;
-          const result = await response.json();
-          if (result.success && result.data && result.data.hasRating && result.data.rating) {
-            const ratingVal = result.data.rating.rating;
-            const emojiMap = { 1: '🤮', 2: '😐', 3: '🤤', 4: '🤯' };
-            const emoji = emojiMap[ratingVal] || '⭐';
-            badge.textContent = emoji;
-            badge.style.display = 'inline';
-            badge.title = 'You rated this order';
-            badge.style.marginLeft = '4px';
+          // Also try scrolling the order history container
+          const orderHistoryDiv = document.getElementById('order-history');
+          if (orderHistoryDiv) {
+            orderHistoryDiv.scrollTop = 0;
           }
-        } catch (_e) {
-          // ignore network/parse errors for badges
-        }
-      }
-    } catch (_e) {}
+
+          // Also try scrolling the main container
+          const container = document.querySelector('.container');
+          if (container) {
+            container.scrollTop = 0;
+          }
+        }, 10);
+      });
+    }
   }
 
   // Add event listeners for delete functionality
@@ -385,7 +470,6 @@ document.addEventListener('DOMContentLoaded', () => {
         e.preventDefault();
         e.stopPropagation();
 
-        const restaurantItem = deleteButton.closest('.restaurant-item');
         const restaurantId = deleteButton.dataset.restaurantId;
         const restaurantName = deleteButton.dataset.restaurantName;
         const orderDate = deleteButton.dataset.orderDate;
@@ -420,15 +504,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
           await apiClient.deleteUserRestaurantHistory(userId, restaurantId, orderDate);
 
-          // Remove the item from the UI
-          restaurantItem.remove();
-
-          // Check if there are any remaining items
-          const remainingItems = document.querySelectorAll('.restaurant-item');
-          if (remainingItems.length === 0) {
-            // Reload the restaurant list to show updated data
-            loadLast10Restaurants();
-          }
+          // Reload the restaurant list to show updated data with fresh categorization
+          loadLast10Restaurants();
         } catch (_error) {
           alert('Failed to remove order. Please try again.');
         } finally {
@@ -997,13 +1074,11 @@ document.addEventListener('DOMContentLoaded', () => {
         const responseData = await response.json();
 
         if (response.ok) {
-          // Go back to history
-          const orderHistoryDiv = document.getElementById('order-history');
-          orderHistoryDiv.innerHTML = originalContent;
-          addRateButtonListeners();
-          addDeleteButtonListeners();
+          // Reload the popup with fresh data
+          loadLast10Restaurants();
         } else if (response.status === 409) {
-          // Rating already exists - silently continue
+          // Rating already exists - reload to show updated state
+          loadLast10Restaurants();
         } else {
           throw new Error(
             `Failed to submit rating: ${responseData.error?.message || 'Unknown error'}`
@@ -1098,12 +1173,6 @@ document.addEventListener('DOMContentLoaded', () => {
           hiddenList.push(restaurantId);
           await chrome.storage.local.set({ hiddenRestaurants: hiddenList });
         }
-
-        // Go back to history and refresh
-        const orderHistoryDiv = document.getElementById('order-history');
-        orderHistoryDiv.innerHTML = originalContent;
-        addRateButtonListeners();
-        addDeleteButtonListeners();
 
         // Reload the restaurant list to reflect the hidden restaurant
         loadLast10Restaurants();

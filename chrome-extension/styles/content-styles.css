@@ -609,6 +609,46 @@
   color: #fff;
 }
 
+/* ================= Restaurant Grid Badges ================ */
+/* Slots available badge (top overlay) */
+.ld-slots-badge {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  background: linear-gradient(135deg, #4caf50, #45a049);
+  color: white;
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  z-index: 10;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  text-transform: lowercase;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+/* Sold out last time badge (bottom overlay) */
+.ld-soldout-last-time-badge {
+  position: absolute;
+  bottom: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: linear-gradient(135deg, #ff6b6b, #ee5a52);
+  color: white;
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 10px;
+  font-weight: 600;
+  z-index: 10;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
 /* Responsive design */
 @media (max-width: 480px) {
   #lunchdrop-rating-widget {
@@ -640,5 +680,21 @@
     flex-direction: column;
     align-items: flex-start;
     gap: 4px;
+  }
+
+  .ld-slots-badge {
+    top: 6px !important;
+    left: 6px !important;
+    transform: none !important;
+    font-size: 10px !important;
+    padding: 3px 6px !important;
+  }
+
+  .ld-soldout-last-time-badge {
+    bottom: 6px !important;
+    left: 50% !important;
+    transform: translateX(-50%) !important;
+    font-size: 9px !important;
+    padding: 3px 6px !important;
   }
 }

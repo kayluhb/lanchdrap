@@ -241,7 +241,6 @@ async function trackUserOrders(env, orders, date) {
   // Process each order
   for (const order of orders) {
     if (!order.id || !order.userId) {
-      console.warn('Skipping order without id or userId:', order);
       continue;
     }
 
@@ -254,8 +253,8 @@ async function trackUserOrders(env, orders, date) {
       if (existingHistory) {
         try {
           historyData = JSON.parse(existingHistory);
-        } catch (e) {
-          console.warn('Failed to parse existing history data:', e);
+        } catch (_e) {
+          // Failed to parse existing history data
         }
       }
 
@@ -266,7 +265,6 @@ async function trackUserOrders(env, orders, date) {
 
       // Check if this order has already been processed for this date
       if (historyData[date].processedOrders?.includes(order.id)) {
-        console.log('Order already processed for this date, skipping:', order.id);
         continue;
       }
 
@@ -290,11 +288,6 @@ async function trackUserOrders(env, orders, date) {
 
         if (newItems.length > 0) {
           historyData[date].items.push(...newItems);
-          console.log(
-            `Added ${newItems.length} new items for order ${order.id}, skipped ${orderItems.length - newItems.length} duplicates`
-          );
-        } else {
-          console.log(`All items for order ${order.id} already exist, skipping`);
         }
       }
 
@@ -307,17 +300,14 @@ async function trackUserOrders(env, orders, date) {
       // Store restaurant ID in the order data for proper mapping
       if (order.restaurantId) {
         historyData[date].restaurantId = order.restaurantId;
-        console.log(`Storing restaurant ID ${order.restaurantId} for order ${order.id}`);
-      } else {
-        console.log(`No restaurant ID found for order ${order.id}`);
       }
 
       // Update the history
       await env.LANCHDRAP_RATINGS.put(userHistoryKey, JSON.stringify(historyData));
 
       processedOrders.push(order);
-    } catch (error) {
-      console.error('Error processing order:', order.id, error);
+    } catch (_error) {
+      // Error processing order
     }
   }
 
@@ -331,22 +321,6 @@ export async function trackAppearances(request, env) {
   try {
     const trackingData = await request.json();
     const { restaurants, orders, date } = trackingData;
-
-    console.log('LanchDrap: Tracking data received:', {
-      date,
-      restaurantsCount: restaurants?.length || 0,
-      ordersCount: orders?.length || 0,
-      restaurants:
-        restaurants?.map((r) => ({ id: r.id, name: r.name, restaurant: r.restaurant })) || [],
-      orders:
-        orders?.map((o) => ({
-          id: o.id,
-          restaurantId: o.restaurantId,
-          deliveryId: o.deliveryId,
-          itemsCount: o.items?.length || 0,
-          itemIds: o.items?.map((item) => item.id) || [],
-        })) || [],
-    });
 
     if (!date) {
       return createErrorResponse('Date is required', 400);
@@ -1422,16 +1396,9 @@ export async function getUserRestaurantSummary(request, env) {
               restaurantName = restaurantData.name || restaurantId;
               color = restaurantData.color || null;
               logo = restaurantData.logo || null;
-              console.log(`Found restaurant data for ${restaurantId}:`, {
-                name: restaurantName,
-                color,
-                logo,
-              });
-            } else {
-              console.log(`No restaurant data found for ${restaurantId}`);
             }
           } catch (_e) {
-            console.log(`Error looking up restaurant data for ${restaurantId}:`, _e);
+            // Error looking up restaurant data
           }
 
           restaurants.push({
@@ -1611,6 +1578,22 @@ export async function getRestaurantStatsWithUserHistory(request, env) {
               ? lastOrder.items[lastOrder.items.length - 1]
               : null;
 
+          // Find the most recent rating by timestamp
+          let lastRating = null;
+          for (const order of orders) {
+            const orderData = historyData[order.date];
+            if (orderData?.rating) {
+              const ratingTimestamp = new Date(orderData.rating.timestamp);
+              if (!lastRating || ratingTimestamp > new Date(lastRating.timestamp)) {
+                lastRating = {
+                  rating: orderData.rating.rating,
+                  timestamp: orderData.rating.timestamp,
+                  emoji: getRatingEmoji(orderData.rating.rating),
+                };
+              }
+            }
+          }
+
           userOrderHistory = {
             totalOrders: orders.length,
             lastOrderDate: lastOrder.date,
@@ -1618,6 +1601,7 @@ export async function getRestaurantStatsWithUserHistory(request, env) {
             lastOrderItems: lastOrder.items || [], // All items from the last order
             orderDates: orderDates,
             recentOrders: orders.slice(0, 5), // First 5 orders (newest)
+            lastRating: lastRating, // Most recent rating by timestamp
           };
         }
       }

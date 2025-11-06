@@ -65,7 +65,7 @@ const CONFIG = {
     SELL_OUT_MIN_DIFFERENCE: 0.2, // Minimum difference (0-1) between highest and second highest rate
 
     // Temporary feature flags
-    TEMP_ENABLE_POPUP_RATINGS: true,
+    TEMP_ENABLE_POPUP_RATINGS: false,
   },
 
   // User identification

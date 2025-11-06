@@ -78,6 +78,12 @@ function setupDataLayerListeners() {
         console.log('LanchDrap: Calling trackRestaurantAppearances');
         await trackRestaurantAppearances(eventData.data);
       }
+
+      // Display restaurant grid badges on grid pages (both /app and /app/date pages)
+      if (eventData.data?.restaurants && eventData.data.restaurants.length > 0) {
+        console.log('LanchDrap: Calling displayRestaurantGridBadges');
+        await displayRestaurantGridBadges(eventData.data);
+      }
     } catch (error) {
       console.error('LanchDrap: Error handling data changed event:', error);
     }
@@ -182,6 +188,74 @@ async function trackRestaurantAppearances(data) {
   }
 }
 
+// Display badges on restaurant grid
+async function displayRestaurantGridBadges(data) {
+  try {
+    console.log('LanchDrap: Displaying restaurant grid badges');
+
+    // Check if we have restaurants data
+    if (!data?.restaurants || !Array.isArray(data.restaurants) || data.restaurants.length === 0) {
+      console.log('LanchDrap: No restaurants data available for badges');
+      return;
+    }
+
+    // Check if indicator function is available
+    if (!window.LanchDrapRestaurantScraper?.addSellOutIndicators) {
+      console.warn('LanchDrap: Restaurant scraper not available for badges');
+      return;
+    }
+
+    // Get API client
+    const apiConfig = window.LanchDrapConfig?.CONFIG;
+    if (!apiConfig) {
+      console.warn('LanchDrap: Config not available');
+      return;
+    }
+
+    const apiClient = new window.LanchDrapApiClient.ApiClient(
+      apiConfig.API_BASE_URL,
+      apiConfig.ENDPOINTS
+    );
+
+    // Enrich restaurant data with API information (appearances, soldOutDates)
+    const enrichedRestaurants = [];
+
+    for (const restaurant of data.restaurants) {
+      try {
+        // Fetch restaurant data from API to get appearances and soldOutDates
+        const restaurantStats = await apiClient.getRestaurantById(restaurant.id, restaurant.name);
+
+        // Combine local data (numSlotsAvailable) with API data (appearances, soldOutDates)
+        enrichedRestaurants.push({
+          id: restaurant.id,
+          name: restaurant.name || restaurant.id,
+          numSlotsAvailable: restaurant.numSlotsAvailable,
+          appearances: restaurantStats.appearances || [],
+          soldOutDates: restaurantStats.soldOutDates || [],
+        });
+      } catch (error) {
+        console.warn(`LanchDrap: Could not fetch data for restaurant ${restaurant.id}:`, error);
+        // Still add the restaurant with just slots data
+        enrichedRestaurants.push({
+          id: restaurant.id,
+          name: restaurant.name || restaurant.id,
+          numSlotsAvailable: restaurant.numSlotsAvailable,
+          appearances: [],
+          soldOutDates: [],
+        });
+      }
+    }
+
+    // Small delay to ensure DOM is ready
+    setTimeout(() => {
+      window.LanchDrapRestaurantScraper.addSellOutIndicators(enrichedRestaurants);
+      console.log('LanchDrap: Restaurant grid badges displayed');
+    }, 500);
+  } catch (error) {
+    console.error('LanchDrap: Error displaying restaurant grid badges:', error);
+  }
+}
+
 // Main function to handle page changes
 async function handlePageChange() {
   try {
@@ -221,6 +295,12 @@ async function handlePageChange() {
       if (isDayPage && data?.deliveries) {
         console.log('LanchDrap: Initial load - calling trackRestaurantAppearances');
         await trackRestaurantAppearances(data);
+      }
+
+      // Display restaurant grid badges on initial load if we have restaurants
+      if (data?.restaurants && data.restaurants.length > 0) {
+        console.log('LanchDrap: Initial load - calling displayRestaurantGridBadges');
+        await displayRestaurantGridBadges(data);
       }
     }
   } catch (error) {

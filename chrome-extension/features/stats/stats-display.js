@@ -176,8 +176,12 @@ window.LanchDrapStatsDisplay = (() => {
     }
   }
 
-  // Helper function to format dates
+  // Helper function to format dates (uses utility if available, fallback otherwise)
   function formatDateString(dateString) {
+    if (window.LanchDrapDateFormatter?.formatDateString) {
+      return window.LanchDrapDateFormatter.formatDateString(dateString);
+    }
+    // Fallback implementation
     if (!dateString) return 'Never';
     try {
       const date = new Date(dateString);
@@ -219,76 +223,72 @@ window.LanchDrapStatsDisplay = (() => {
     // Use restaurant's color for styling
     const restaurantColor = stats.color || 'rgb(100, 100, 100)'; // Default gray if no color
 
-    // Helper: parse color string (#RRGGBB, #RGB, rgb(), rgba()) to {r,g,b}
-    function parseColorToRgb(color) {
-      if (!color || typeof color !== 'string') return null;
-      const c = color.trim();
-      // rgb() or rgba()
-      let m = c.match(/^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i);
-      if (m) {
-        return { r: parseInt(m[1], 10), g: parseInt(m[2], 10), b: parseInt(m[3], 10) };
-      }
-      // #RRGGBB
-      m = c.match(/^#([0-9a-fA-F]{6})$/);
-      if (m) {
-        const intVal = parseInt(m[1], 16);
-        return { r: (intVal >> 16) & 255, g: (intVal >> 8) & 255, b: intVal & 255 };
-      }
-      // #RGB
-      m = c.match(/^#([0-9a-fA-F]{3})$/);
-      if (m) {
-        const rHex = m[1][0];
-        const gHex = m[1][1];
-        const bHex = m[1][2];
-        return {
-          r: parseInt(rHex + rHex, 16),
-          g: parseInt(gHex + gHex, 16),
-          b: parseInt(bHex + bHex, 16),
-        };
-      }
-      return null;
-    }
-
-    // Helper: convert color string to HSL for better gradient control
-    function colorToHsl(color) {
-      const rgbVals = parseColorToRgb(color);
-      if (!rgbVals) return { h: 0, s: 0, l: 50 };
-
-      const r = rgbVals.r / 255;
-      const g = rgbVals.g / 255;
-      const b = rgbVals.b / 255;
-
-      const max = Math.max(r, g, b);
-      const min = Math.min(r, g, b);
-      let h, s;
-      const l = (max + min) / 2;
-
-      if (max === min) {
-        h = s = 0;
-      } else {
-        const d = max - min;
-        s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
-        switch (max) {
-          case r:
-            h = (g - b) / d + (g < b ? 6 : 0);
-            break;
-          case g:
-            h = (b - r) / d + 2;
-            break;
-          case b:
-            h = (r - g) / d + 4;
-            break;
+    // Use color utilities if available, fallback to local implementation
+    let hsl, gradientStart, gradientEnd;
+    if (window.LanchDrapColorUtils?.createGradientFromColor) {
+      const gradient = window.LanchDrapColorUtils.createGradientFromColor(restaurantColor);
+      hsl = gradient.hsl;
+      gradientStart = gradient.gradientStart;
+      gradientEnd = gradient.gradientEnd;
+    } else {
+      // Fallback implementation
+      function parseColorToRgb(color) {
+        if (!color || typeof color !== 'string') return null;
+        const c = color.trim();
+        let m = c.match(/^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i);
+        if (m) return { r: parseInt(m[1], 10), g: parseInt(m[2], 10), b: parseInt(m[3], 10) };
+        m = c.match(/^#([0-9a-fA-F]{6})$/);
+        if (m) {
+          const intVal = parseInt(m[1], 16);
+          return { r: (intVal >> 16) & 255, g: (intVal >> 8) & 255, b: intVal & 255 };
         }
-        h /= 6;
+        m = c.match(/^#([0-9a-fA-F]{3})$/);
+        if (m) {
+          const rHex = m[1][0],
+            gHex = m[1][1],
+            bHex = m[1][2];
+          return {
+            r: parseInt(rHex + rHex, 16),
+            g: parseInt(gHex + gHex, 16),
+            b: parseInt(bHex + bHex, 16),
+          };
+        }
+        return null;
       }
-
-      return { h: h * 360, s: s * 100, l: l * 100 };
+      function colorToHsl(color) {
+        const rgbVals = parseColorToRgb(color);
+        if (!rgbVals) return { h: 0, s: 0, l: 50 };
+        const r = rgbVals.r / 255,
+          g = rgbVals.g / 255,
+          b = rgbVals.b / 255;
+        const max = Math.max(r, g, b),
+          min = Math.min(r, g, b);
+        let h, s;
+        const l = (max + min) / 2;
+        if (max === min) {
+          h = s = 0;
+        } else {
+          const d = max - min;
+          s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+          switch (max) {
+            case r:
+              h = (g - b) / d + (g < b ? 6 : 0);
+              break;
+            case g:
+              h = (b - r) / d + 2;
+              break;
+            case b:
+              h = (r - g) / d + 4;
+              break;
+          }
+          h /= 6;
+        }
+        return { h: h * 360, s: s * 100, l: l * 100 };
+      }
+      hsl = colorToHsl(restaurantColor);
+      gradientStart = `hsl(${hsl.h}, ${Math.min(hsl.s + 10, 80)}%, ${Math.min(hsl.l + 25, 90)}%)`;
+      gradientEnd = `hsl(${hsl.h}, ${Math.max(hsl.s - 5, 20)}%, ${Math.max(hsl.l + 10, 85)}%)`;
     }
-
-    // Create gradient colors from restaurant color; also expose via CSS vars
-    const hsl = colorToHsl(restaurantColor);
-    const gradientStart = `hsl(${hsl.h}, ${Math.min(hsl.s + 10, 80)}%, ${Math.min(hsl.l + 25, 90)}%)`;
-    const gradientEnd = `hsl(${hsl.h}, ${Math.max(hsl.s - 5, 20)}%, ${Math.max(hsl.l + 10, 85)}%)`;
 
     const restaurantName = stats.name || stats.id;
     const displayTitle = `📊 ${createPossessive(restaurantName)} Stats`;
@@ -472,7 +472,29 @@ window.LanchDrapStatsDisplay = (() => {
           } catch (_e) {}
         }
 
-        openEditDialog(restaurantId, restaurantName);
+        if (window.LanchDrapEditDialog?.openEditDialog) {
+          const apiClient = new LanchDrapApiClient.ApiClient(
+            LanchDrapConfig.CONFIG.API_BASE_URL,
+            LanchDrapConfig.CONFIG.ENDPOINTS
+          );
+          window.LanchDrapEditDialog.openEditDialog(restaurantId, restaurantName, {
+            apiClient,
+            onSave: async (restId, appearanceDates, soldoutDates) => {
+              await apiClient.updateRestaurantAppearances(restId, appearanceDates, soldoutDates);
+              // Refresh stats display
+              const statsContainer = document.getElementById('lanchdrap-restaurant-stats');
+              if (statsContainer) statsContainer.remove();
+              if (window.LanchDrapStatsDisplay) {
+                if (await window.LanchDrapRestaurantContext?.isRestaurantDetailPage()) {
+                  await window.LanchDrapStatsDisplay.displayRestaurantTrackingInfo();
+                }
+              }
+            },
+          });
+        } else {
+          // Fallback to old implementation if dialog module not available
+          openEditDialog(restaurantId, restaurantName);
+        }
       });
     } else {
     }

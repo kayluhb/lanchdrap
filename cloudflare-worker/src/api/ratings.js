@@ -4,12 +4,7 @@
 import { invalidateUserHistoryCache } from '../utils/cache.js';
 import { Rating, RatingStats } from '../utils/models.js';
 import { createApiResponse, createErrorResponse } from '../utils/response.js';
-
-// Helper function to get rating emoji
-function getRatingEmoji(rating) {
-  const emojis = { 1: '🤮', 2: '😐', 3: '🤤', 4: '🤯' };
-  return emojis[rating] || '⭐';
-}
+import { getRatingEmoji } from '../utils/rating-utils.js';
 
 // Update restaurant rating data (for admin editing)
 export async function updateRestaurantRatingData(request, env) {

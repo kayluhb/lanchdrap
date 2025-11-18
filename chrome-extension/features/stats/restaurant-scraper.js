@@ -64,17 +64,14 @@ window.LanchDrapRestaurantScraper = (() => {
   }
 
   // Function to add badges to restaurant cards (slots available and sold out last time)
-  function addSellOutIndicators(restaurantsData) {
+  function addSellOutIndicators(restaurantsData, expectedDate = null) {
     try {
-      console.log('LanchDrap: addSellOutIndicators called with data:', restaurantsData);
-
-      // Check if indicators have already been added to prevent duplicate processing
+      // Clear existing badges before adding new ones to ensure fresh data is displayed
       const existingBadges = document.querySelectorAll(
         '.ld-slots-badge, .ld-soldout-last-time-badge'
       );
       if (existingBadges.length > 0) {
-        console.log('LanchDrap: Badges already exist, skipping');
-        return;
+        existingBadges.forEach((badge) => badge.remove());
       }
 
       // Find the restaurant grid container using a reliable class-based selector
@@ -83,15 +80,12 @@ window.LanchDrapRestaurantScraper = (() => {
       // Try fallback approach if selector doesn't work
       if (!restaurantGrid && window.LanchDrapDOMUtils?.getCachedRestaurantGrid) {
         restaurantGrid = window.LanchDrapDOMUtils.getCachedRestaurantGrid();
-        console.log('LanchDrap: Found restaurant grid via cached approach');
       }
 
       if (!restaurantGrid) {
         console.warn('LanchDrap: Restaurant grid container not found');
         return;
       }
-
-      console.log('LanchDrap: Found restaurant grid container');
 
       // Now find restaurant cards within the grid only
       const restaurantCards = restaurantGrid.querySelectorAll('a[href*="/app/"]');
@@ -101,12 +95,6 @@ window.LanchDrapRestaurantScraper = (() => {
         return;
       }
 
-      console.log(`LanchDrap: Found ${restaurantCards.length} restaurant cards in grid`);
-
-      console.log(
-        `LanchDrap: Processing ${restaurantsData.length} restaurants against ${restaurantCards.length} cards`
-      );
-
       // Match by index since the order is the same
       const restaurantCardsArray = Array.from(restaurantCards);
 
@@ -115,11 +103,6 @@ window.LanchDrapRestaurantScraper = (() => {
       for (let i = 0; i < restaurantsData.length; i++) {
         const restaurantData = restaurantsData[i];
         const restaurantCard = restaurantCardsArray[i];
-
-        console.log(
-          `LanchDrap: Processing restaurant ${i}: ${restaurantData.name}`,
-          restaurantData
-        );
 
         if (!restaurantCard) {
           console.warn(
@@ -136,51 +119,58 @@ window.LanchDrapRestaurantScraper = (() => {
         }
         cardDiv.style.position = 'relative';
 
-        // Add slots available badge (top)
+        // Add or update slots available badge (top)
         if (
           restaurantData.numSlotsAvailable !== undefined &&
           restaurantData.numSlotsAvailable !== null
         ) {
           const existingSlotsBadge = cardDiv.querySelector('.ld-slots-badge');
-          if (!existingSlotsBadge) {
+          const slotsText =
+            restaurantData.numSlotsAvailable === 1
+              ? '1 slot left'
+              : `${restaurantData.numSlotsAvailable} slots left`;
+          
+          if (existingSlotsBadge) {
+            // Update existing badge with new data
+            existingSlotsBadge.textContent = slotsText;
+          } else {
+            // Create new badge
             const slotsBadge = document.createElement('div');
             slotsBadge.className = 'ld-slots-badge';
-            const slotsText =
-              restaurantData.numSlotsAvailable === 1
-                ? '1 slot left'
-                : `${restaurantData.numSlotsAvailable} slots left`;
             slotsBadge.textContent = slotsText;
             cardDiv.appendChild(slotsBadge);
             badgesAdded++;
-            console.log(`LanchDrap: Added slots badge to ${restaurantData.name}: ${slotsText}`);
           }
         } else {
-          console.log(`LanchDrap: No slots data for ${restaurantData.name}`);
+          // Remove badge if no slots data
+          const existingSlotsBadge = cardDiv.querySelector('.ld-slots-badge');
+          if (existingSlotsBadge) {
+            existingSlotsBadge.remove();
+          }
         }
 
-        // Add sold out last time badge (bottom)
+        // Add or update sold out last time badge (bottom)
         const soldOutLastTime = checkSoldOutLastTime(
           restaurantData.appearances,
           restaurantData.soldOutDates
         );
-        console.log(
-          `LanchDrap: Sold out last time check for ${restaurantData.name}:`,
-          soldOutLastTime
-        );
+        const existingSoldOutBadge = cardDiv.querySelector('.ld-soldout-last-time-badge');
         if (soldOutLastTime) {
-          const existingSoldOutBadge = cardDiv.querySelector('.ld-soldout-last-time-badge');
           if (!existingSoldOutBadge) {
+            // Create new badge
             const soldOutBadge = document.createElement('div');
             soldOutBadge.className = 'ld-soldout-last-time-badge';
             soldOutBadge.textContent = 'Sold Out Last Time';
             cardDiv.appendChild(soldOutBadge);
             badgesAdded++;
-            console.log(`LanchDrap: Added sold out badge to ${restaurantData.name}`);
+          }
+        } else {
+          // Remove badge if restaurant is no longer sold out last time
+          if (existingSoldOutBadge) {
+            existingSoldOutBadge.remove();
           }
         }
       }
-
-      console.log(`LanchDrap: Added ${badgesAdded} total badges`);
     } catch (error) {
       console.error('LanchDrap: Error adding indicators:', error);
     }

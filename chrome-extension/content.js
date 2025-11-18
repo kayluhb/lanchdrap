@@ -9,6 +9,7 @@ let lastRestaurantId = null;
 // Prevent infinite loops in stats display
 let isProcessingStats = false;
 let isProcessingTracking = false;
+let isHandlingPageChange = false;
 
 // Initialize the extension
 async function initializeExtension() {
@@ -45,6 +46,9 @@ function setupDataLayerListeners() {
     try {
       console.log('LanchDrap: Data changed event received:', eventData);
 
+      // Parallelize independent operations for better performance
+      const promises = [];
+
       // Check if we have restaurant data and if the restaurant has changed
       if (eventData.data?.currentRestaurant) {
         const currentRestaurantId = eventData.data.currentRestaurant.id;
@@ -59,14 +63,14 @@ function setupDataLayerListeners() {
           );
           lastRestaurantId = currentRestaurantId;
 
-          // Trigger stats display for the new restaurant
-          await displayRestaurantStats(eventData.data);
+          // Trigger stats display for the new restaurant (can run in parallel)
+          promises.push(displayRestaurantStats(eventData.data));
         } else {
           console.log('LanchDrap: Restaurant unchanged, skipping stats display');
         }
       }
 
-      // Track restaurant appearances when on day pages
+      // Track restaurant appearances when on day pages (can run in parallel)
       const isDayPage = window.LanchDrapDataLayer?.getIsDayPage?.();
       console.log(
         'LanchDrap: isDayPage:',
@@ -76,14 +80,21 @@ function setupDataLayerListeners() {
       );
       if (isDayPage && eventData.data?.deliveries) {
         console.log('LanchDrap: Calling trackRestaurantAppearances');
-        await trackRestaurantAppearances(eventData.data);
+        promises.push(trackRestaurantAppearances(eventData.data));
       }
 
-      // Display restaurant grid badges on grid pages (both /app and /app/date pages)
-      if (eventData.data?.restaurants && eventData.data.restaurants.length > 0) {
-        console.log('LanchDrap: Calling displayRestaurantGridBadges');
-        await displayRestaurantGridBadges(eventData.data);
+      // Display restaurant grid badges on grid pages (can run in parallel, doesn't need to wait)
+      // Only render if we have restaurants and the event includes a date (prevents stale data)
+      if (eventData.data?.restaurants && eventData.data.restaurants.length > 0 && eventData.date) {
+        console.log('LanchDrap: Calling displayRestaurantGridBadges for date:', eventData.date);
+        // Don't await this - let it run independently so badges appear faster
+        displayRestaurantGridBadges(eventData.data).catch((error) => {
+          console.error('LanchDrap: Error displaying badges:', error);
+        });
       }
+
+      // Wait for all parallel operations to complete
+      await Promise.all(promises);
     } catch (error) {
       console.error('LanchDrap: Error handling data changed event:', error);
     }
@@ -114,14 +125,10 @@ async function displayRestaurantStats(data) {
     // Check if stats are already displayed for this restaurant
     const existingStats = document.getElementById('lanchdrap-restaurant-stats');
     if (existingStats && existingStats.dataset.restaurantId === currentRestaurant.id) {
-      console.log('LanchDrap: Stats already displayed for restaurant:', currentRestaurant.name);
       return;
     }
 
     isProcessingStats = true;
-
-    console.log('LanchDrap: Displaying stats for restaurant:', currentRestaurant.name);
-    console.log('LanchDrap: Current restaurant data:', currentRestaurant);
 
     // Call the stats display function with the current restaurant object
     await window.LanchDrapStatsDisplay.displaySelectedRestaurantStats(currentRestaurant);
@@ -137,7 +144,6 @@ async function trackRestaurantAppearances(data) {
   try {
     // Prevent infinite loops
     if (isProcessingTracking) {
-      console.log('LanchDrap: Already processing tracking, skipping to prevent duplicate calls');
       return;
     }
 
@@ -159,7 +165,6 @@ async function trackRestaurantAppearances(data) {
 
     // Check if we've already tracked this data today
     if (window.lanchDrapTrackedKeys?.has(trackingKey)) {
-      console.log('LanchDrap: Already tracked this data today, skipping:', trackingKey);
       return;
     }
 
@@ -170,14 +175,11 @@ async function trackRestaurantAppearances(data) {
     window.lanchDrapTrackedKeys.add(trackingKey);
 
     // Send tracking request to background service worker
-    console.log('LanchDrap: Sending tracking request to background:', { data, date: currentDate });
     const response = await chrome.runtime.sendMessage({
       action: 'trackRestaurantAppearances',
       data: data,
       date: currentDate,
     });
-
-    console.log('LanchDrap: Received tracking response from background:', response);
     if (response && !response.success) {
       console.error('LanchDrap: Background tracking failed:', response.error);
     }
@@ -191,11 +193,20 @@ async function trackRestaurantAppearances(data) {
 // Display badges on restaurant grid
 async function displayRestaurantGridBadges(data) {
   try {
-    console.log('LanchDrap: Displaying restaurant grid badges');
 
     // Check if we have restaurants data
     if (!data?.restaurants || !Array.isArray(data.restaurants) || data.restaurants.length === 0) {
       console.log('LanchDrap: No restaurants data available for badges');
+      return;
+    }
+
+    // Validate that we have current day's data by checking if restaurants have numSlotsAvailable
+    // This ensures we're not rendering stale data from a previous day
+    const hasValidSlotsData = data.restaurants.some(
+      (r) => r.numSlotsAvailable !== undefined && r.numSlotsAvailable !== null
+    );
+    if (!hasValidSlotsData) {
+      console.warn('LanchDrap: No valid slots data in restaurants, skipping badge display');
       return;
     }
 
@@ -205,52 +216,43 @@ async function displayRestaurantGridBadges(data) {
       return;
     }
 
-    // Get API client
-    const apiConfig = window.LanchDrapConfig?.CONFIG;
-    if (!apiConfig) {
-      console.warn('LanchDrap: Config not available');
-      return;
-    }
+    // Use restaurant data directly from data layer - no additional API calls needed
+    // The data layer already has all the current day's restaurant data including numSlotsAvailable
+    // For badges, we only need numSlotsAvailable (current day) and appearances/soldOutDates (historical)
+    // Since we don't have appearances/soldOutDates in the day data, we'll skip those badges for now
+    // and only show slots available badges which use current day's data
+    const enrichedRestaurants = data.restaurants.map((restaurant) => ({
+      id: restaurant.id,
+      name: restaurant.name || restaurant.id,
+      numSlotsAvailable: restaurant.numSlotsAvailable, // From data layer - current day's data
+      appearances: [], // Not available in day data, would require separate API calls
+      soldOutDates: [], // Not available in day data, would require separate API calls
+    }));
 
-    const apiClient = new window.LanchDrapApiClient.ApiClient(
-      apiConfig.API_BASE_URL,
-      apiConfig.ENDPOINTS
-    );
-
-    // Enrich restaurant data with API information (appearances, soldOutDates)
-    const enrichedRestaurants = [];
-
-    for (const restaurant of data.restaurants) {
-      try {
-        // Fetch restaurant data from API to get appearances and soldOutDates
-        const restaurantStats = await apiClient.getRestaurantById(restaurant.id, restaurant.name);
-
-        // Combine local data (numSlotsAvailable) with API data (appearances, soldOutDates)
-        enrichedRestaurants.push({
-          id: restaurant.id,
-          name: restaurant.name || restaurant.id,
-          numSlotsAvailable: restaurant.numSlotsAvailable,
-          appearances: restaurantStats.appearances || [],
-          soldOutDates: restaurantStats.soldOutDates || [],
-        });
-      } catch (error) {
-        console.warn(`LanchDrap: Could not fetch data for restaurant ${restaurant.id}:`, error);
-        // Still add the restaurant with just slots data
-        enrichedRestaurants.push({
-          id: restaurant.id,
-          name: restaurant.name || restaurant.id,
-          numSlotsAvailable: restaurant.numSlotsAvailable,
-          appearances: [],
-          soldOutDates: [],
-        });
+    // Get current date from data layer to validate we're rendering current day's data
+    const currentDate = window.LanchDrapDataLayer?.getCurrentDate?.();
+    
+    // Wait for restaurant grid to be available in DOM before rendering badges
+    // Use a more efficient polling approach with shorter initial delay
+    const waitForGrid = (maxAttempts = 20, attempt = 0) => {
+      const restaurantGrid = document.querySelector('.mx-4.my-8') || 
+                            (window.LanchDrapDOMUtils?.getCachedRestaurantGrid?.());
+      
+      if (restaurantGrid && restaurantGrid.querySelectorAll('a[href*="/app/"]').length > 0) {
+        // Grid is ready, render badges immediately
+        window.LanchDrapRestaurantScraper.addSellOutIndicators(enrichedRestaurants, currentDate);
+      } else if (attempt < maxAttempts) {
+        // Use shorter delay for first few attempts, then longer delays
+        const delay = attempt < 5 ? 50 : 100;
+        setTimeout(() => waitForGrid(maxAttempts, attempt + 1), delay);
+      } else {
+        console.warn('LanchDrap: Restaurant grid not found after max attempts, rendering anyway');
+        window.LanchDrapRestaurantScraper.addSellOutIndicators(enrichedRestaurants, currentDate);
       }
-    }
-
-    // Small delay to ensure DOM is ready
-    setTimeout(() => {
-      window.LanchDrapRestaurantScraper.addSellOutIndicators(enrichedRestaurants);
-      console.log('LanchDrap: Restaurant grid badges displayed');
-    }, 500);
+    };
+    
+    // Start waiting for grid with immediate first check
+    waitForGrid();
   } catch (error) {
     console.error('LanchDrap: Error displaying restaurant grid badges:', error);
   }
@@ -258,7 +260,14 @@ async function displayRestaurantGridBadges(data) {
 
 // Main function to handle page changes
 async function handlePageChange() {
+  // Prevent infinite loops - if already processing, skip
+  if (isHandlingPageChange) {
+    return;
+  }
+
   try {
+    isHandlingPageChange = true;
+
     const currentUrl = window.location.href;
     const urlChanged = currentUrl !== lastUrl;
 
@@ -286,25 +295,19 @@ async function handlePageChange() {
 
       // Track restaurant appearances on initial load if on day page
       const isDayPage = window.LanchDrapDataLayer?.getIsDayPage?.();
-      console.log(
-        'LanchDrap: Initial load - isDayPage:',
-        isDayPage,
-        'hasDeliveries:',
-        !!data?.deliveries
-      );
       if (isDayPage && data?.deliveries) {
-        console.log('LanchDrap: Initial load - calling trackRestaurantAppearances');
         await trackRestaurantAppearances(data);
       }
 
       // Display restaurant grid badges on initial load if we have restaurants
       if (data?.restaurants && data.restaurants.length > 0) {
-        console.log('LanchDrap: Initial load - calling displayRestaurantGridBadges');
         await displayRestaurantGridBadges(data);
       }
     }
   } catch (error) {
     console.error('🚀 LanchDrap: Error in handlePageChange:', error);
+  } finally {
+    isHandlingPageChange = false;
   }
 }
 
@@ -376,6 +379,16 @@ function setupEventListeners() {
         // Check if any added node contains meaningful content
         for (const node of mutation.addedNodes) {
           if (node.nodeType === Node.ELEMENT_NODE) {
+            // Ignore our own badge additions to prevent infinite loops
+            if (
+              node.classList?.contains('ld-slots-badge') ||
+              node.classList?.contains('ld-soldout-last-time-badge') ||
+              node.querySelector?.('.ld-slots-badge') ||
+              node.querySelector?.('.ld-soldout-last-time-badge')
+            ) {
+              continue;
+            }
+
             // Check if this looks like a page content change
             const hasSignificantContent =
               node.querySelector &&
@@ -394,10 +407,19 @@ function setupEventListeners() {
     }
 
     if (shouldHandleChange) {
+      // Skip if we're already handling a page change
+      if (isHandlingPageChange) {
+        return;
+      }
+
       // Debounce to avoid multiple rapid calls
       clearTimeout(window.lanchdrapChangeTimeout);
       window.lanchdrapChangeTimeout = setTimeout(() => {
-        handlePageChange();
+        // Double-check URL actually changed before calling handlePageChange
+        const currentUrl = window.location.href;
+        if (currentUrl !== lastUrl) {
+          handlePageChange();
+        }
       }, 200);
     }
   });

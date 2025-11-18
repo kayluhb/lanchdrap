@@ -67,57 +67,50 @@ window.LanchDrapDataLayer = (() => {
     }
   }
 
+  // Use transformer utilities if available, fallback to local implementations
   function extractMenuFromDelivery(delivery) {
+    if (window.LanchDrapDataTransformer?.extractMenuFromDelivery) {
+      return window.LanchDrapDataTransformer.extractMenuFromDelivery(delivery);
+    }
+    // Fallback implementation (simplified)
     try {
       if (!delivery.menu || !delivery.menu.sections || !delivery.menu.items) {
         console.log('LanchDrap: No menu data available in delivery');
         return [];
       }
-
       const sections = delivery.menu.sections;
       const items = delivery.menu.items;
-
-      // Create a map of item IDs to items for quick lookup
       const itemMap = new Map();
       for (const item of items) {
         itemMap.set(item.id, item);
       }
-
-      // Build menu items with section labels
-      const menuItems = [];
-
-      for (const section of sections) {
-        if (section.items && Array.isArray(section.items)) {
-          for (const itemId of section.items) {
-            const item = itemMap.get(itemId);
-            if (item) {
-              menuItems.push({
-                id: item.id,
-                label: item.label,
-                description: item.description || '',
-                price: item.price || 0,
-                basePrice: item.basePrice || 0,
-                maxPrice: item.maxPrice || 0,
-                section: section.label || 'Unknown',
-                sectionSortOrder: section.sort_order || 0,
-                isEntree: item.isEntree || false,
-                isFavorite: item.isFavorite || false,
-                isSpicy1: item.isSpicy1 || false,
-                isSpicy2: item.isSpicy2 || false,
-                isSpicy3: item.isSpicy3 || false,
-                isGlutenFree: item.isGlutenFree || false,
-                isVegetarian: item.isVegetarian || false,
-                isNutAllergy: item.isNutAllergy || false,
-                picture: item.picture || '',
-                rating: item.rating || 0,
-                reviews: item.reviews || 0,
-              });
-            }
-          }
-        }
-      }
-
-      return menuItems;
+      return sections.flatMap((section) => {
+        if (!section.items || !Array.isArray(section.items)) return [];
+        return section.items
+          .map((itemId) => itemMap.get(itemId))
+          .filter(Boolean)
+          .map((item) => ({
+            id: item.id,
+            label: item.label,
+            description: item.description || '',
+            price: item.price || 0,
+            basePrice: item.basePrice || 0,
+            maxPrice: item.maxPrice || 0,
+            section: section.label || 'Unknown',
+            sectionSortOrder: section.sort_order || 0,
+            isEntree: item.isEntree || false,
+            isFavorite: item.isFavorite || false,
+            isSpicy1: item.isSpicy1 || false,
+            isSpicy2: item.isSpicy2 || false,
+            isSpicy3: item.isSpicy3 || false,
+            isGlutenFree: item.isGlutenFree || false,
+            isVegetarian: item.isVegetarian || false,
+            isNutAllergy: item.isNutAllergy || false,
+            picture: item.picture || '',
+            rating: item.rating || 0,
+            reviews: item.reviews || 0,
+          }));
+      });
     } catch (error) {
       console.log('LanchDrap: Error extracting menu data from delivery:', error);
       return [];
@@ -125,12 +118,16 @@ window.LanchDrapDataLayer = (() => {
   }
 
   function combineDeliveryAndRestaurant(delivery) {
-    // Determine if restaurant is sold out based on slots AND time
+    if (window.LanchDrapDataTransformer?.combineDeliveryAndRestaurant) {
+      return window.LanchDrapDataTransformer.combineDeliveryAndRestaurant(
+        delivery,
+        isBeforeNoonOnDeliveryDay
+      );
+    }
+    // Fallback implementation
     const isSoldOut = delivery.numSlotsAvailable === 0 && isBeforeNoonOnDeliveryDay();
-
     return {
       ...delivery.restaurant,
-      // Map brandColor to color for consistency with API data structure
       color: delivery.restaurant?.brandColor || delivery.restaurant?.color || null,
       numSlotsAvailable: delivery.numSlotsAvailable,
       menu: extractMenuFromDelivery(delivery),
@@ -157,48 +154,64 @@ window.LanchDrapDataLayer = (() => {
 
   // Normalize order items to ensure consistent field names and remove modifications
   function normalizeOrderItems(items) {
+    if (window.LanchDrapDataTransformer?.normalizeOrderItems) {
+      return window.LanchDrapDataTransformer.normalizeOrderItems(items);
+    }
+    // Fallback implementation
     if (!Array.isArray(items)) {
       return [];
     }
-
     return items.map((item) => ({
       itemId: item.itemId,
       quantity: item.quantity || 1,
-      name: item.label || 'Unknown Item', // Use label only
+      name: item.label || 'Unknown Item',
       description: item.description || '',
-      fullDescription: item.label || 'Unknown Item', // Use label only
-      options: '', // Empty options field as requested
+      fullDescription: item.label || 'Unknown Item',
+      options: '',
       price: item.price || 0,
       specialRequest: item.specialRequest,
-      // Explicitly exclude: id, orderId, modifications, specialRequestRequired, labelFor, guestToken, paymentMethod
     }));
   }
 
   // Normalize delivery order data
   function normalizeDeliveryOrder(delivery) {
-    if (!delivery || !delivery.order) {
+    if (window.LanchDrapDataTransformer?.normalizeDeliveryOrder) {
+      return window.LanchDrapDataTransformer.normalizeDeliveryOrder(delivery);
+    }
+    // Fallback implementation
+    if (!delivery?.order) {
       return delivery;
     }
-
+    const { order, id } = delivery;
+    const { id: orderId, items = [] } = order;
     return {
       ...delivery,
       order: {
-        id: delivery.order.id || delivery.id, // Include order ID
-        items: normalizeOrderItems(delivery.order.items || []),
+        id: orderId || id,
+        items: normalizeOrderItems(items),
       },
     };
   }
 
   function parseData({ data, deliveryId, isDayPage }) {
+    if (!data?.lunchDay?.deliveries) {
+      return {
+        currentRestaurant: null,
+        delivery: null,
+        deliveries: [],
+        restaurants: [],
+      };
+    }
+
     const { delivery, lunchDay } = data;
     const { deliveries } = lunchDay;
-    let actualDelivery = null;
 
     console.log('LanchDrap Data Layer: Populating from data:', data);
 
+    let actualDelivery = null;
     if (isDayPage) {
       actualDelivery = delivery
-        ? deliveries.find((deli) => deli.id === delivery?.id)
+        ? deliveries.find((deli) => deli.id === delivery.id)
         : deliveries[0];
     } else {
       actualDelivery = deliveries.find((deli) => deli.id === deliveryId);
@@ -255,38 +268,32 @@ window.LanchDrapDataLayer = (() => {
     }
   }
 
-  // Extract date from URL (helper function)
+  // Extract date from URL (helper function) - uses utility if available
   function extractDataFromUrl() {
+    if (window.LanchDrapUrlParser?.extractDataFromUrl) {
+      return window.LanchDrapUrlParser.extractDataFromUrl();
+    }
+    // Fallback implementation
     try {
       const path = window.location.pathname || '';
       const pathSegments = path.split('/').filter(Boolean);
-
-      // Early return for invalid paths
       if (pathSegments.length === 0 || pathSegments[0] !== 'app') {
         return { date: null, deliveryId: null, isDayPage: false };
       }
-
       const datePattern = /^\d{4}-\d{2}-\d{2}$/;
       const isDeliveryPage = pathSegments.length === 3;
       const isDayPage = pathSegments.length === 2 || pathSegments.length === 1;
       const deliveryId = isDeliveryPage ? pathSegments[2] : null;
-
-      // Handle /app/date/deliveryId format
       if (isDeliveryPage && datePattern.test(pathSegments[1])) {
         return { date: pathSegments[1], deliveryId, isDayPage };
       }
-
-      // Handle /app/date format
       if (pathSegments.length === 2 && datePattern.test(pathSegments[1])) {
         return { date: pathSegments[1], deliveryId, isDayPage };
       }
-
-      // Handle /app format (default to today)
       if (pathSegments.length === 1) {
         const today = new Date().toISOString().split('T')[0];
         return { date: today, deliveryId, isDayPage };
       }
-
       return { date: null, deliveryId, isDayPage };
     } catch {
       return { date: null, deliveryId: null, isDayPage: false };
@@ -384,17 +391,41 @@ window.LanchDrapDataLayer = (() => {
 
       console.info('datalayerState', dataLayerState.currentDate, date);
       if (isDayPage || dataLayerState.currentDate !== date) {
+        // Clear old data when date changes to prevent stale data
+        if (dataLayerState.currentDate !== date) {
+          dataLayerState.data = {
+            currentRestaurant: null,
+            deliveries: [],
+            delivery: null,
+            restaurants: [],
+          };
+        }
+
         const apiData = await fetchData({ date });
         console.info('apiData', apiData);
-        const pageData = parseData({ data: apiData.props, isDayPage, deliveryId });
-        dataLayerState.data = pageData;
+
+        // Only update if we got valid data
+        if (apiData && apiData.props) {
+          const pageData = parseData({ data: apiData.props, isDayPage, deliveryId });
+          // Update date first to ensure consistency
+          dataLayerState.currentDate = date;
+          dataLayerState.isDayPage = isDayPage;
+          // Then update data - this ensures data is fully set before emitting event
+          dataLayerState.data = pageData;
+        } else {
+          console.warn('LanchDrap Data Layer: No valid API data received, keeping existing data');
+          // Still update date even if API call failed
+          dataLayerState.currentDate = date;
+          dataLayerState.isDayPage = isDayPage;
+        }
       } else {
         const delivery = dataLayerState.data.deliveries.find((deli) => deli.id === deliveryId);
         dataLayerState.data.currentRestaurant = combineDeliveryAndRestaurant(delivery);
+        // Update date even when not fetching new data
+        dataLayerState.currentDate = date;
+        dataLayerState.isDayPage = isDayPage;
       }
-      // Load data from page on initial load
-      dataLayerState.currentDate = date;
-      // Emit data changed event
+      // Emit data changed event after data is fully updated
       emitEvent('dataChanged', {
         type: 'pageChange',
         data: dataLayerState.data,

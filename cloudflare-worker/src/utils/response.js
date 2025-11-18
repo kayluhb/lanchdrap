@@ -40,7 +40,11 @@ export function createErrorResponse(message, status = 400, headers = corsHeaders
   };
 
   if (details) {
-    errorResponse.error.details = details;
+    if (typeof details === 'object' && !Array.isArray(details)) {
+      errorResponse.error.details = details;
+    } else {
+      errorResponse.error.details = { details };
+    }
   }
 
   return new Response(JSON.stringify(errorResponse), {

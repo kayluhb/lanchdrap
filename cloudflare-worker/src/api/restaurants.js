@@ -12,12 +12,7 @@ import {
 import { Menu } from '../utils/models.js';
 import { createApiResponse, createErrorResponse } from '../utils/response.js';
 import { compareMenus } from '../utils/restaurants.js';
-
-// Helper function to get rating emoji
-function getRatingEmoji(rating) {
-  const emojis = { 1: '🤮', 2: '😐', 3: '🤤', 4: '🤯' };
-  return emojis[rating] || '⭐';
-}
+import { getRatingEmoji } from '../utils/rating-utils.js';
 
 // Helper function to store menu data separately
 async function storeMenuData(env, restaurantId, menuItems) {
@@ -1650,6 +1645,82 @@ export async function getRestaurantStatsWithUserHistory(request, env) {
     );
   } catch (error) {
     return createErrorResponse('Failed to get restaurant stats with user history', 500, {
+      error: error.message,
+    });
+  }
+}
+
+// Get batch restaurant data (appearances and soldOutDates) for multiple restaurants
+export async function getBatchRestaurantData(request, env) {
+  try {
+    const url = new URL(request.url);
+    const restaurantIdsParam = url.searchParams.get('restaurants');
+    
+    if (!restaurantIdsParam) {
+      return createErrorResponse('Restaurants parameter is required (comma-separated IDs)', 400);
+    }
+
+    // Parse comma-separated restaurant IDs
+    const restaurantIds = restaurantIdsParam.split(',').map(id => id.trim()).filter(Boolean);
+    
+    if (restaurantIds.length === 0) {
+      return createErrorResponse('At least one restaurant ID is required', 400);
+    }
+
+    // Fetch data for all restaurants in parallel
+    const restaurantDataPromises = restaurantIds.map(async (restaurantId) => {
+      try {
+        const data = await getCachedRestaurantData(env, restaurantId);
+        if (data) {
+          return {
+            id: restaurantId,
+            appearances: data.appearances || [],
+            soldOutDates: data.soldOutDates || [],
+          };
+        } else {
+          // Return empty data for unknown restaurants
+          return {
+            id: restaurantId,
+            appearances: [],
+            soldOutDates: [],
+          };
+        }
+      } catch (error) {
+        console.error(`Error fetching data for restaurant ${restaurantId}:`, error);
+        // Return empty data on error
+        return {
+          id: restaurantId,
+          appearances: [],
+          soldOutDates: [],
+        };
+      }
+    });
+
+    const restaurantDataArray = await Promise.all(restaurantDataPromises);
+
+    // Create a map for easy lookup
+    const restaurantDataMap = {};
+    for (const data of restaurantDataArray) {
+      restaurantDataMap[data.id] = {
+        appearances: data.appearances,
+        soldOutDates: data.soldOutDates,
+      };
+    }
+
+    return new Response(
+      JSON.stringify({
+        restaurants: restaurantDataMap,
+      }),
+      {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+        },
+      }
+    );
+  } catch (error) {
+    return createErrorResponse('Failed to get batch restaurant data', 500, {
       error: error.message,
     });
   }

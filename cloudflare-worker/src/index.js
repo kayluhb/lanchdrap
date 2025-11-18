@@ -4,16 +4,10 @@
 
 import { getOrderRating, getRatingStats, submitRating } from './api/ratings.js';
 // Import tracking, admin, order, and stats functions
-import {
-  deleteUserRestaurantHistory,
-  getRestaurantById,
-  getRestaurantMenu,
-  getRestaurantStatsWithUserHistory,
-  getUserRestaurantSummary,
-  trackAppearances,
-  updateAppearances,
-  updateUserOrder,
-} from './api/restaurants.js';
+import { trackAppearances } from './api/restaurants/tracking.js';
+import { getAppearances, getRestaurantStatsWithUserHistory, getBatchRestaurantData } from './api/restaurants/stats.js';
+import { updateAppearances, getRestaurantById, getRestaurantMenu } from './api/restaurants/crud.js';
+import { updateUserOrder, deleteUserRestaurantHistory, getUserRestaurantSummary } from './api/restaurants/orders.js';
 import { createCorsResponse } from './utils/response.js';
 
 // Route configuration - Tracking, admin, and order endpoints enabled
@@ -26,6 +20,9 @@ const routes = {
 
   // Restaurant stats endpoints enabled
   'GET /api/restaurants/stats': getRestaurantStatsWithUserHistory,
+  
+  // Batch restaurant data endpoint
+  'GET /api/restaurants/batch': getBatchRestaurantData,
 
   // Ratings endpoints temporarily enabled
   'POST /api/ratings': submitRating,
@@ -91,42 +88,11 @@ export default {
       }
 
       // No route found - return 404
-      return new Response(
-        JSON.stringify({
-          success: false,
-          error: {
-            message: 'Route not found',
-            status: 404,
-            timestamp: new Date().toISOString(),
-          },
-        }),
-        {
-          status: 404,
-          headers: {
-            'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': '*',
-          },
-        }
-      );
+      return createErrorResponse('Route not found', 404);
     } catch (error) {
-      return new Response(
-        JSON.stringify({
-          success: false,
-          error: {
-            message: 'Internal server error',
-            status: 500,
-            timestamp: new Date().toISOString(),
-            details: { error: error.message },
-          },
-        }),
-        {
-          status: 500,
-          headers: {
-            'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': '*',
-          },
-        }
-      );
+      return createErrorResponse('Internal server error', 500, null, {
+        error: error.message,
+      });
     }
   },
 };

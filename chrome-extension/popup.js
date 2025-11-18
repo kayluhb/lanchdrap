@@ -1,6 +1,11 @@
 document.addEventListener('DOMContentLoaded', () => {
   const orderHistoryDiv = document.getElementById('order-history');
 
+  // State for pagination
+  let allRestaurants = [];
+  let displayedCount = 0;
+  const RESTAURANTS_PER_PAGE = 10;
+
   // Show loading skeleton
   function getOrderHistorySkeletonHTML(count = 3) {
     const items = Array.from({ length: count })
@@ -21,7 +26,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   orderHistoryDiv.innerHTML = getOrderHistorySkeletonHTML(4);
 
-  // Load last 10 restaurants from user order history
+  // Load restaurants from user order history
   async function loadLast10Restaurants() {
     try {
       // Get user ID
@@ -85,12 +90,17 @@ document.addEventListener('DOMContentLoaded', () => {
         (restaurant) => !hiddenList.includes(restaurant.restaurantId)
       );
 
-      // Sort by last order date (oldest first) and take the first 10
-      const sortedRestaurants = filteredRestaurants
-        .sort((a, b) => new Date(a.lastOrderDate) - new Date(b.lastOrderDate))
-        .slice(0, 10);
+      // Sort by last order date (oldest first)
+      const sortedRestaurants = filteredRestaurants.sort(
+        (a, b) => new Date(a.lastOrderDate) - new Date(b.lastOrderDate)
+      );
 
-      await displayLast10Restaurants(sortedRestaurants);
+      // Store all restaurants and reset display count
+      allRestaurants = sortedRestaurants;
+      displayedCount = 0;
+
+      // Load first batch
+      await loadMoreRestaurants();
     } catch {
       orderHistoryDiv.innerHTML = `
         <div class="error-message">
@@ -101,14 +111,86 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  async function displayLast10Restaurants(restaurants) {
+  // Load more restaurants (pagination)
+  async function loadMoreRestaurants() {
+    if (!allRestaurants || allRestaurants.length === 0) {
+      if (displayedCount === 0) {
+        orderHistoryDiv.innerHTML = `
+          <div class="no-data-message">
+            <h3>No restaurant history found</h3>
+            <p>You haven't ordered from any restaurants yet, or your order history is not available.</p>
+          </div>
+        `;
+      }
+      return;
+    }
+
+    // Get next batch
+    const nextBatch = allRestaurants.slice(displayedCount, displayedCount + RESTAURANTS_PER_PAGE);
+    
+    if (nextBatch.length === 0) {
+      // No more restaurants to load
+      removeLoadMoreButton();
+      return;
+    }
+
+    // If this is the first load, clear the container
+    if (displayedCount === 0) {
+      orderHistoryDiv.innerHTML = '';
+    }
+
+    // Display the next batch
+    await displayRestaurants(nextBatch, displayedCount > 0);
+
+    // Update displayed count
+    displayedCount += nextBatch.length;
+
+    // Add or update "Load More" button
+    updateLoadMoreButton();
+  }
+
+  // Update or add "Load More" button
+  function updateLoadMoreButton() {
+    // Remove existing button if any
+    removeLoadMoreButton();
+
+    // Check if there are more restaurants to load
+    if (displayedCount >= allRestaurants.length) {
+      return; // No more to load
+    }
+
+    // Create "Load More" button
+    const loadMoreButton = document.createElement('button');
+    loadMoreButton.id = 'load-more-restaurants';
+    loadMoreButton.className = 'load-more-button';
+    loadMoreButton.textContent = `Load More (${allRestaurants.length - displayedCount} remaining)`;
+    loadMoreButton.addEventListener('click', async () => {
+      loadMoreButton.disabled = true;
+      loadMoreButton.textContent = 'Loading...';
+      await loadMoreRestaurants();
+    });
+
+    orderHistoryDiv.appendChild(loadMoreButton);
+  }
+
+  // Remove "Load More" button
+  function removeLoadMoreButton() {
+    const existingButton = document.getElementById('load-more-restaurants');
+    if (existingButton) {
+      existingButton.remove();
+    }
+  }
+
+  async function displayRestaurants(restaurants, append = false) {
     if (!restaurants || restaurants.length === 0) {
-      orderHistoryDiv.innerHTML = `
-        <div class="no-data-message">
-          <h3>No restaurant history found</h3>
-          <p>You haven't ordered from any restaurants yet, or your order history is not available.</p>
-        </div>
-      `;
+      if (!append) {
+        orderHistoryDiv.innerHTML = `
+          <div class="no-data-message">
+            <h3>No restaurant history found</h3>
+            <p>You haven't ordered from any restaurants yet, or your order history is not available.</p>
+          </div>
+        `;
+      }
       return;
     }
 
@@ -177,16 +259,18 @@ document.addEventListener('DOMContentLoaded', () => {
     // Sort within categories
     // Upcoming: newest first
     upcomingOrders.sort((a, b) => new Date(b.lastOrderDate) - new Date(a.lastOrderDate));
-    // Needs rating: oldest first
-    needsRating.sort((a, b) => new Date(a.lastOrderDate) - new Date(b.lastOrderDate));
-    // Rated: oldest first
-    ratedOrders.sort((a, b) => new Date(a.lastOrderDate) - new Date(b.lastOrderDate));
+    // Needs rating: newest first
+    needsRating.sort((a, b) => new Date(b.lastOrderDate) - new Date(a.lastOrderDate));
+    // Rated: newest first
+    ratedOrders.sort((a, b) => new Date(b.lastOrderDate) - new Date(a.lastOrderDate));
 
     // Render function for a single restaurant
     const renderRestaurant = (restaurant) => {
       // Format the last order date, handling timezone issues
       let lastOrderDate;
-      if (window.LanchDrapDOMUtils?.formatDateString) {
+      if (window.LanchDrapDateFormatter?.formatDateString) {
+        lastOrderDate = window.LanchDrapDateFormatter.formatDateString(restaurant.lastOrderDate);
+      } else if (window.LanchDrapDOMUtils?.formatDateString) {
         lastOrderDate = window.LanchDrapDOMUtils.formatDateString(restaurant.lastOrderDate);
       } else {
         // Fallback: handle YYYY-MM-DD format properly to avoid timezone issues
@@ -237,8 +321,7 @@ document.addEventListener('DOMContentLoaded', () => {
       // Get rating emoji if rated
       let ratingEmoji = '';
       if (restaurant.hasRating && restaurant.ratingData) {
-        const emojiMap = { 1: '🤮', 2: '😐', 3: '🤤', 4: '🤯' };
-        ratingEmoji = emojiMap[restaurant.ratingData.rating] || '⭐';
+        ratingEmoji = window.LanchDrapRatingUtils?.getRatingEmoji?.(restaurant.ratingData.rating) || '⭐';
       }
 
       return `
@@ -303,7 +386,55 @@ document.addEventListener('DOMContentLoaded', () => {
       `);
     }
 
-    orderHistoryDiv.innerHTML = htmlSections.join('');
+    // Append or replace content
+    if (append) {
+      // When appending, merge with existing sections
+      // Find existing section headers and append to them, or create new sections
+      for (const sectionHTML of htmlSections) {
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = sectionHTML;
+        const sectionHeader = tempDiv.querySelector('.order-section-header');
+        
+        if (sectionHeader) {
+          const headerText = sectionHeader.textContent.trim();
+          // Find existing section with same header
+          const existingHeaders = orderHistoryDiv.querySelectorAll('.order-section-header');
+          let found = false;
+          
+          for (const existingHeader of existingHeaders) {
+            if (existingHeader.textContent.trim() === headerText) {
+              // Append restaurants to existing section
+              const sectionContent = tempDiv.querySelectorAll('.restaurant-item');
+              sectionContent.forEach((item) => {
+                existingHeader.parentNode.insertBefore(item, existingHeader.nextSibling);
+              });
+              found = true;
+              break;
+            }
+          }
+          
+          if (!found) {
+            // Create new section before "Load More" button
+            const loadMoreButton = document.getElementById('load-more-restaurants');
+            if (loadMoreButton) {
+              loadMoreButton.insertAdjacentHTML('beforebegin', sectionHTML);
+            } else {
+              orderHistoryDiv.insertAdjacentHTML('beforeend', sectionHTML);
+            }
+          }
+        } else {
+          // No section header, just append
+          const loadMoreButton = document.getElementById('load-more-restaurants');
+          if (loadMoreButton) {
+            loadMoreButton.insertAdjacentHTML('beforebegin', sectionHTML);
+          } else {
+            orderHistoryDiv.insertAdjacentHTML('beforeend', sectionHTML);
+          }
+        }
+      }
+    } else {
+      orderHistoryDiv.innerHTML = htmlSections.join('');
+    }
 
     // After initial render, resolve and replace any restaurant IDs with names
     try {
@@ -344,39 +475,43 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       }
 
-      const items = document.querySelectorAll('.restaurant-item');
-      for (const el of items) {
-        const id = el.getAttribute('data-restaurant-id');
-        const nameSpan = el.querySelector('.restaurant-name');
-        if (!id || !nameSpan) continue;
+      const items = Array.from(document.querySelectorAll('.restaurant-item'));
+      
+      // Parallelize restaurant name lookups
+      await Promise.all(
+        items.map(async (el) => {
+          const id = el.getAttribute('data-restaurant-id');
+          const nameSpan = el.querySelector('.restaurant-name');
+          if (!id || !nameSpan) return;
 
-        // Skip if already a human-friendly name (heuristic: contains a space or non-alnum)
-        const currentText = (nameSpan.textContent || '').trim();
-        if (currentText && currentText !== id && /[^a-zA-Z0-9_-]/.test(currentText)) {
-          continue;
-        }
+          // Skip if already a human-friendly name (heuristic: contains a space or non-alnum)
+          const currentText = (nameSpan.textContent || '').trim();
+          if (currentText && currentText !== id && /[^a-zA-Z0-9_-]/.test(currentText)) {
+            return;
+          }
 
-        let name = await getCachedName(id);
-        if (!name) {
-          name = await fetchRestaurantNameById(id);
-          if (name) await setCachedName(id, name);
-        }
+          let name = await getCachedName(id);
+          if (!name) {
+            name = await fetchRestaurantNameById(id);
+            if (name) await setCachedName(id, name);
+          }
 
-        if (name) {
-          nameSpan.textContent = name;
-          el.setAttribute('data-restaurant-name', name);
-          const rateBtn = el.querySelector('.rate-button');
-          const deleteBtn = el.querySelector('.delete-order-button');
-          if (rateBtn) rateBtn.setAttribute('data-restaurant-name', name);
-          if (deleteBtn) deleteBtn.setAttribute('data-restaurant-name', name);
-        }
-      }
+          if (name) {
+            nameSpan.textContent = name;
+            el.setAttribute('data-restaurant-name', name);
+            const rateBtn = el.querySelector('.rate-button');
+            const deleteBtn = el.querySelector('.delete-order-button');
+            if (rateBtn) rateBtn.setAttribute('data-restaurant-name', name);
+            if (deleteBtn) deleteBtn.setAttribute('data-restaurant-name', name);
+          }
+        })
+      );
     } catch {}
 
-    // Add event listeners for rate buttons
+    // Add event listeners for rate buttons (always re-attach to handle new elements)
     addRateButtonListeners();
 
-    // Add event listeners for delete functionality
+    // Add event listeners for delete functionality (always re-attach to handle new elements)
     addDeleteButtonListeners();
 
     // Note: Rating badges are now populated inline during categorization
@@ -726,14 +861,9 @@ document.addEventListener('DOMContentLoaded', () => {
       // Show a message that rating exists
       const ratingHeader = document.querySelector('.rating-header h3');
       if (ratingHeader) {
-        ratingHeader.innerHTML = `Rate ${restaurantName} <span style="font-size: 0.8em; color: #666;">(Previously rated: ${getRatingEmoji(rating.rating)})</span>`;
+        const emoji = window.LanchDrapRatingUtils?.getRatingEmoji?.(rating.rating) || '⭐';
+        ratingHeader.innerHTML = `Rate ${restaurantName} <span style="font-size: 0.8em; color: #666;">(Previously rated: ${emoji})</span>`;
       }
-    }
-
-    // Helper function to get rating emoji
-    function getRatingEmoji(rating) {
-      const emojis = { 1: '🤮', 2: '😐', 3: '🤤', 4: '🤯' };
-      return emojis[rating] || '⭐';
     }
 
     // Order display functionality

@@ -5,6 +5,10 @@ class ApiClient {
     this.endpoints = endpoints;
     this.retryAttempts = 3;
     this.retryDelay = 1000;
+    // Request deduplication cache - stores in-flight requests
+    this.requestCache = new Map();
+    // Cache TTL in milliseconds (5 seconds)
+    this.cacheTTL = 5000;
   }
 
   // Get full API URL
@@ -24,6 +28,55 @@ class ApiClient {
   // Make HTTP request with retry logic and enhanced error handling
   async request(endpoint, options = {}) {
     const url = this.getUrl(endpoint);
+
+    // Create cache key for request deduplication
+    const cacheKey = this._createCacheKey(url, options);
+
+    // Check if there's an in-flight request with the same key
+    if (this.requestCache.has(cacheKey)) {
+      const cachedRequest = this.requestCache.get(cacheKey);
+      // Check if cache is still valid (not expired)
+      if (Date.now() - cachedRequest.timestamp < this.cacheTTL) {
+        console.log('LanchDrap: API Client - Using cached request:', cacheKey);
+        return cachedRequest.promise;
+      } else {
+        // Cache expired, remove it
+        this.requestCache.delete(cacheKey);
+      }
+    }
+
+    // Create new request promise
+    const requestPromise = this._executeRequest(url, options);
+
+    // Store in cache
+    this.requestCache.set(cacheKey, {
+      promise: requestPromise,
+      timestamp: Date.now(),
+    });
+
+    // Clean up cache entry after request completes (success or failure)
+    requestPromise
+      .then(() => {
+        // Keep in cache for TTL, will be cleaned up by expiration check
+      })
+      .catch(() => {
+        // Remove from cache on error so it can be retried
+        this.requestCache.delete(cacheKey);
+      });
+
+    return requestPromise;
+  }
+
+  // Create cache key from URL and options
+  _createCacheKey(url, options) {
+    // Include method, URL, and body for cache key
+    const method = options.method || 'GET';
+    const body = options.body ? JSON.stringify(JSON.parse(options.body)) : '';
+    return `${method}:${url}:${body}`;
+  }
+
+  // Execute the actual HTTP request
+  async _executeRequest(url, options = {}) {
     let lastError;
 
     for (let attempt = 1; attempt <= this.retryAttempts; attempt++) {
@@ -72,6 +125,11 @@ class ApiClient {
     const errorMessage = `API request failed after ${this.retryAttempts} attempts: ${lastError.message}`;
 
     throw new Error(errorMessage);
+  }
+
+  // Clear request cache (useful for testing or manual cache invalidation)
+  clearCache() {
+    this.requestCache.clear();
   }
 
   // Get restaurant by ID

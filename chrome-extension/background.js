@@ -43,8 +43,8 @@ async function loadDependencies() {
         return await response.json();
       },
     };
-  } catch (error) {
-    console.error('LanchDrap: Failed to load dependencies in service worker:', error);
+  } catch {
+    // Failed to load dependencies in service worker
   }
 }
 
@@ -72,12 +72,10 @@ async function trackRestaurantAppearancesInBackground(trackingData, date) {
     }
 
     if (!LanchDrapApiClient) {
-      console.error('LanchDrap: API client not available in service worker');
       return { success: false, error: 'API client not available' };
     }
 
     if (!date) {
-      console.error('LanchDrap: No date available for tracking');
       return { success: false, error: 'No date provided' };
     }
 
@@ -108,23 +106,17 @@ async function trackRestaurantAppearancesInBackground(trackingData, date) {
         restaurantId: restaurantId || order.restaurantId || order.deliveryId || 'unknown',
       }));
       dataToSend.orders = ordersWithRestaurantId;
-      console.log('LanchDrap: Added restaurant ID to orders:', {
-        restaurantId,
-        ordersCount: ordersWithRestaurantId.length,
-        sampleOrder: ordersWithRestaurantId[0],
-      });
     }
 
     const result = await LanchDrapApiClient.trackRestaurantAppearances(dataToSend);
     return { success: true, result };
   } catch (error) {
-    console.error('LanchDrap: Error in background tracking:', error);
     return { success: false, error: error.message };
   }
 }
 
 // Listen for messages from content scripts or popup
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
   if (request.action === 'getTabInfo') {
     // Get information about the current tab
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
@@ -147,18 +139,12 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
 
   if (request.action === 'trackRestaurantAppearances') {
-    console.log('LanchDrap: Background received tracking request:', {
-      data: request.data,
-      date: request.date,
-    });
     // Handle tracking in background
     trackRestaurantAppearancesInBackground(request.data, request.date)
       .then((result) => {
-        console.log('LanchDrap: Background tracking completed:', result);
         sendResponse(result);
       })
       .catch((error) => {
-        console.error('LanchDrap: Background tracking error:', error);
         sendResponse({ success: false, error: error.message });
       });
     return true; // Keep message channel open for async response
@@ -171,26 +157,3 @@ chrome.storage.onChanged.addListener((changes, namespace) => {
     // Rating history changed - no server sync needed
   }
 });
-
-// Handle context menu (optional)
-chrome.runtime.onInstalled.addListener(() => {
-  // Check if contextMenus API is available
-  if (chrome.contextMenus) {
-    chrome.contextMenus.create({
-      id: 'rateLanchDrap',
-      title: 'Rate this LanchDrap order',
-      contexts: ['page'],
-      documentUrlPatterns: ['https://lunchdrop.com/*', 'https://*.lunchdrop.com/*'],
-    });
-  }
-});
-
-// Only add the listener if contextMenus API is available
-if (chrome.contextMenus) {
-  chrome.contextMenus.onClicked.addListener((info, tab) => {
-    if (info.menuItemId === 'rateLanchDrap') {
-      // Send message to content script to show rating widget
-      chrome.tabs.sendMessage(tab.id, { action: 'showRatingWidget' });
-    }
-  });
-}

@@ -10,7 +10,6 @@ window.LanchDrapDataTransformer = (() => {
    */
   function extractMenuFromDelivery(delivery) {
     if (!delivery?.menu?.sections || !delivery?.menu?.items) {
-      console.log('LanchDrap: No menu data available in delivery');
       return [];
     }
 
@@ -58,8 +57,7 @@ window.LanchDrapDataTransformer = (() => {
       });
 
       return menuItems;
-    } catch (error) {
-      console.log('LanchDrap: Error extracting menu data from delivery:', error);
+    } catch {
       return [];
     }
   }
@@ -148,4 +146,3 @@ window.LanchDrapDataTransformer = (() => {
     normalizeDeliveryOrder,
   };
 })();
-

@@ -2,9 +2,9 @@
 // Handles stats retrieval and user history
 
 import { getCachedRestaurantData, getCachedUserHistoryData } from '../../utils/cache.js';
-import { getRatingEmoji } from '../../utils/rating-utils.js';
-import { createApiResponse, createErrorResponse } from '../../utils/response.js';
 import { normalizeOrderHistory } from '../../utils/order-history-normalizer.js';
+import { getRatingEmoji } from '../../utils/rating-utils.js';
+import { createErrorResponse } from '../../utils/response.js';
 
 // Helper function to calculate sold out rate
 function calculateSoldOutRate(appearances, soldOutDates) {
@@ -92,7 +92,8 @@ export async function getAppearances(request, env) {
         appearances: appearances,
         firstSeen,
         lastAppearance,
-        lastUpdated: restaurantData.updatedAt || restaurantData.createdAt || new Date().toISOString(),
+        lastUpdated:
+          restaurantData.updatedAt || restaurantData.createdAt || new Date().toISOString(),
         restaurant: restaurantData.name || restaurant,
         restaurantId: restaurantData.id || restaurant,
         soldOutRate,
@@ -155,7 +156,17 @@ export async function getRestaurantStatsWithUserHistory(request, env) {
     }
 
     const data = JSON.parse(restaurantData);
-    const { appearances = [], soldOutDates = [], name, id, color, firstSeen: dataFirstSeen, updatedAt, createdAt, ratingStats } = data;
+    const {
+      appearances = [],
+      soldOutDates = [],
+      name,
+      id,
+      color,
+      firstSeen: dataFirstSeen,
+      updatedAt,
+      createdAt,
+      ratingStats,
+    } = data;
 
     const lastAppearance = appearances.length > 0 ? appearances[appearances.length - 1] : null;
     const firstSeen = dataFirstSeen || (appearances.length > 0 ? appearances[0] : null);
@@ -180,7 +191,8 @@ export async function getRestaurantStatsWithUserHistory(request, env) {
           const [lastOrder] = orders;
           const { date: lastOrderDate, items: lastOrderItems = [] } = lastOrder;
           const orderDates = orders.map((order) => order.date);
-          const lastItemPurchased = lastOrderItems.length > 0 ? lastOrderItems[lastOrderItems.length - 1] : null;
+          const lastItemPurchased =
+            lastOrderItems.length > 0 ? lastOrderItems[lastOrderItems.length - 1] : null;
 
           let lastRating = null;
           for (const order of orders) {
@@ -262,13 +274,16 @@ export async function getBatchRestaurantData(request, env) {
   try {
     const url = new URL(request.url);
     const restaurantIdsParam = url.searchParams.get('restaurants');
-    
+
     if (!restaurantIdsParam) {
       return createErrorResponse('Restaurants parameter is required (comma-separated IDs)', 400);
     }
 
-    const restaurantIds = restaurantIdsParam.split(',').map(id => id.trim()).filter(Boolean);
-    
+    const restaurantIds = restaurantIdsParam
+      .split(',')
+      .map((id) => id.trim())
+      .filter(Boolean);
+
     if (restaurantIds.length === 0) {
       return createErrorResponse('At least one restaurant ID is required', 400);
     }
@@ -289,8 +304,7 @@ export async function getBatchRestaurantData(request, env) {
             soldOutDates: [],
           };
         }
-      } catch (error) {
-        console.error(`Error fetching data for restaurant ${restaurantId}:`, error);
+      } catch {
         return {
           id: restaurantId,
           appearances: [],
@@ -327,4 +341,3 @@ export async function getBatchRestaurantData(request, env) {
     });
   }
 }
-

@@ -10,9 +10,9 @@ import {
   invalidateUserHistoryCache,
 } from '../utils/cache.js';
 import { Menu } from '../utils/models.js';
+import { getRatingEmoji } from '../utils/rating-utils.js';
 import { createApiResponse, createErrorResponse } from '../utils/response.js';
 import { compareMenus } from '../utils/restaurants.js';
-import { getRatingEmoji } from '../utils/rating-utils.js';
 
 // Helper function to store menu data separately
 async function storeMenuData(env, restaurantId, menuItems) {
@@ -1655,14 +1655,17 @@ export async function getBatchRestaurantData(request, env) {
   try {
     const url = new URL(request.url);
     const restaurantIdsParam = url.searchParams.get('restaurants');
-    
+
     if (!restaurantIdsParam) {
       return createErrorResponse('Restaurants parameter is required (comma-separated IDs)', 400);
     }
 
     // Parse comma-separated restaurant IDs
-    const restaurantIds = restaurantIdsParam.split(',').map(id => id.trim()).filter(Boolean);
-    
+    const restaurantIds = restaurantIdsParam
+      .split(',')
+      .map((id) => id.trim())
+      .filter(Boolean);
+
     if (restaurantIds.length === 0) {
       return createErrorResponse('At least one restaurant ID is required', 400);
     }
@@ -1685,8 +1688,7 @@ export async function getBatchRestaurantData(request, env) {
             soldOutDates: [],
           };
         }
-      } catch (error) {
-        console.error(`Error fetching data for restaurant ${restaurantId}:`, error);
+      } catch {
         // Return empty data on error
         return {
           id: restaurantId,

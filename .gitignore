@@ -105,3 +105,4 @@ wrangler.toml.bak
 # Chrome Extension specific
 *.crx
 *.pem
+lanchdrap-extension.zip

@@ -75,7 +75,6 @@ window.LanchDrapDataLayer = (() => {
     // Fallback implementation (simplified)
     try {
       if (!delivery.menu || !delivery.menu.sections || !delivery.menu.items) {
-        console.log('LanchDrap: No menu data available in delivery');
         return [];
       }
       const sections = delivery.menu.sections;
@@ -111,8 +110,7 @@ window.LanchDrapDataLayer = (() => {
             reviews: item.reviews || 0,
           }));
       });
-    } catch (error) {
-      console.log('LanchDrap: Error extracting menu data from delivery:', error);
+    } catch {
       return [];
     }
   }
@@ -206,8 +204,6 @@ window.LanchDrapDataLayer = (() => {
     const { delivery, lunchDay } = data;
     const { deliveries } = lunchDay;
 
-    console.log('LanchDrap Data Layer: Populating from data:', data);
-
     let actualDelivery = null;
     if (isDayPage) {
       actualDelivery = delivery
@@ -238,7 +234,6 @@ window.LanchDrapDataLayer = (() => {
     try {
       // Extract current date from URL
       const { date, isDayPage, deliveryId } = extractDataFromUrl();
-      console.log('LanchDrap: Extracted URL data:', { date, isDayPage, deliveryId });
       dataLayerState.currentDate = date;
       dataLayerState.isDayPage = isDayPage;
 
@@ -246,12 +241,9 @@ window.LanchDrapDataLayer = (() => {
       const pageData = await extractFromPageData({ isDayPage, deliveryId });
       if (pageData) {
         dataLayerState.data = pageData;
-      } else {
-        console.log('LanchDrap: No page data available');
       }
 
       dataLayerState.isInitialized = true;
-      console.log('LanchDrap: Data layer initialization complete', dataLayerState);
 
       // Emit initialization event
       emitEvent('dataChanged', {
@@ -261,8 +253,7 @@ window.LanchDrapDataLayer = (() => {
       });
 
       return true;
-    } catch (error) {
-      console.error('LanchDrap: Data layer initialization failed:', error);
+    } catch {
       dataLayerState.isInitialized = true; // Mark as initialized even if failed to prevent infinite waiting
       return false;
     }
@@ -305,13 +296,11 @@ window.LanchDrapDataLayer = (() => {
     try {
       const appElement = document.getElementById('app');
       if (!appElement || !appElement.dataset.page) {
-        console.warn('LanchDrap: No app element or page data found');
         return null;
       }
       const pageData = JSON.parse(appElement.dataset.page);
       return parseData({ data: pageData.props, deliveryId, isDayPage });
-    } catch (error) {
-      console.error('LanchDrap: Error extracting page data:', error);
+    } catch {
       return null;
     }
   }
@@ -381,15 +370,9 @@ window.LanchDrapDataLayer = (() => {
   // Handle page changes - reload data when navigating between pages
   async function handlePageChange() {
     try {
-      console.log(
-        'LanchDrap Data Layer: handlePageChange called, current URL:',
-        window.location.href
-      );
-
       // Extract current date from URL
       const { date, isDayPage, deliveryId } = extractDataFromUrl();
 
-      console.info('datalayerState', dataLayerState.currentDate, date);
       if (isDayPage || dataLayerState.currentDate !== date) {
         // Clear old data when date changes to prevent stale data
         if (dataLayerState.currentDate !== date) {
@@ -402,10 +385,9 @@ window.LanchDrapDataLayer = (() => {
         }
 
         const apiData = await fetchData({ date });
-        console.info('apiData', apiData);
 
         // Only update if we got valid data
-        if (apiData && apiData.props) {
+        if (apiData?.props) {
           const pageData = parseData({ data: apiData.props, isDayPage, deliveryId });
           // Update date first to ensure consistency
           dataLayerState.currentDate = date;
@@ -413,7 +395,6 @@ window.LanchDrapDataLayer = (() => {
           // Then update data - this ensures data is fully set before emitting event
           dataLayerState.data = pageData;
         } else {
-          console.warn('LanchDrap Data Layer: No valid API data received, keeping existing data');
           // Still update date even if API call failed
           dataLayerState.currentDate = date;
           dataLayerState.isDayPage = isDayPage;
@@ -431,9 +412,8 @@ window.LanchDrapDataLayer = (() => {
         data: dataLayerState.data,
         date: dataLayerState.currentDate,
       });
-      console.log('LanchDrap Data Layer: Data layer updated:', dataLayerState);
-    } catch (error) {
-      console.error('LanchDrap Data Layer: Error in handlePageChange:', error);
+    } catch {
+      // Error in handlePageChange
     }
   }
 

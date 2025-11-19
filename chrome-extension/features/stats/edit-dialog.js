@@ -11,11 +11,7 @@ window.LanchDrapEditDialog = (() => {
    * @returns {Promise<void>}
    */
   async function openEditDialog(restaurantId, restaurantName, options = {}) {
-    const {
-      onSave = null,
-      onCancel = null,
-      apiClient = null,
-    } = options;
+    const { onSave = null, onCancel = null, apiClient = null } = options;
 
     // Remove existing dialog if any
     const existingDialog = document.getElementById('lanchdrap-edit-dialog');
@@ -104,7 +100,14 @@ window.LanchDrapEditDialog = (() => {
     await loadCurrentData(restaurantId, apiClient);
 
     // Setup event listeners
-    setupDialogEventListeners(restaurantId, restaurantName, dialogOverlay, onSave, onCancel, apiClient);
+    setupDialogEventListeners(
+      restaurantId,
+      restaurantName,
+      dialogOverlay,
+      onSave,
+      onCancel,
+      apiClient
+    );
   }
 
   /**
@@ -115,7 +118,11 @@ window.LanchDrapEditDialog = (() => {
    */
   async function loadCurrentData(restaurantId, apiClient) {
     try {
-      if (!apiClient || typeof LanchDrapApiClient === 'undefined' || typeof LanchDrapConfig === 'undefined') {
+      if (
+        !apiClient ||
+        typeof LanchDrapApiClient === 'undefined' ||
+        typeof LanchDrapConfig === 'undefined'
+      ) {
         return;
       }
 
@@ -165,7 +172,14 @@ window.LanchDrapEditDialog = (() => {
    * @param {Function} onCancel - Cancel callback
    * @param {Object} apiClient - API client instance
    */
-  function setupDialogEventListeners(restaurantId, restaurantName, dialogOverlay, onSave, onCancel, apiClient) {
+  function setupDialogEventListeners(
+    restaurantId,
+    _restaurantName,
+    dialogOverlay,
+    onSave,
+    onCancel,
+    apiClient
+  ) {
     const form = document.getElementById('lanchdrap-edit-form');
     const cancelButton = document.getElementById('cancel-edit');
     const saveButton = document.getElementById('save-edit');
@@ -237,4 +251,3 @@ window.LanchDrapEditDialog = (() => {
     openEditDialog,
   };
 })();
-

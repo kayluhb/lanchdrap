@@ -2,16 +2,28 @@
 // Following modern patterns similar to React Router Cloudflare template
 // Import API route handlers
 
+import { getPrivacyPolicy } from './api/privacy.js';
 import { getOrderRating, getRatingStats, submitRating } from './api/ratings.js';
+import { getRestaurantById, getRestaurantMenu, updateAppearances } from './api/restaurants/crud.js';
+import {
+  deleteUserRestaurantHistory,
+  getUserRestaurantSummary,
+  updateUserOrder,
+} from './api/restaurants/orders.js';
+import {
+  getBatchRestaurantData,
+  getRestaurantStatsWithUserHistory,
+} from './api/restaurants/stats.js';
 // Import tracking, admin, order, and stats functions
 import { trackAppearances } from './api/restaurants/tracking.js';
-import { getAppearances, getRestaurantStatsWithUserHistory, getBatchRestaurantData } from './api/restaurants/stats.js';
-import { updateAppearances, getRestaurantById, getRestaurantMenu } from './api/restaurants/crud.js';
-import { updateUserOrder, deleteUserRestaurantHistory, getUserRestaurantSummary } from './api/restaurants/orders.js';
-import { createCorsResponse } from './utils/response.js';
+import { createCorsResponse, createErrorResponse } from './utils/response.js';
 
 // Route configuration - Tracking, admin, and order endpoints enabled
 const routes = {
+  // Privacy policy endpoint
+  'GET /privacy': getPrivacyPolicy,
+  'GET /privacy-policy': getPrivacyPolicy,
+
   // Combined tracking endpoint for both restaurants and orders
   'POST /api/restaurants/appearances/track': trackAppearances,
 
@@ -20,7 +32,7 @@ const routes = {
 
   // Restaurant stats endpoints enabled
   'GET /api/restaurants/stats': getRestaurantStatsWithUserHistory,
-  
+
   // Batch restaurant data endpoint
   'GET /api/restaurants/batch': getBatchRestaurantData,
 
@@ -80,6 +92,14 @@ export default {
       }
       if (!dynamicHandler && method === 'DELETE' && path.startsWith('/api/orders/')) {
         dynamicHandler = deleteUserRestaurantHistory;
+      }
+      // Privacy policy routes (also handle /privacy.html for compatibility)
+      if (
+        !dynamicHandler &&
+        method === 'GET' &&
+        (path === '/privacy' || path === '/privacy-policy' || path === '/privacy.html')
+      ) {
+        dynamicHandler = getPrivacyPolicy;
       }
 
       if (dynamicHandler) {

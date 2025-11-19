@@ -127,7 +127,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Get next batch
     const nextBatch = allRestaurants.slice(displayedCount, displayedCount + RESTAURANTS_PER_PAGE);
-    
+
     if (nextBatch.length === 0) {
       // No more restaurants to load
       removeLoadMoreButton();
@@ -321,7 +321,8 @@ document.addEventListener('DOMContentLoaded', () => {
       // Get rating emoji if rated
       let ratingEmoji = '';
       if (restaurant.hasRating && restaurant.ratingData) {
-        ratingEmoji = window.LanchDrapRatingUtils?.getRatingEmoji?.(restaurant.ratingData.rating) || '⭐';
+        ratingEmoji =
+          window.LanchDrapRatingUtils?.getRatingEmoji?.(restaurant.ratingData.rating) || '⭐';
       }
 
       return `
@@ -394,25 +395,25 @@ document.addEventListener('DOMContentLoaded', () => {
         const tempDiv = document.createElement('div');
         tempDiv.innerHTML = sectionHTML;
         const sectionHeader = tempDiv.querySelector('.order-section-header');
-        
+
         if (sectionHeader) {
           const headerText = sectionHeader.textContent.trim();
           // Find existing section with same header
           const existingHeaders = orderHistoryDiv.querySelectorAll('.order-section-header');
           let found = false;
-          
+
           for (const existingHeader of existingHeaders) {
             if (existingHeader.textContent.trim() === headerText) {
               // Append restaurants to existing section
               const sectionContent = tempDiv.querySelectorAll('.restaurant-item');
-              sectionContent.forEach((item) => {
+              for (const item of sectionContent) {
                 existingHeader.parentNode.insertBefore(item, existingHeader.nextSibling);
-              });
+              }
               found = true;
               break;
             }
           }
-          
+
           if (!found) {
             // Create new section before "Load More" button
             const loadMoreButton = document.getElementById('load-more-restaurants');
@@ -476,7 +477,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       const items = Array.from(document.querySelectorAll('.restaurant-item'));
-      
+
       // Parallelize restaurant name lookups
       await Promise.all(
         items.map(async (el) => {

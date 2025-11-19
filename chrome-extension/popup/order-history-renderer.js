@@ -11,100 +11,101 @@ window.LanchDrapOrderHistoryRenderer = (() => {
    */
   async function renderOrderHistory(container, restaurants, options = {}) {
     const {
-      userId = null,
+      userId: _userId = null,
       onRateClick = null,
       onDeleteClick = null,
       onEditRatingClick = null,
     } = options;
 
-  if (!restaurants || restaurants.length === 0) {
-    container.innerHTML = `
+    if (!restaurants || restaurants.length === 0) {
+      container.innerHTML = `
       <div class="no-data-message">
         <h3>No restaurant history found</h3>
         <p>You haven't ordered from any restaurants yet, or your order history is not available.</p>
       </div>
     `;
-    return;
-  }
-
-  // Categorize restaurants
-  const today = new Date();
-  const todayString = today.toISOString().split('T')[0];
-  const currentTime = today.getHours() * 60 + today.getMinutes();
-  const cutoffTime = 12 * 60; // 12:00 PM
-
-  const upcomingOrders = [];
-  const needsRating = [];
-  const ratedOrders = [];
-
-  for (const restaurant of restaurants) {
-    const orderDateString = restaurant.lastOrderDate;
-    const isUpcoming =
-      orderDateString > todayString ||
-      (orderDateString === todayString && currentTime < cutoffTime);
-
-    if (isUpcoming) {
-      upcomingOrders.push(restaurant);
-    } else if (restaurant.hasRating) {
-      ratedOrders.push(restaurant);
-    } else {
-      needsRating.push(restaurant);
+      return;
     }
-  }
 
-  // Sort within categories
-  upcomingOrders.sort((a, b) => new Date(b.lastOrderDate) - new Date(a.lastOrderDate));
-  needsRating.sort((a, b) => new Date(b.lastOrderDate) - new Date(a.lastOrderDate));
-  ratedOrders.sort((a, b) => new Date(b.lastOrderDate) - new Date(a.lastOrderDate));
+    // Categorize restaurants
+    const today = new Date();
+    const todayString = today.toISOString().split('T')[0];
+    const currentTime = today.getHours() * 60 + today.getMinutes();
+    const cutoffTime = 12 * 60; // 12:00 PM
 
-  // Render function for a single restaurant
-  const renderRestaurant = (restaurant) => {
-    // Format the last order date
-    let lastOrderDate;
-    if (window.LanchDrapDateFormatter?.formatDateString) {
-      lastOrderDate = window.LanchDrapDateFormatter.formatDateString(restaurant.lastOrderDate);
-    } else if (window.LanchDrapDOMUtils?.formatDateString) {
-      lastOrderDate = window.LanchDrapDOMUtils.formatDateString(restaurant.lastOrderDate);
-    } else {
-      // Fallback
-      if (
-        typeof restaurant.lastOrderDate === 'string' &&
-        /^\d{4}-\d{2}-\d{2}$/.test(restaurant.lastOrderDate)
-      ) {
-        const [year, month, day] = restaurant.lastOrderDate.split('-');
-        const date = new Date(parseInt(year, 10), parseInt(month, 10) - 1, parseInt(day, 10));
-        lastOrderDate = date.toLocaleDateString();
+    const upcomingOrders = [];
+    const needsRating = [];
+    const ratedOrders = [];
+
+    for (const restaurant of restaurants) {
+      const orderDateString = restaurant.lastOrderDate;
+      const isUpcoming =
+        orderDateString > todayString ||
+        (orderDateString === todayString && currentTime < cutoffTime);
+
+      if (isUpcoming) {
+        upcomingOrders.push(restaurant);
+      } else if (restaurant.hasRating) {
+        ratedOrders.push(restaurant);
       } else {
-        lastOrderDate = new Date(restaurant.lastOrderDate).toLocaleDateString();
+        needsRating.push(restaurant);
       }
     }
 
-    const recentOrders = restaurant.recentOrders || [];
-    const recentItems =
-      recentOrders.length > 0 && recentOrders[0].items
-        ? recentOrders[0].items.map((item) => item.label || 'Unknown Item').join(', ')
-        : 'No items recorded';
+    // Sort within categories
+    upcomingOrders.sort((a, b) => new Date(b.lastOrderDate) - new Date(a.lastOrderDate));
+    needsRating.sort((a, b) => new Date(b.lastOrderDate) - new Date(a.lastOrderDate));
+    ratedOrders.sort((a, b) => new Date(b.lastOrderDate) - new Date(a.lastOrderDate));
 
-    const restaurantName = restaurant.restaurantName || restaurant.restaurantId;
+    // Render function for a single restaurant
+    const renderRestaurant = (restaurant) => {
+      // Format the last order date
+      let lastOrderDate;
+      if (window.LanchDrapDateFormatter?.formatDateString) {
+        lastOrderDate = window.LanchDrapDateFormatter.formatDateString(restaurant.lastOrderDate);
+      } else if (window.LanchDrapDOMUtils?.formatDateString) {
+        lastOrderDate = window.LanchDrapDOMUtils.formatDateString(restaurant.lastOrderDate);
+      } else {
+        // Fallback
+        if (
+          typeof restaurant.lastOrderDate === 'string' &&
+          /^\d{4}-\d{2}-\d{2}$/.test(restaurant.lastOrderDate)
+        ) {
+          const [year, month, day] = restaurant.lastOrderDate.split('-');
+          const date = new Date(parseInt(year, 10), parseInt(month, 10) - 1, parseInt(day, 10));
+          lastOrderDate = date.toLocaleDateString();
+        } else {
+          lastOrderDate = new Date(restaurant.lastOrderDate).toLocaleDateString();
+        }
+      }
 
-    // Check if order can be rated
-    const orderDateString = restaurant.lastOrderDate;
-    const today = new Date();
-    const todayString = today.toISOString().split('T')[0];
-    const isSameDay = orderDateString === todayString;
-    const isPastDate = orderDateString < todayString;
-    const currentTime = today.getHours() * 60 + today.getMinutes();
-    const cutoffTime = 12 * 60;
-    const forceRatings = !!window.LanchDrapConfig?.CONFIG?.SETTINGS?.TEMP_ENABLE_POPUP_RATINGS;
-    const canRate = forceRatings || isPastDate || (isSameDay && currentTime >= cutoffTime);
+      const recentOrders = restaurant.recentOrders || [];
+      const recentItems =
+        recentOrders.length > 0 && recentOrders[0].items
+          ? recentOrders[0].items.map((item) => item.label || 'Unknown Item').join(', ')
+          : 'No items recorded';
 
-    // Get rating emoji if rated
-    let ratingEmoji = '';
-    if (restaurant.hasRating && restaurant.ratingData) {
-      ratingEmoji = window.LanchDrapRatingUtils?.getRatingEmoji?.(restaurant.ratingData.rating) || '⭐';
-    }
+      const restaurantName = restaurant.restaurantName || restaurant.restaurantId;
 
-    return `
+      // Check if order can be rated
+      const orderDateString = restaurant.lastOrderDate;
+      const today = new Date();
+      const todayString = today.toISOString().split('T')[0];
+      const isSameDay = orderDateString === todayString;
+      const isPastDate = orderDateString < todayString;
+      const currentTime = today.getHours() * 60 + today.getMinutes();
+      const cutoffTime = 12 * 60;
+      const forceRatings = !!window.LanchDrapConfig?.CONFIG?.SETTINGS?.TEMP_ENABLE_POPUP_RATINGS;
+      const canRate = forceRatings || isPastDate || (isSameDay && currentTime >= cutoffTime);
+
+      // Get rating emoji if rated
+      let ratingEmoji = '';
+      if (restaurant.hasRating && restaurant.ratingData) {
+        ratingEmoji =
+          window.LanchDrapRatingUtils?.getRatingEmoji?.(restaurant.ratingData.rating) || '⭐';
+      }
+
+      return `
       <div class="restaurant-item" data-restaurant-id="${restaurant.restaurantId}" data-restaurant-name="${restaurantName}" data-order-date="${restaurant.lastOrderDate}">
         <button class="restaurant-item-trash" title="Delete this order">🗑️</button>
         <div class="restaurant-item-content">
@@ -140,104 +141,103 @@ window.LanchDrapOrderHistoryRenderer = (() => {
         </div>
       </div>
     `;
-  };
+    };
 
-  // Build HTML with categorized sections
-  const htmlSections = [];
+    // Build HTML with categorized sections
+    const htmlSections = [];
 
-  if (upcomingOrders.length > 0) {
-    htmlSections.push(`
+    if (upcomingOrders.length > 0) {
+      htmlSections.push(`
       <h3 class="order-section-header">📅 Upcoming Orders</h3>
       ${upcomingOrders.map(renderRestaurant).join('')}
     `);
-  }
+    }
 
-  if (needsRating.length > 0) {
-    htmlSections.push(`
+    if (needsRating.length > 0) {
+      htmlSections.push(`
       <h3 class="order-section-header">⭐ Orders That Need Rating</h3>
       ${needsRating.map(renderRestaurant).join('')}
     `);
-  }
+    }
 
-  if (ratedOrders.length > 0) {
-    htmlSections.push(`
+    if (ratedOrders.length > 0) {
+      htmlSections.push(`
       <h3 class="order-section-header">✅ Past Orders - Rated</h3>
       ${ratedOrders.map(renderRestaurant).join('')}
     `);
-  }
+    }
 
-  container.innerHTML = htmlSections.join('');
+    container.innerHTML = htmlSections.join('');
 
-  // Attach event listeners if callbacks provided
-  if (onRateClick) {
-    const rateButtons = container.querySelectorAll('.rate-button');
-    rateButtons.forEach((button) => {
-      button.addEventListener('click', (e) => {
-        e.preventDefault();
-        onRateClick({
-          restaurantId: button.dataset.restaurantId,
-          restaurantName: button.dataset.restaurantName,
-          orderDate: button.dataset.orderDate,
+    // Attach event listeners if callbacks provided
+    if (onRateClick) {
+      const rateButtons = container.querySelectorAll('.rate-button');
+      for (const button of rateButtons) {
+        button.addEventListener('click', (e) => {
+          e.preventDefault();
+          onRateClick({
+            restaurantId: button.dataset.restaurantId,
+            restaurantName: button.dataset.restaurantName,
+            orderDate: button.dataset.orderDate,
+          });
         });
-      });
-    });
-  }
+      }
+    }
 
-  if (onDeleteClick) {
-    const deleteButtons = container.querySelectorAll('.delete-order-button');
-    deleteButtons.forEach((button) => {
-      button.addEventListener('click', (e) => {
+    if (onDeleteClick) {
+      const deleteButtons = container.querySelectorAll('.delete-order-button');
+      for (const button of deleteButtons) {
+        button.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          onDeleteClick({
+            restaurantId: button.dataset.restaurantId,
+            restaurantName: button.dataset.restaurantName,
+            orderDate: button.dataset.orderDate,
+          });
+        });
+      }
+    }
+
+    if (onEditRatingClick) {
+      const editLinks = container.querySelectorAll('.edit-rating-link');
+      for (const link of editLinks) {
+        link.addEventListener('click', (e) => {
+          e.preventDefault();
+          onEditRatingClick({
+            restaurantId: link.dataset.restaurantId,
+            restaurantName: link.dataset.restaurantName,
+            orderDate: link.dataset.orderDate,
+          });
+        });
+      }
+    }
+
+    // Handle trash button clicks (reveal delete button)
+    const trashButtons = container.querySelectorAll('.restaurant-item-trash');
+    for (const trashButton of trashButtons) {
+      trashButton.addEventListener('click', (e) => {
         e.preventDefault();
         e.stopPropagation();
-        onDeleteClick({
-          restaurantId: button.dataset.restaurantId,
-          restaurantName: button.dataset.restaurantName,
-          orderDate: button.dataset.orderDate,
-        });
-      });
-    });
-  }
-
-  if (onEditRatingClick) {
-    const editLinks = container.querySelectorAll('.edit-rating-link');
-    editLinks.forEach((link) => {
-      link.addEventListener('click', (e) => {
-        e.preventDefault();
-        onEditRatingClick({
-          restaurantId: link.dataset.restaurantId,
-          restaurantName: link.dataset.restaurantName,
-          orderDate: link.dataset.orderDate,
-        });
-      });
-    });
-  }
-
-  // Handle trash button clicks (reveal delete button)
-  const trashButtons = container.querySelectorAll('.restaurant-item-trash');
-  trashButtons.forEach((trashButton) => {
-    trashButton.addEventListener('click', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      const restaurantItem = trashButton.closest('.restaurant-item');
-      if (restaurantItem) {
-        restaurantItem.classList.toggle('swiped');
-      }
-    });
-  });
-
-  // Close swipe when clicking outside
-  document.addEventListener('click', (e) => {
-    if (!e.target.closest('.restaurant-item')) {
-      const restaurantItems = container.querySelectorAll('.restaurant-item');
-      restaurantItems.forEach((item) => {
-        item.classList.remove('swiped');
+        const restaurantItem = trashButton.closest('.restaurant-item');
+        if (restaurantItem) {
+          restaurantItem.classList.toggle('swiped');
+        }
       });
     }
-  });
+
+    // Close swipe when clicking outside
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest('.restaurant-item')) {
+        const restaurantItems = container.querySelectorAll('.restaurant-item');
+        for (const item of restaurantItems) {
+          item.classList.remove('swiped');
+        }
+      }
+    });
   }
 
   return {
     renderOrderHistory,
   };
 })();
-

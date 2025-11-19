@@ -194,8 +194,8 @@ window.LanchDrapRatingWidget = (() => {
         return;
       }
 
-      items.forEach((item) => {
-        if (selectedMenuItems.includes(item)) return; // Skip already selected items
+      for (const item of items) {
+        if (selectedMenuItems.includes(item)) continue; // Skip already selected items
 
         const option = document.createElement('div');
         option.className = 'ld-menu-option';
@@ -206,7 +206,7 @@ window.LanchDrapRatingWidget = (() => {
           menuDropdown.style.display = 'none';
         });
         menuDropdown.appendChild(option);
-      });
+      }
 
       menuDropdown.style.display = 'block';
     }
@@ -225,7 +225,7 @@ window.LanchDrapRatingWidget = (() => {
 
     function renderSelectedItems() {
       selectedItems.innerHTML = '';
-      selectedMenuItems.forEach((item) => {
+      for (const item of selectedMenuItems) {
         const tag = document.createElement('div');
         tag.className = 'ld-selected-item';
         tag.innerHTML = `
@@ -233,14 +233,15 @@ window.LanchDrapRatingWidget = (() => {
           <button class="ld-remove-item" data-item="${item}">×</button>
         `;
         selectedItems.appendChild(tag);
-      });
+      }
 
       // Add event listeners for remove buttons
-      selectedItems.querySelectorAll('.ld-remove-item').forEach((btn) => {
+      const removeButtons = selectedItems.querySelectorAll('.ld-remove-item');
+      for (const btn of removeButtons) {
         btn.addEventListener('click', (e) => {
           removeMenuItem(e.target.dataset.item);
         });
-      });
+      }
     }
 
     // Menu search event listeners
@@ -264,7 +265,7 @@ window.LanchDrapRatingWidget = (() => {
       }
     });
 
-    stars.forEach((star) => {
+    for (const star of stars) {
       star.addEventListener('click', function () {
         const rating = parseInt(this.dataset.rating, 10);
         currentRating = rating;
@@ -280,10 +281,11 @@ window.LanchDrapRatingWidget = (() => {
       star.addEventListener('mouseleave', () => {
         updateStarDisplay();
       });
-    });
+    }
 
     function updateStarDisplay() {
-      stars.forEach((star, index) => {
+      for (let index = 0; index < stars.length; index++) {
+        const star = stars[index];
         if (index < currentRating) {
           star.classList.add('active');
           star.style.opacity = '1';
@@ -291,11 +293,12 @@ window.LanchDrapRatingWidget = (() => {
           star.classList.remove('active');
           star.style.opacity = '0.5';
         }
-      });
+      }
     }
 
     function highlightStars(rating) {
-      stars.forEach((star, index) => {
+      for (let index = 0; index < stars.length; index++) {
+        const star = stars[index];
         if (index < rating) {
           star.style.color = '#ffd700';
           star.style.opacity = '1';
@@ -303,7 +306,7 @@ window.LanchDrapRatingWidget = (() => {
           star.style.color = '#ccc';
           star.style.opacity = '0.5';
         }
-      });
+      }
     }
 
     submitButton.addEventListener('click', async () => {

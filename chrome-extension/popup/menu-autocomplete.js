@@ -41,7 +41,9 @@ window.LanchDrapMenuAutocomplete = (() => {
       for (const item of items) {
         // Check if this item is already selected
         const isAlreadySelected = selectedMenuItems.some(
-          (selected) => selected.label?.toLowerCase() === item.toLowerCase() || selected.toLowerCase() === item.toLowerCase()
+          (selected) =>
+            selected.label?.toLowerCase() === item.toLowerCase() ||
+            selected.toLowerCase() === item.toLowerCase()
         );
         if (isAlreadySelected) continue;
 
@@ -66,7 +68,7 @@ window.LanchDrapMenuAutocomplete = (() => {
       if (window.LanchDrapModels?.MenuItem) {
         menuItem = window.LanchDrapModels.MenuItem.fromString(itemName);
         const alreadySelected = selectedMenuItems.some((selected) => {
-          if (selected.equals && selected.equals(menuItem)) return true;
+          if (selected.equals?.(menuItem)) return true;
           if (selected.label?.toLowerCase() === itemName.toLowerCase()) return true;
           return false;
         });
@@ -196,4 +198,3 @@ window.LanchDrapMenuAutocomplete = (() => {
     initMenuAutocomplete,
   };
 })();
-

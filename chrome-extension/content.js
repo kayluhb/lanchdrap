@@ -20,15 +20,12 @@ async function initializeExtension() {
     if (window.LanchDrapDataLayer) {
       // Initialize the data layer
       await window.LanchDrapDataLayer.initialize();
-      console.log('LanchDrap: Data layer initialized');
 
       // Set up data layer event listeners
       setupDataLayerListeners();
-    } else {
-      console.warn('LanchDrap: Data layer not available');
     }
-  } catch (error) {
-    console.warn('LanchDrap: Data layer initialization failed:', error);
+  } catch {
+    // Data layer initialization failed
   }
 
   isInitialized = true;
@@ -37,15 +34,12 @@ async function initializeExtension() {
 // Set up data layer event listeners
 function setupDataLayerListeners() {
   if (!window.LanchDrapDataLayer) {
-    console.warn('LanchDrap: Data layer not available for event listeners');
     return;
   }
 
   // Listen for data changes from the data layer
   window.LanchDrapDataLayer.on('dataChanged', async (eventData) => {
     try {
-      console.log('LanchDrap: Data changed event received:', eventData);
-
       // Parallelize independent operations for better performance
       const promises = [];
 
@@ -55,48 +49,32 @@ function setupDataLayerListeners() {
 
         // Only trigger stats display if restaurant actually changed
         if (currentRestaurantId !== lastRestaurantId) {
-          console.log(
-            'LanchDrap: Restaurant changed from',
-            lastRestaurantId,
-            'to',
-            currentRestaurantId
-          );
           lastRestaurantId = currentRestaurantId;
 
           // Trigger stats display for the new restaurant (can run in parallel)
           promises.push(displayRestaurantStats(eventData.data));
-        } else {
-          console.log('LanchDrap: Restaurant unchanged, skipping stats display');
         }
       }
 
       // Track restaurant appearances when on day pages (can run in parallel)
       const isDayPage = window.LanchDrapDataLayer?.getIsDayPage?.();
-      console.log(
-        'LanchDrap: isDayPage:',
-        isDayPage,
-        'hasDeliveries:',
-        !!eventData.data?.deliveries
-      );
       if (isDayPage && eventData.data?.deliveries) {
-        console.log('LanchDrap: Calling trackRestaurantAppearances');
         promises.push(trackRestaurantAppearances(eventData.data));
       }
 
       // Display restaurant grid badges on grid pages (can run in parallel, doesn't need to wait)
       // Only render if we have restaurants and the event includes a date (prevents stale data)
       if (eventData.data?.restaurants && eventData.data.restaurants.length > 0 && eventData.date) {
-        console.log('LanchDrap: Calling displayRestaurantGridBadges for date:', eventData.date);
         // Don't await this - let it run independently so badges appear faster
-        displayRestaurantGridBadges(eventData.data).catch((error) => {
-          console.error('LanchDrap: Error displaying badges:', error);
+        displayRestaurantGridBadges(eventData.data).catch(() => {
+          // Error displaying badges
         });
       }
 
       // Wait for all parallel operations to complete
       await Promise.all(promises);
-    } catch (error) {
-      console.error('LanchDrap: Error handling data changed event:', error);
+    } catch {
+      // Error handling data changed event
     }
   });
 }
@@ -106,19 +84,16 @@ async function displayRestaurantStats(data) {
   try {
     // Prevent infinite loops
     if (isProcessingStats) {
-      console.log('LanchDrap: Already processing stats, skipping to prevent infinite loop');
       return;
     }
 
     if (!window.LanchDrapStatsDisplay) {
-      console.warn('LanchDrap: Stats display not available');
       return;
     }
 
     const { currentRestaurant } = data;
 
     if (!currentRestaurant) {
-      console.log('LanchDrap: No current restaurant to display stats for');
       return;
     }
 
@@ -132,8 +107,8 @@ async function displayRestaurantStats(data) {
 
     // Call the stats display function with the current restaurant object
     await window.LanchDrapStatsDisplay.displaySelectedRestaurantStats(currentRestaurant);
-  } catch (error) {
-    console.error('LanchDrap: Error displaying restaurant stats:', error);
+  } catch {
+    // Error displaying restaurant stats
   } finally {
     isProcessingStats = false;
   }
@@ -153,7 +128,6 @@ async function trackRestaurantAppearances(data) {
     const currentDate = window.LanchDrapDataLayer?.getCurrentDate?.();
 
     if (!currentDate) {
-      console.error('LanchDrap: No date available for tracking');
       return;
     }
 
@@ -181,10 +155,10 @@ async function trackRestaurantAppearances(data) {
       date: currentDate,
     });
     if (response && !response.success) {
-      console.error('LanchDrap: Background tracking failed:', response.error);
+      // Background tracking failed
     }
-  } catch (error) {
-    console.error('LanchDrap: Error sending tracking request to background:', error);
+  } catch {
+    // Error sending tracking request to background
   } finally {
     isProcessingTracking = false;
   }
@@ -193,10 +167,8 @@ async function trackRestaurantAppearances(data) {
 // Display badges on restaurant grid
 async function displayRestaurantGridBadges(data) {
   try {
-
     // Check if we have restaurants data
     if (!data?.restaurants || !Array.isArray(data.restaurants) || data.restaurants.length === 0) {
-      console.log('LanchDrap: No restaurants data available for badges');
       return;
     }
 
@@ -206,13 +178,11 @@ async function displayRestaurantGridBadges(data) {
       (r) => r.numSlotsAvailable !== undefined && r.numSlotsAvailable !== null
     );
     if (!hasValidSlotsData) {
-      console.warn('LanchDrap: No valid slots data in restaurants, skipping badge display');
       return;
     }
 
     // Check if indicator function is available
     if (!window.LanchDrapRestaurantScraper?.addSellOutIndicators) {
-      console.warn('LanchDrap: Restaurant scraper not available for badges');
       return;
     }
 
@@ -231,13 +201,14 @@ async function displayRestaurantGridBadges(data) {
 
     // Get current date from data layer to validate we're rendering current day's data
     const currentDate = window.LanchDrapDataLayer?.getCurrentDate?.();
-    
+
     // Wait for restaurant grid to be available in DOM before rendering badges
     // Use a more efficient polling approach with shorter initial delay
     const waitForGrid = (maxAttempts = 20, attempt = 0) => {
-      const restaurantGrid = document.querySelector('.mx-4.my-8') || 
-                            (window.LanchDrapDOMUtils?.getCachedRestaurantGrid?.());
-      
+      const restaurantGrid =
+        document.querySelector('.mx-4.my-8') ||
+        window.LanchDrapDOMUtils?.getCachedRestaurantGrid?.();
+
       if (restaurantGrid && restaurantGrid.querySelectorAll('a[href*="/app/"]').length > 0) {
         // Grid is ready, render badges immediately
         window.LanchDrapRestaurantScraper.addSellOutIndicators(enrichedRestaurants, currentDate);
@@ -246,15 +217,14 @@ async function displayRestaurantGridBadges(data) {
         const delay = attempt < 5 ? 50 : 100;
         setTimeout(() => waitForGrid(maxAttempts, attempt + 1), delay);
       } else {
-        console.warn('LanchDrap: Restaurant grid not found after max attempts, rendering anyway');
         window.LanchDrapRestaurantScraper.addSellOutIndicators(enrichedRestaurants, currentDate);
       }
     };
-    
+
     // Start waiting for grid with immediate first check
     waitForGrid();
-  } catch (error) {
-    console.error('LanchDrap: Error displaying restaurant grid badges:', error);
+  } catch {
+    // Error displaying restaurant grid badges
   }
 }
 
@@ -304,8 +274,8 @@ async function handlePageChange() {
         await displayRestaurantGridBadges(data);
       }
     }
-  } catch (error) {
-    console.error('🚀 LanchDrap: Error in handlePageChange:', error);
+  } catch {
+    // Error in handlePageChange
   } finally {
     isHandlingPageChange = false;
   }

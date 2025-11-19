@@ -51,19 +51,19 @@ window.LanchDrapKeyManager = (() => {
   // Update visibility of all key elements
   function updateKeyVisibility() {
     const keyElements = document.querySelectorAll('.ld-key-element');
-    keyElements.forEach((element) => {
+    for (const element of keyElements) {
       const newDisplay = keysVisible ? 'inline' : 'none';
       element.style.display = newDisplay;
-    });
+    }
 
     // Also update edit triggers cursor and title
     const editTriggers = document.querySelectorAll('.ld-edit-stats-trigger');
-    editTriggers.forEach((trigger) => {
+    for (const trigger of editTriggers) {
       trigger.style.cursor = keysVisible ? 'pointer' : 'default';
       trigger.title = keysVisible
         ? 'Click to edit restaurant stats'
         : 'Enable keys visibility to edit stats';
-    });
+    }
   }
 
   // Show visual feedback for Konami code

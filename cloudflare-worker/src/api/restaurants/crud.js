@@ -91,7 +91,6 @@ export async function updateAppearances(request, env) {
     const sortedAppearanceDates = [...new Set(appearanceDates)].sort();
     const sortedSoldoutDates = [...new Set(soldoutDates)].sort();
 
-    const { appearances, soldOutDates } = restaurantData;
     restaurantData.appearances = sortedAppearanceDates;
     restaurantData.soldOutDates = sortedSoldoutDates;
 

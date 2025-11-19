@@ -64,14 +64,16 @@ window.LanchDrapRestaurantScraper = (() => {
   }
 
   // Function to add badges to restaurant cards (slots available and sold out last time)
-  function addSellOutIndicators(restaurantsData, expectedDate = null) {
+  function addSellOutIndicators(restaurantsData, _expectedDate = null) {
     try {
       // Clear existing badges before adding new ones to ensure fresh data is displayed
       const existingBadges = document.querySelectorAll(
         '.ld-slots-badge, .ld-soldout-last-time-badge'
       );
       if (existingBadges.length > 0) {
-        existingBadges.forEach((badge) => badge.remove());
+        for (const badge of existingBadges) {
+          badge.remove();
+        }
       }
 
       // Find the restaurant grid container using a reliable class-based selector
@@ -83,7 +85,6 @@ window.LanchDrapRestaurantScraper = (() => {
       }
 
       if (!restaurantGrid) {
-        console.warn('LanchDrap: Restaurant grid container not found');
         return;
       }
 
@@ -91,7 +92,6 @@ window.LanchDrapRestaurantScraper = (() => {
       const restaurantCards = restaurantGrid.querySelectorAll('a[href*="/app/"]');
 
       if (!restaurantCards || restaurantCards.length === 0) {
-        console.warn('LanchDrap: No restaurant cards found in grid');
         return;
       }
 
@@ -99,22 +99,17 @@ window.LanchDrapRestaurantScraper = (() => {
       const restaurantCardsArray = Array.from(restaurantCards);
 
       // Process each restaurant by matching index
-      let badgesAdded = 0;
       for (let i = 0; i < restaurantsData.length; i++) {
         const restaurantData = restaurantsData[i];
         const restaurantCard = restaurantCardsArray[i];
 
         if (!restaurantCard) {
-          console.warn(
-            `LanchDrap: No card found at index ${i} for restaurant ${restaurantData.name}`
-          );
           continue;
         }
 
         // Make sure the card has relative positioning
         const cardDiv = restaurantCard.querySelector('div');
         if (!cardDiv) {
-          console.warn(`LanchDrap: No div found inside card for restaurant ${restaurantData.name}`);
           continue;
         }
         cardDiv.style.position = 'relative';
@@ -129,7 +124,7 @@ window.LanchDrapRestaurantScraper = (() => {
             restaurantData.numSlotsAvailable === 1
               ? '1 slot left'
               : `${restaurantData.numSlotsAvailable} slots left`;
-          
+
           if (existingSlotsBadge) {
             // Update existing badge with new data
             existingSlotsBadge.textContent = slotsText;
@@ -139,7 +134,6 @@ window.LanchDrapRestaurantScraper = (() => {
             slotsBadge.className = 'ld-slots-badge';
             slotsBadge.textContent = slotsText;
             cardDiv.appendChild(slotsBadge);
-            badgesAdded++;
           }
         } else {
           // Remove badge if no slots data
@@ -162,7 +156,6 @@ window.LanchDrapRestaurantScraper = (() => {
             soldOutBadge.className = 'ld-soldout-last-time-badge';
             soldOutBadge.textContent = 'Sold Out Last Time';
             cardDiv.appendChild(soldOutBadge);
-            badgesAdded++;
           }
         } else {
           // Remove badge if restaurant is no longer sold out last time
@@ -171,8 +164,8 @@ window.LanchDrapRestaurantScraper = (() => {
           }
         }
       }
-    } catch (error) {
-      console.error('LanchDrap: Error adding indicators:', error);
+    } catch {
+      // Error adding indicators
     }
   }
 

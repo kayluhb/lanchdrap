@@ -37,7 +37,6 @@ class ApiClient {
       const cachedRequest = this.requestCache.get(cacheKey);
       // Check if cache is still valid (not expired)
       if (Date.now() - cachedRequest.timestamp < this.cacheTTL) {
-        console.log('LanchDrap: API Client - Using cached request:', cacheKey);
         return cachedRequest.promise;
       } else {
         // Cache expired, remove it
@@ -193,17 +192,11 @@ class ApiClient {
 
   // Get restaurant stats with user history
   async getRestaurantStatsWithUserHistory(restaurantId, userId, signal = null) {
-    console.log('LanchDrap: API Client - getRestaurantStatsWithUserHistory called with:', {
-      restaurantId,
-      userId,
-    });
     const params = new URLSearchParams();
     params.append('restaurant', restaurantId);
     params.append('userId', userId);
     const endpoint = `${this.getEndpoint('RESTAURANTS_STATS')}?${params.toString()}`;
-    console.log('LanchDrap: API Client - calling endpoint:', endpoint);
     const result = await this.request(endpoint, { signal: signal });
-    console.log('LanchDrap: API Client - request completed, result:', result);
     return result;
   }
 
